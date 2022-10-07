@@ -3,7 +3,7 @@
 """
 File:         run_cellranger_count.py
 Created:      2022/09/22
-Last Changed:
+Last Changed: 2022/09/30
 Author:       M.Vochteloo
 
 Copyright (C) 2022 M.Vochteloo
@@ -395,7 +395,10 @@ class main():
                  "  --transcriptome={} \\".format(self.transcriptome)]
 
         for name, value in arguments.items():
-            lines.append("  --{}={} \\".format(name, value))
+            if isinstance(value, bool):
+                lines.append("  --{} \\".format(name))
+            else:
+                lines.append("  --{}={} \\".format(name, value))
 
         lines.extend(["", "deactivate", ""])
 
