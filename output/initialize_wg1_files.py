@@ -3,7 +3,7 @@
 """
 File:         initialize_wg1_files.py
 Created:      2022/10/07
-Last Changed: 2022/10/10
+Last Changed: 2022/10/13
 Author:       M.Vochteloo
 
 Copyright (C) 2022 M.Vochteloo
@@ -48,30 +48,11 @@ __description__ = "{} is a program developed and maintained by {}. " \
 """
 Syntax: 
 
-### ImputationTestDataset ###
-./initialize_wg1_files.py \
-    --step 1 \
-    --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC \
-    --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/hg38 \
-    --dataset_outdir ImputationTestDataset-step1 \
-    --imputation_subdir 2022-10-07-Imputation \
-    --plink_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-07-Imputation/ImputationTestDataset_plink
-    
-./initialize_wg1_files.py \
-    --step 2 \
-    --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC \
-    --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/hg38 \
-    --dataset_outdir ImputationTestDataset-step2 \
-    --demultiplexing_subdir 2022-10-10-DemultiplexingAndDoubletRemoval \
-    --samplesheet_filepath /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall/samplesheet.txt \
-    --scRNAseq_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall \
-    --snp_genotypes_filepath /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall/test_dataset.vcf \
-    --individual_list_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall/individuals_list_dir
-    
+### ImputationTestDataset ###    
 ./initialize_wg1_files.py \
     --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC \
     --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/hg38 \
-    --dataset_outdir ImputationTestDataset-all \
+    --dataset_outdir ImputationTestDataset \
     --imputation_subdir 2022-10-07-Imputation \
     --plink_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-07-Imputation/ImputationTestDataset_plink \
     --demultiplexing_subdir 2022-10-10-DemultiplexingAndDoubletRemoval \
@@ -79,6 +60,26 @@ Syntax:
     --scRNAseq_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall \
     --snp_genotypes_filepath /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall/test_dataset.vcf \
     --individual_list_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall/individuals_list_dir
+    
+### Mathys 2019 ###
+./initialize_wg1_files.py \
+    --step 1 \
+    --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC \
+    --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/hg38 \
+    --dataset_outdir Mathys2019 \
+    --imputation_subdir 2022-10-07-Imputation \
+    --plink_dir 
+    
+./initialize_wg1_files.py \
+    --step 2 \
+    --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC \
+    --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/hg38 \
+    --dataset_outdir Mathys2019 \
+    --demultiplexing_subdir 2022-10-10-DemultiplexingAndDoubletRemoval \
+    --samplesheet_filepath  \
+    --scRNAseq_dir  \
+    --snp_genotypes_filepath  \
+    --individual_list_dir 
 """
 
 
@@ -123,12 +124,6 @@ class main():
                 if value is None:
                     print("Argument {} is required when --step equals {}.".format(label, self.step))
                     exit()
-
-        self.time_dict = {
-            "short": "05:59:59",
-            "medium": "23:59:00",
-            "long": "6-23:59:00"
-        }
 
     @staticmethod
     def create_argument_parser():
@@ -245,56 +240,54 @@ class main():
         if self.step is None or self.step == 1:
             print("Generating step 1 files")
 
-            imputation_singularity = os.path.join(self.work_dir, self.imputation_subdir, self.imputation_singularity)
-            imputation_snakefile = os.path.join(self.work_dir, self.imputation_subdir, "Snakefile")
-
-            dataset_imputation_output_dir = os.path.join(dataset_work_dir, "Step1-Imputation")
-            dataset_imputation_logdir = os.path.join(dataset_imputation_output_dir, "log")
-            dataset_imputation_configtemplate = os.path.join(self.work_dir, self.imputation_subdir, self.imputation_config)
-            dataset_imputation_configfile = os.path.join(dataset_imputation_output_dir, self.imputation_config)
-
-            for outdir in [dataset_imputation_output_dir, dataset_imputation_logdir]:
+            output_dir = os.path.join(dataset_work_dir, "Step1-Imputation")
+            log_dir = os.path.join(output_dir, "log")
+            for outdir in [output_dir, log_dir]:
                 if not os.path.exists(outdir):
                     os.makedirs(outdir)
 
             self.generate_step1_files(
-                output_dir=dataset_imputation_output_dir,
-                log_dir=dataset_imputation_logdir,
-                singularity=imputation_singularity,
-                snakefile=imputation_snakefile,
-                configtemplate=dataset_imputation_configtemplate,
-                configfile=dataset_imputation_configfile
+                output_dir=output_dir,
+                log_dir=log_dir,
+                singularity=os.path.join(self.work_dir, self.imputation_subdir, self.imputation_singularity),
+                snakefile=os.path.join(self.work_dir, self.imputation_subdir, "Snakefile"),
+                configtemplate=os.path.join(self.work_dir, self.imputation_subdir, self.imputation_config),
+                configfile=os.path.join(output_dir, self.imputation_config)
             )
 
             print("")
 
         if self.step is None or self.step == 2:
             print("Generating step 2 files")
-            demultiplexing_singularity = os.path.join(self.work_dir, self.demultiplexing_subdir, self.demultiplexing_singularity)
-            demultiplexing_snakefile = os.path.join(self.work_dir, self.demultiplexing_subdir, "Snakefile")
 
-            dataset_demultiplexing_output_dir = os.path.join(dataset_work_dir, "Step2-DemultiplexingAndDoubletRemoval")
-            dataset_demultiplexing_logdir = os.path.join(dataset_demultiplexing_output_dir, "log")
-            dataset_demultiplexing_configtemplate = os.path.join(self.work_dir, self.demultiplexing_subdir, self.demultiplexing_config)
-            dataset_demultiplexing_configfile = os.path.join(dataset_demultiplexing_output_dir, self.demultiplexing_config)
-
-            for outdir in [dataset_demultiplexing_output_dir, dataset_demultiplexing_logdir]:
+            output_dir = os.path.join(dataset_work_dir, "Step2-DemultiplexingAndDoubletRemoval")
+            log_dir = os.path.join(output_dir, "log")
+            for outdir in [output_dir, log_dir]:
                 if not os.path.exists(outdir):
                     os.makedirs(outdir)
 
             self.generate_step2_files(
-                output_dir=dataset_demultiplexing_output_dir,
-                log_dir=dataset_demultiplexing_logdir,
-                singularity=demultiplexing_singularity,
-                snakefile=demultiplexing_snakefile,
-                configtemplate=dataset_demultiplexing_configtemplate,
-                configfile=dataset_demultiplexing_configfile
+                output_dir=output_dir,
+                log_dir=log_dir,
+                singularity=os.path.join(self.work_dir, self.demultiplexing_subdir, self.demultiplexing_singularity),
+                snakefile=os.path.join(self.work_dir, self.demultiplexing_subdir, "Snakefile"),
+                configtemplate=os.path.join(self.work_dir, self.demultiplexing_subdir, self.demultiplexing_config),
+                configfile=os.path.join(output_dir, self.demultiplexing_config)
             )
 
             print("")
 
     def generate_step1_files(self, output_dir, log_dir, singularity, snakefile,
                              configtemplate, configfile):
+        """
+        Step 1) run 'dry_run.sh'
+        Step 2) run 'run.sh'
+        Step 3) check 'pca_sex_checks/check_sex_update_remove.tsv'
+        Step 4) check 'pca_sex_checks/ancestry_update_remove.tsv'
+        Step 5) run 'dry_run.sh'
+        Step 6) run 'run_20jobs.sh'
+        Step 7) run 'report.sh'
+        """
         config_arguments = (
             ("ref_dir", self.ref_dir),
             ("singularity_image", singularity),
@@ -333,12 +326,26 @@ class main():
         self.write_report_script(
             snakefile=snakefile,
             configfile=configfile,
+            report=os.path.join(output_dir, "imputation_report.html"),
+            log_dir=log_dir,
             output_dir=output_dir
         )
 
     def generate_step2_files(self, output_dir, log_dir, singularity, snakefile,
                              configtemplate, configfile):
-        config_arguments =(
+        """
+
+        Step 1) run 'dry_run.sh'
+        Step 2) run 'run_4jobs.sh'
+        Step 3) run 'dry_run.sh'
+        Step 4) run 'run_4jobs.sh'
+        Step 5) check 'manual_selections/DoubletDetection/DoubletDetection_manual_selection.tsv'
+        Step 6) check 'manual_selections/scrublet/scrublet_percentile_manual_selection.tsv'
+        Step 7) run 'dry_run.sh'
+        Step 8) run 'run_4jobs.sh'
+        Step 9) run 'report.sh'
+        """
+        config_arguments = (
             ("ref_dir", self.ref_dir),
             ("singularity_image", singularity),
             ("bind_path", self.bind_paths),
@@ -365,7 +372,16 @@ class main():
             configfile=configfile,
             output_dir=output_dir,
             log_dir=log_dir,
-            jobs=4
+            jobs=4,
+            outfile="run_4jobs"
+        )
+
+        self.write_report_script(
+            snakefile=snakefile,
+            configfile=configfile,
+            report=os.path.join(output_dir, "demultiplexing_report.html"),
+            log_dir=log_dir,
+            output_dir=output_dir
         )
 
     def write_configfile(self, template, arguments, outpath):
@@ -401,7 +417,13 @@ class main():
     def write_run_script(self, snakefile, configfile, output_dir, log_dir,
                          jobs=1, restart_times=2, latency_wait=180, nodes=1,
                          time="short", outfile="run"):
-        if time not in self.time_dict.keys():
+        time_dict = {
+            "short": "05:59:59",
+            "medium": "23:59:00",
+            "long": "6-23:59:00"
+        }
+
+        if time not in time_dict.keys():
             print("Error, time not recognized.")
             exit()
 
@@ -427,15 +449,18 @@ class main():
             '       --tmp={resources.disk_per_thread_gb}G \\',
             '       -o {} \\'.format(os.path.join(log_dir, '{rule}.out')),
             '       --export ALL \\',
-            '       --time={}" \\'.format(self.time_dict[time]),
-            '    > {}/nohup_`date +%Y-%m-%d.%H:%M:%S`.log &'.format(log_dir)
+            '       --time={}" \\'.format(time_dict[time]),
+            '    > {}/nohup_`date +%Y-%m-%d.%H:%M:%S`.log &'.format(log_dir),
+            '',
+            'echo "Check status of command with:" ps -p $! -u'
         ]
         self.write_lines_to_file(
             lines=lines,
             path=os.path.join(output_dir, "{}.sh".format(outfile))
         )
 
-    def write_report_script(self, snakefile, configfile, output_dir):
+    def write_report_script(self, snakefile, configfile, report, log_dir,
+                            output_dir):
         lines = [
             '#!/bin/bash',
             '',
@@ -443,7 +468,10 @@ class main():
             '  snakemake \\',
             '    --snakefile {} \\'.format(snakefile),
             '    --configfile {} \\'.format(configfile),
-            '    --report {} \\'.format(output_dir, 'imputation_report.html')
+            '    --report {} \\'.format(report),
+            '    > {}/nohup_`date +%Y-%m-%d.%H:%M:%S`.log &'.format(log_dir),
+            '',
+            'echo "Check status of command with:" ps -p $! -u'
         ]
         self.write_lines_to_file(
             lines=lines,
