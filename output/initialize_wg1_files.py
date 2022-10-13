@@ -50,16 +50,35 @@ Syntax:
 
 ### ImputationTestDataset ###
 ./initialize_wg1_files.py \
+    --step 1 \
     --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC \
-    --imputation_subdir 2022-10-07-Imputation \
-    --demultiplexing_subdir 2022-10-10-DemultiplexingAndDoubletRemoval \
     --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/hg38 \
-    --plink_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-07-Imputation/ImputationTestDataset_plink \
+    --dataset_outdir ImputationTestDataset-step1 \
+    --imputation_subdir 2022-10-07-Imputation \
+    --plink_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-07-Imputation/ImputationTestDataset_plink
+    
+./initialize_wg1_files.py \
+    --step 2 \
+    --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC \
+    --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/hg38 \
+    --dataset_outdir ImputationTestDataset-step2 \
+    --demultiplexing_subdir 2022-10-10-DemultiplexingAndDoubletRemoval \
     --samplesheet_filepath /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall/samplesheet.txt \
     --scRNAseq_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall \
     --snp_genotypes_filepath /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall/test_dataset.vcf \
-    --individual_list_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall/individuals_list_dir \
-    --dataset_outdir ImputationTestDataset
+    --individual_list_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall/individuals_list_dir
+    
+./initialize_wg1_files.py \
+    --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC \
+    --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/hg38 \
+    --dataset_outdir ImputationTestDataset-all \
+    --imputation_subdir 2022-10-07-Imputation \
+    --plink_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-07-Imputation/ImputationTestDataset_plink \
+    --demultiplexing_subdir 2022-10-10-DemultiplexingAndDoubletRemoval \
+    --samplesheet_filepath /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall/samplesheet.txt \
+    --scRNAseq_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall \
+    --snp_genotypes_filepath /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall/test_dataset.vcf \
+    --individual_list_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall/individuals_list_dir
 """
 
 
@@ -67,47 +86,43 @@ class main():
     def __init__(self):
         # Get the command line arguments.
         arguments = self.create_argument_parser()
-        work_dir = getattr(arguments, 'work_dir')
-        imputation_subdir = getattr(arguments, 'imputation_subdir')
-        demultiplexing_subdir = getattr(arguments, 'demultiplexing_subdir')
+        self.step = getattr(arguments, 'step')
+        self.work_dir = getattr(arguments, 'work_dir')
         self.ref_dir = getattr(arguments, 'ref_dir')
+        self.bind_paths = ", ".join(getattr(arguments, 'bind_paths'))
+        self.dataset_outdir = getattr(arguments, 'dataset_outdir')
+
+        # Step 1 arguments.
+        self.imputation_subdir = getattr(arguments, 'imputation_subdir')
+        self.imputation_singularity = getattr(arguments, 'imputation_singularity')
+        self.imputation_config = getattr(arguments, 'imputation_config')
         self.plink_dir = getattr(arguments, 'plink_dir')
+
+        if self.step is None or self.step == 1:
+            for label, value in [("--imputation_subdir", self.imputation_subdir),
+                                 ("--plink_dir", self.plink_dir)]:
+                if value is None:
+                    print("Argument {} is required when --step equals {}.".format(label, self.step))
+                    exit()
+
+        # Step 2 arguments.
+        self.demultiplexing_subdir = getattr(arguments, 'demultiplexing_subdir')
+        self.demultiplexing_singularity = getattr(arguments, 'demultiplexing_singularity')
+        self.demultiplexing_config = getattr(arguments, 'demultiplexing_config')
         self.samplesheet_filepath = getattr(arguments, 'samplesheet_filepath')
         self.scRNAseq_dir = getattr(arguments, 'scRNAseq_dir')
         self.snp_genotypes_filepath = getattr(arguments, 'snp_genotypes_filepath')
         self.individual_list_dir = getattr(arguments, 'individual_list_dir')
-        self.individual_list_dir = getattr(arguments, 'individual_list_dir')
-        self.bind_paths = ", ".join(getattr(arguments, 'bind_paths'))
-        dataset_outdir = getattr(arguments, 'dataset_outdir')
 
-        # Define general variables.
-        self.imputation_dir = os.path.join(work_dir, imputation_subdir)
-        self.imputation_snakefile = os.path.join(self.imputation_dir, "Snakefile")
-        self.demultiplexing_dir = os.path.join(work_dir, demultiplexing_subdir)
-        self.demultiplexing_snakefile = os.path.join(self.demultiplexing_dir, "Snakefile")
-
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        dataset_work_dir = os.path.join(work_dir, "{}-{}".format(date_str, dataset_outdir))
-
-        # Define step 1 variables.
-        self.dataset_imputation_output_dir = os.path.join(dataset_work_dir, "Step1-Imputation")
-        self.dataset_imputation_logdir = os.path.join(self.dataset_imputation_output_dir, "log")
-        self.dataset_imputation_configfile = os.path.join(self.dataset_imputation_output_dir, "PreImputation.yaml")
-
-        # Define step 2 variables.
-        self.dataset_demultiplexing_output_dir = os.path.join(dataset_work_dir, "Step2-DemultiplexingAndDoubletRemoval")
-        self.dataset_demultiplexing_logdir = os.path.join(self.dataset_demultiplexing_output_dir, "log")
-        self.dataset_demultiplexing_configfile = os.path.join(self.dataset_demultiplexing_output_dir, "sceQTL-Gen_Demultiplex.yaml")
-
-        # Creating output directories
-        for outdir in [dataset_work_dir,
-                       self.dataset_imputation_output_dir,
-                       self.dataset_imputation_logdir,
-                       self.dataset_demultiplexing_output_dir,
-                       self.dataset_demultiplexing_logdir,
-                       ]:
-            if not os.path.exists(outdir):
-                os.makedirs(outdir)
+        if self.step is None or self.step == 2:
+            for label, value in [("--demultiplexing_subdir", self.demultiplexing_subdir),
+                                 ("--samplesheet_filepath", self.samplesheet_filepath),
+                                 ("--scRNAseq_dir", self.scRNAseq_dir),
+                                 ("--snp_genotypes_filepath", self.snp_genotypes_filepath),
+                                 ("--individual_list_dir", self.individual_list_dir)]:
+                if value is None:
+                    print("Argument {} is required when --step equals {}.".format(label, self.step))
+                    exit()
 
         self.time_dict = {
             "short": "05:59:59",
@@ -120,70 +135,31 @@ class main():
         parser = argparse.ArgumentParser(prog=__program__,
                                          description=__description__)
 
-        # Add other arguments.
+        # general arguments.
         parser.add_argument("-v",
                             "--version",
                             action="version",
                             version="{} {}".format(__program__,
                                                    __version__),
                             help="show program's version number and exit")
+        parser.add_argument("--step",
+                            type=int,
+                            choices=[1, 2],
+                            default=None,
+                            help="Which step to prepare. Default: None.")
         parser.add_argument("--work_dir",
                             type=str,
                             required=True,
                             help="The working directory.")
-        parser.add_argument("--imputation_subdir",
-                            type=str,
-                            required=True,
-                            help="The imputation step subdirectory.")
-        parser.add_argument("--demultiplexing_subdir",
-                            type=str,
-                            required=True,
-                            help="The demultiplexing and doublet removal step "
-                                 "subdirectory.")
         parser.add_argument("--ref_dir",
                             type=str,
                             required=True,
                             help="This is the path to the directory containing "
                                  "the imputation references provided for the "
                                  "SNP processing and imputation")
-        parser.add_argument("--plink_dir",
-                            type=str,
-                            required=True,
-                            help="Absolute path to directory that contains "
-                                 "plink2 pgen, pvar and psam files for "
-                                 "pipeline on hg19.")
-        parser.add_argument("--samplesheet_filepath",
-                            type=str,
-                            required=True,
-                            help="Tab separated file that has a header. Each "
-                                 "line has a pool name used for the scRNA-seq "
-                                 "directories and the number of individuals in "
-                                 "each pool.")
-        parser.add_argument("--scRNAseq_dir",
-                            type=str,
-                            required=True,
-                            help="The parent directory that has directories "
-                                 "for each pool and the scRNA-seq output "
-                                 "below it.")
-        parser.add_argument("--snp_genotypes_filepath",
-                            type=str,
-                            required=True,
-                            help="The path to the genotype file that has just "
-                                 "SNPs that are within exons and with a minor"
-                                 " allele frequency > 0.05 (5%) in this "
-                                 "sample.")
-        parser.add_argument("--individual_list_dir",
-                            type=str,
-                            required=True,
-                            help="Directory that has a different file for "
-                                 "each pool. Each file contains a list of "
-                                 "the individuals IDs that are in the pool "
-                                 "separated by line (match the genotype "
-                                 "individual IDs).")
         parser.add_argument("--bind_paths",
                             nargs="*",
                             type=str,
-                            required=False,
                             default=["/groups/umcg-biogen/tmp01/"],
                             help="List of paths to bind to Singularity. "
                                  "Default: ['/groups/umcg-biogen/tmp01/']")
@@ -193,30 +169,142 @@ class main():
                             help="The name of the output directory where you "
                                  "would like all outputs/results saved.")
 
+        # arguments for step 1.
+        parser.add_argument("--imputation_subdir",
+                            type=str,
+                            default=None,
+                            help="The imputation step subdirectory.")
+        parser.add_argument("--imputation_singularity",
+                            type=str,
+                            default="WG1-pipeline-QC_imputation.sif",
+                            help="")
+        parser.add_argument("--imputation_config",
+                            type=str,
+                            default="PreImputation.yaml",
+                            help="")
+        parser.add_argument("--plink_dir",
+                            type=str,
+                            default=None,
+                            help="Absolute path to directory that contains "
+                                 "plink2 pgen, pvar and psam files for "
+                                 "pipeline on hg19.")
+
+        # argument for step 2.
+        parser.add_argument("--demultiplexing_subdir",
+                            type=str,
+                            default=None,
+                            help="The demultiplexing and doublet removal step "
+                                 "subdirectory.")
+        parser.add_argument("--demultiplexing_singularity",
+                            type=str,
+                            default="WG1-pipeline-QC_wgpipeline.sif",
+                            help="")
+        parser.add_argument("--demultiplexing_config",
+                            type=str,
+                            default="sceQTL-Gen_Demultiplex.yaml",
+                            help="")
+        parser.add_argument("--samplesheet_filepath",
+                            type=str,
+                            default=None,
+                            help="Tab separated file that has a header. Each "
+                                 "line has a pool name used for the scRNA-seq "
+                                 "directories and the number of individuals in "
+                                 "each pool.")
+        parser.add_argument("--scRNAseq_dir",
+                            type=str,
+                            default=None,
+                            help="The parent directory that has directories "
+                                 "for each pool and the scRNA-seq output "
+                                 "below it.")
+        parser.add_argument("--snp_genotypes_filepath",
+                            type=str,
+                            default=None,
+                            help="The path to the genotype file that has just "
+                                 "SNPs that are within exons and with a minor"
+                                 " allele frequency > 0.05 (5%) in this "
+                                 "sample.")
+        parser.add_argument("--individual_list_dir",
+                            type=str,
+                            default=None,
+                            help="Directory that has a different file for "
+                                 "each pool. Each file contains a list of "
+                                 "the individuals IDs that are in the pool "
+                                 "separated by line (match the genotype "
+                                 "individual IDs).")
+
         return parser.parse_args()
 
     def start(self):
         self.print_arguments()
 
-        print("Generating step 1 files")
-        self.generate_step1_files(
-            output_dir=self.dataset_imputation_output_dir,
-            log_dir=self.dataset_imputation_logdir,
-            snakefile=self.imputation_snakefile,
-            configfile=self.dataset_imputation_configfile
-        )
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        dataset_work_dir = os.path.join(self.work_dir, "{}-{}".format(date_str, self.dataset_outdir))
+        if not os.path.exists(dataset_work_dir):
+            os.makedirs(dataset_work_dir)
 
-        print("Generating step 2 files")
-        self.generate_step2_files(
-            output_dir=self.dataset_demultiplexing_output_dir,
-            log_dir=self.dataset_demultiplexing_logdir,
-            snakefile=self.demultiplexing_snakefile,
-            configfile=self.dataset_demultiplexing_configfile
-        )
+        if self.step is None or self.step == 1:
+            print("Generating step 1 files")
 
-    def generate_step1_files(self, output_dir, log_dir, snakefile, configfile):
-        self.write_imputation_configfile(
-            output_dir=output_dir,
+            imputation_singularity = os.path.join(self.work_dir, self.imputation_subdir, self.imputation_singularity)
+            imputation_snakefile = os.path.join(self.work_dir, self.imputation_subdir, "Snakefile")
+
+            dataset_imputation_output_dir = os.path.join(dataset_work_dir, "Step1-Imputation")
+            dataset_imputation_logdir = os.path.join(dataset_imputation_output_dir, "log")
+            dataset_imputation_configtemplate = os.path.join(self.work_dir, self.imputation_subdir, self.imputation_config)
+            dataset_imputation_configfile = os.path.join(dataset_imputation_output_dir, self.imputation_config)
+
+            for outdir in [dataset_imputation_output_dir, dataset_imputation_logdir]:
+                if not os.path.exists(outdir):
+                    os.makedirs(outdir)
+
+            self.generate_step1_files(
+                output_dir=dataset_imputation_output_dir,
+                log_dir=dataset_imputation_logdir,
+                singularity=imputation_singularity,
+                snakefile=imputation_snakefile,
+                configtemplate=dataset_imputation_configtemplate,
+                configfile=dataset_imputation_configfile
+            )
+
+            print("")
+
+        if self.step is None or self.step == 2:
+            print("Generating step 2 files")
+            demultiplexing_singularity = os.path.join(self.work_dir, self.demultiplexing_subdir, self.demultiplexing_singularity)
+            demultiplexing_snakefile = os.path.join(self.work_dir, self.demultiplexing_subdir, "Snakefile")
+
+            dataset_demultiplexing_output_dir = os.path.join(dataset_work_dir, "Step2-DemultiplexingAndDoubletRemoval")
+            dataset_demultiplexing_logdir = os.path.join(dataset_demultiplexing_output_dir, "log")
+            dataset_demultiplexing_configtemplate = os.path.join(self.work_dir, self.demultiplexing_subdir, self.demultiplexing_config)
+            dataset_demultiplexing_configfile = os.path.join(dataset_demultiplexing_output_dir, self.demultiplexing_config)
+
+            for outdir in [dataset_demultiplexing_output_dir, dataset_demultiplexing_logdir]:
+                if not os.path.exists(outdir):
+                    os.makedirs(outdir)
+
+            self.generate_step2_files(
+                output_dir=dataset_demultiplexing_output_dir,
+                log_dir=dataset_demultiplexing_logdir,
+                singularity=demultiplexing_singularity,
+                snakefile=demultiplexing_snakefile,
+                configtemplate=dataset_demultiplexing_configtemplate,
+                configfile=dataset_demultiplexing_configfile
+            )
+
+            print("")
+
+    def generate_step1_files(self, output_dir, log_dir, singularity, snakefile,
+                             configtemplate, configfile):
+        config_arguments = (
+            ("ref_dir", self.ref_dir),
+            ("singularity_image", singularity),
+            ("plink_dir", self.plink_dir),
+            ("bind_paths", self.bind_paths),
+            ("output_dir", output_dir)
+        )
+        self.write_configfile(
+            template=configtemplate,
+            arguments=config_arguments,
             outpath=configfile
         )
 
@@ -248,28 +336,21 @@ class main():
             output_dir=output_dir
         )
 
-
-    def write_imputation_configfile(self, output_dir, outpath):
-        yaml_lines = []
-        for line in open(os.path.join(self.imputation_dir, "PreImputation.yaml"), 'r'):
-            for label, argument in (("ref_dir", self.ref_dir),
-                                    ("singularity_image", os.path.join(self.imputation_dir, "WG1-pipeline-QC_imputation.sif")),
-                                    ("plink_dir", self.plink_dir),
-                                    ("bind_paths", self.bind_paths),
-                                    ("output_dir", output_dir)):
-                if label in line:
-                    line = "  {}: {}\n".format(label, argument)
-                line = line.replace("\n", "")
-            yaml_lines.append(line)
-
-        self.write_lines_to_file(
-            lines=yaml_lines,
-            path=outpath
+    def generate_step2_files(self, output_dir, log_dir, singularity, snakefile,
+                             configtemplate, configfile):
+        config_arguments =(
+            ("ref_dir", self.ref_dir),
+            ("singularity_image", singularity),
+            ("bind_path", self.bind_paths),
+            ("samplesheet_filepath", self.samplesheet_filepath),
+            ("scRNAseq_dir", self.scRNAseq_dir),
+            ("snp_genotypes_filepath", self.snp_genotypes_filepath),
+            ("individual_list_dir", self.individual_list_dir),
+            ("output_dir", output_dir)
         )
-
-    def generate_step2_files(self, output_dir, log_dir, snakefile, configfile):
-        self.write_demultiplexing_configfile(
-            output_dir=output_dir,
+        self.write_configfile(
+            template=configtemplate,
+            arguments=config_arguments,
             outpath=configfile
         )
 
@@ -287,17 +368,10 @@ class main():
             jobs=4
         )
 
-    def write_demultiplexing_configfile(self, output_dir, outpath):
+    def write_configfile(self, template, arguments, outpath):
         yaml_lines = []
-        for line in open(os.path.join(self.demultiplexing_dir, "sceQTL-Gen_Demultiplex.yaml"), 'r'):
-            for label, argument in (("ref_dir", self.ref_dir),
-                                    ("singularity_image", os.path.join(self.demultiplexing_dir, "WG1-pipeline-QC_wgpipeline.sif")),
-                                    ("bind_path", self.bind_paths),
-                                    ("samplesheet_filepath", self.samplesheet_filepath),
-                                    ("scRNAseq_dir", self.scRNAseq_dir),
-                                    ("snp_genotypes_filepath", self.snp_genotypes_filepath),
-                                    ("individual_list_dir", self.individual_list_dir),
-                                    ("output_dir", output_dir)):
+        for line in open(template, 'r'):
+            for label, argument in arguments:
                 if label in line:
                     line = "  {}: {}\n".format(label, argument)
                 line = line.replace("\n", "")
@@ -386,29 +460,31 @@ class main():
 
     def print_arguments(self):
         print("General arguments")
-        print("  > Imputation directory: {}".format(self.imputation_dir))
-        print("  > Imputation snakefile: {}".format(self.imputation_snakefile))
-        print("  > Demultiplexing directory: {}".format(self.demultiplexing_dir))
-        print("  > Demultiplexing snakefile: {}".format(self.demultiplexing_snakefile))
-        print("  > Reference directory: {}".format(self.ref_dir))
+        print("  > Step:                         {}".format("1 & 2" if self.step is None else str(self.step)))
+        print("  > Working directory:            {}".format(self.work_dir))
+        print("  > Reference directory:          {}".format(self.ref_dir))
+        print("  > Bind paths:                   {}".format(self.bind_paths))
+        print("  > Dataset output directory:     {}".format(self.dataset_outdir))
         print("")
 
-        print("[Step 1] Imputation arguments:")
-        print("  > Output directory: {}".format(self.dataset_imputation_output_dir))
-        print("  > Log directory: {}".format(self.dataset_imputation_logdir))
-        print("  > Plink directory: {}".format(self.plink_dir))
-        print("  > Configuration file: {}".format(self.dataset_imputation_configfile))
-        print("")
+        if self.step is None or self.step == 1:
+            print("[Step 1] Imputation arguments:")
+            print("  > Imputation subdirectory:      {}".format(self.imputation_subdir))
+            print("  > Imputation singularity:       {}".format(self.imputation_singularity))
+            print("  > Imputation configuration:     {}".format(self.imputation_config))
+            print("  > Plink directory:              {}".format(self.plink_dir))
+            print("")
 
-        print("[Step2] Demultiplexing and doublet removal arguments:")
-        print("  > Output directory: {}".format(self.dataset_demultiplexing_output_dir))
-        print("  > Log directory: {}".format(self.dataset_demultiplexing_logdir))
-        print("  > Samplesheet file: {}".format(self.samplesheet_filepath))
-        print("  > scRNA-seq directory: {}".format(self.scRNAseq_dir))
-        print("  > SNP-genotypes file: {}".format(self.snp_genotypes_filepath))
-        print("  > Individual list directory: {}".format(self.individual_list_dir))
-        print("  > Configuration file: {}".format(self.dataset_demultiplexing_configfile))
-        print("")
+        if self.step is None or self.step == 2:
+            print("[Step2] Demultiplexing and doublet removal arguments:")
+            print("  > Demultiplexing subdirectory:  {}".format(self.demultiplexing_subdir))
+            print("  > Demultiplexing singularity:   {}".format(self.demultiplexing_singularity))
+            print("  > Demultiplexing configuration: {}".format(self.demultiplexing_config))
+            print("  > Samplesheet file:             {}".format(self.samplesheet_filepath))
+            print("  > scRNA-seq directory:          {}".format(self.scRNAseq_dir))
+            print("  > SNP-genotypes file:           {}".format(self.snp_genotypes_filepath))
+            print("  > Individual list directory:    {}".format(self.individual_list_dir))
+            print("")
 
 
 if __name__ == '__main__':
