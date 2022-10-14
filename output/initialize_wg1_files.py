@@ -3,7 +3,7 @@
 """
 File:         initialize_wg1_files.py
 Created:      2022/10/07
-Last Changed: 2022/10/13
+Last Changed: 2022/10/14
 Author:       M.Vochteloo
 
 Copyright (C) 2022 M.Vochteloo
@@ -26,6 +26,7 @@ from __future__ import print_function
 from datetime import datetime
 import argparse
 import os
+import re
 
 # Third party imports.
 
@@ -52,7 +53,7 @@ Syntax:
 ./initialize_wg1_files.py \
     --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC \
     --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/hg38 \
-    --dataset_outdir ImputationTestDataset \
+    --dataset_outdir 2022-10-13-ImputationTestDataset \
     --imputation_subdir 2022-10-07-Imputation \
     --plink_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-07-Imputation/ImputationTestDataset_plink \
     --demultiplexing_subdir 2022-10-10-DemultiplexingAndDoubletRemoval \
@@ -76,10 +77,10 @@ Syntax:
     --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/hg38 \
     --dataset_outdir Mathys2019 \
     --demultiplexing_subdir 2022-10-10-DemultiplexingAndDoubletRemoval \
-    --samplesheet_filepath  \
-    --scRNAseq_dir  \
+    --samplesheet_filepath /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019/samplesheet.txt \
+    --scRNAseq_dir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019 \
     --snp_genotypes_filepath  \
-    --individual_list_dir 
+    --individual_list_dir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019/individual_list_dir
 """
 
 
@@ -91,7 +92,13 @@ class main():
         self.work_dir = getattr(arguments, 'work_dir')
         self.ref_dir = getattr(arguments, 'ref_dir')
         self.bind_paths = ", ".join(getattr(arguments, 'bind_paths'))
-        self.dataset_outdir = getattr(arguments, 'dataset_outdir')
+        dataset_outdir = getattr(arguments, 'dataset_outdir')
+
+        # Pre-process the dataset output directory.
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        if not re.match("^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])", dataset_outdir):
+            dataset_outdir = "{}-{}".format(date_str, dataset_outdir)
+        self.dataset_outdir =dataset_outdir
 
         # Step 1 arguments.
         self.imputation_subdir = getattr(arguments, 'imputation_subdir')
@@ -232,8 +239,7 @@ class main():
     def start(self):
         self.print_arguments()
 
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        dataset_work_dir = os.path.join(self.work_dir, "{}-{}".format(date_str, self.dataset_outdir))
+        dataset_work_dir = os.path.join(self.work_dir, self.dataset_outdir)
         if not os.path.exists(dataset_work_dir):
             os.makedirs(dataset_work_dir)
 
