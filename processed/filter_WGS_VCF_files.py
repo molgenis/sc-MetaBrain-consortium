@@ -55,10 +55,12 @@ Syntax:
     --filter_script /groups/umcg-biogen/tmp01/input/rawdata/2017-GTExV8Genotypes/customVCFFilter.py \
     --vcf_indir /groups/umcg-biogen/tmp01/input/AMP-AD/2017-12-08-joint-WGS \
     --vcf_file_format NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_CHR.recalibrated_variants.vcf.gz \
+    --exclude X Y others \
     --outdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD \
     --outfolder FilteredGenotypes
 """
 
+CHROMOSOMES = [str(chr) for chr in range(1, 23)] + ["X", "Y", "others"]
 
 class main():
     def __init__(self):
@@ -67,6 +69,7 @@ class main():
         self.filter_script = getattr(arguments, 'filter_script')
         self.vcf_indir = getattr(arguments, 'vcf_indir')
         self.vcf_file_format = getattr(arguments, 'vcf_file_format')
+        self.exclude = getattr(arguments, 'exclude')
         time = getattr(arguments, 'time')
         self.cpus_per_task = getattr(arguments, 'cpus_per_task')
         self.mem = getattr(arguments, 'mem')
@@ -86,6 +89,8 @@ class main():
             "long": "6-23:59:00"
         }
         self.time = time_dict[time]
+
+        self.chromosomes = [CHR for CHR in CHROMOSOMES if (self.exclude is None) or (CHR not in self.exclude)]
 
         # Pre-process the dataset output directory.
         date_str = datetime.now().strftime("%Y-%m-%d")
@@ -125,6 +130,12 @@ class main():
                             required=True,
                             help="The file format of the VCF files. CHR"
                                  "will be replaced with the chromosome number.")
+        parser.add_argument("--exclude",
+                            nargs="*",
+                            type=str,
+                            choices=CHROMOSOMES,
+                            default=None,
+                            help="Exclude certain chromosomes.")
         parser.add_argument("--time",
                             type=str,
                             default="medium",
@@ -156,7 +167,7 @@ class main():
         print("Look for available files")
         files = []
         if "CHR" in self.vcf_file_format:
-            for chr in [str(chr) for chr in range(1, 23)] + ["X", "Y", "others"]:
+            for chr in self.chromosomes:
                 files.append((chr, os.path.join(self.vcf_indir, self.vcf_file_format.replace("CHR", chr))))
         else:
             files = [("", os.path.join(self.vcf_indir, self.vcf_file_format))]
@@ -235,6 +246,7 @@ class main():
         print("  > filter_script: {}".format(self.filter_script))
         print("  > vcf_indir: {}".format(self.vcf_indir))
         print("  > vcf_file_format: {}".format(self.vcf_file_format))
+        print("  > Exclude: {}".format(self.exclude))
         print("  > Time: {}".format(self.time))
         print("  > CPU-per-task: {}Gb".format(self.cpus_per_task))
         print("  > Memory: {}Gb".format(self.mem))

@@ -24,6 +24,7 @@ root directory of this source tree. If not, see <https://www.gnu.org/licenses/>.
 # Standard imports.
 from __future__ import print_function
 import argparse
+import gzip
 import os
 import re
 
@@ -52,15 +53,23 @@ Syntax:
 
 ### AMP-AD ###
 ./print_WGS_VCF_filter_overview.py \
-    --workdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/2022-10-20-FilteredGenotypes
+    --workdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/2022-10-20-FilteredGenotypes \
+    --vcf_file_format NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_CHR.recalibrated_variants-filtered.log.gz \
+    --exclude X Y others
 """
 
+
+CHROMOSOMES = [str(chr) for chr in range(1, 23)] + ["X", "Y", "others"]
 
 class main():
     def __init__(self):
         # Get the command line arguments.
         arguments = self.create_argument_parser()
         self.workdir = getattr(arguments, 'workdir')
+        self.vcf_file_format = getattr(arguments, 'vcf_file_format')
+        self.exclude = getattr(arguments, 'exclude')
+
+        self.chromosomes = [CHR for CHR in CHROMOSOMES if (self.exclude is None) or (CHR not in self.exclude)]
 
     @staticmethod
     def create_argument_parser():
@@ -78,6 +87,17 @@ class main():
                             type=str,
                             required=True,
                             help="The path to the working directory")
+        parser.add_argument("--vcf_file_format",
+                            type=str,
+                            required=True,
+                            help="The file format of the VCF files. CHR"
+                                 "will be replaced with the chromosome number.")
+        parser.add_argument("--exclude",
+                            nargs="*",
+                            type=str,
+                            choices=CHROMOSOMES,
+                            default=None,
+                            help="Exclude certain chromosomes.")
 
         return parser.parse_args()
 
@@ -86,19 +106,35 @@ class main():
 
         print("Printing overview:")
         data = []
-        for chr in [str(chr) for chr in range(1, 23)] + ["X", "Y", "others"]:
-            logfile_path = os.path.join(self.workdir, "jobs", "output", "VCFFilter_CHR{}.out".format(chr))
-            if os.path.exists(logfile_path):
-                data.append([chr, True] + self.read_log_file(filepath=logfile_path))
-            else:
-                data.append([chr, False, 0, 0, np.nan, False, "00:00:00"])
+        for chr in self.chromosomes:
+            row = [chr, False, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, np.nan, False, "00:00:00"]
+
+            job_logfile_path = os.path.join(self.workdir, "jobs", "output", "VCFFilter_CHR{}.out".format(chr))
+            if os.path.exists(job_logfile_path):
+                row[1] = True
+                row[11:] = self.read_job_logfile(filepath=job_logfile_path)
+
+            job_logfile_path = os.path.join(self.workdir, self.vcf_file_format.replace("CHR", chr))
+            if os.path.exists(job_logfile_path):
+                row[2:11] = self.read_filter_logfile(filepath=job_logfile_path)
+
+            data.append(row)
+
         data.append([])
-        df = pd.DataFrame(data, columns=["chromosome", "started", "parsed", "written", "kept (%)", "finished", "elapsed"])
-        df.iloc[df.shape[0] - 1, :] = ["total", df["started"].all(), df["parsed"].sum(), df["written"].sum(), df["kept (%)"].mean(), df["finished"].all(), ""]
+        df = pd.DataFrame(data, columns=["Chromosome", "Started", "PASSQC", "FailedVariantStats", "MultiAllelic", "IndelBelowVQSR", "IndelNonPass", "SNVBelowVQSR", "SNVNonPass", "IncorrectInbreedingCoeff", "BelowInbreedingCoeff", "Parsed", "Written", "PctKept", "Finished", "Elapsed"])
+        df.iloc[df.shape[0] - 1, :2] = ["total", df["started"].all()]
+        df.iloc[df.shape[0] - 1, 2:13] = df.iloc[:, 2:13].sum(axis=0)
+        df.iloc[df.shape[0] - 1, 13:] = [np.round((df.iloc[df.shape[0] - 1, 12] / df.iloc[df.shape[0] - 1, 11]) * 100, 1), df["finished"].all(), ""]
+        df.iloc[:, 2:13] = df.iloc[:, 2:13].astype(int)
         print(df)
 
+        self.save_file(
+            df=df,
+            outpath=os.path.join(self.workdir, "VCFFilterSummaryStats.txt.gz")
+        )
+
     @staticmethod
-    def read_log_file(filepath):
+    def read_job_logfile(filepath):
         with open(filepath, 'r') as f:
             parsed = 0
             written = 0
@@ -122,9 +158,60 @@ class main():
 
         return [parsed, written, pct_kept, finished, elapsed]
 
+    @staticmethod
+    def read_filter_logfile(filepath):
+        pass_qc = 0
+        failed_variant_stats = 0
+        multi_allelic = 0
+        indel_below_vqsr = 0
+        indel_non_pass = 0
+        snv_below_vqsr = 0
+        snv_non_pass = 0
+        incorrect_inbreeding_coeff = 0
+        below_inbreeding_coeff = 0
+
+        try:
+            with gzip.open(filepath, 'rt') as f:
+                for line in f:
+                    reason = line.split("\t")[1]
+                    if reason == "PASSQC":
+                        pass_qc += 1
+                    elif reason == "FailedVariantStats":
+                        failed_variant_stats += 1
+                    elif reason == "MultiAllelic":
+                        multi_allelic += 1
+                    elif reason == "IndelBelowVQSR":
+                        indel_below_vqsr += 1
+                    elif reason == "IndelNonPass":
+                        indel_non_pass += 1
+                    elif reason == "SNVBelowVQSR":
+                        snv_below_vqsr += 1
+                    elif reason == "SNVNonPass":
+                        snv_non_pass += 1
+                    elif reason.startswith("IncorrectInbreedingCoeff"):
+                        incorrect_inbreeding_coeff += 1
+                    elif reason.startswith("BelowInbreedingCoeff"):
+                        below_inbreeding_coeff += 1
+                    else:
+                        pass
+            f.close()
+        except EOFError:
+            pass
+
+        return [pass_qc, failed_variant_stats, multi_allelic, indel_below_vqsr, indel_non_pass, snv_below_vqsr, snv_non_pass, incorrect_inbreeding_coeff, below_inbreeding_coeff]
+
+    @staticmethod
+    def save_file(df, outpath, header=True, index=False, sep=","):
+        df.to_csv(outpath, sep=sep, index=index, header=header)
+        print("\tSaved dataframe: {} "
+              "with shape: {}".format(os.path.basename(outpath),
+                                      df.shape))
+
     def print_arguments(self):
         print("Arguments:")
         print("  > Working directory: {}".format(self.workdir))
+        print("  > vcf_file_format: {}".format(self.vcf_file_format))
+        print("  > Exclude: {}".format(self.exclude))
         print("")
 
 
