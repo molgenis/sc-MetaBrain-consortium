@@ -3,7 +3,7 @@
 """
 File:         run_cellranger_count.py
 Created:      2022/09/22
-Last Changed: 2022/10/14
+Last Changed: 2022/10/19
 Author:       M.Vochteloo
 
 Copyright (C) 2022 M.Vochteloo
@@ -70,7 +70,6 @@ class main():
         self.sample_id_table = getattr(arguments, 'sample_id_table')
         self.sample_col = getattr(arguments, 'sample_col')
         self.id_col = getattr(arguments, 'id_col')
-        self.n_individuals_per_pool = getattr(arguments, 'n_individuals_per_pool')
 
         # Safe the Cell Ranger arguments.
         self.fastqs = getattr(arguments, 'fastqs')
@@ -105,7 +104,6 @@ class main():
             ("sample_id_table", self.sample_id_table, "required"),
             ("sample_col", self.sample_col, "required"),
             ("id_col", self.id_col, "required"),
-            ("n_individuals_per_pool", self.n_individuals_per_pool, "required"),
             ("fastqs", self.fastqs, "required"),
             ("libraries", self.libraries, None),
             ("transcriptome", self.transcriptome, "required"),
@@ -151,11 +149,6 @@ class main():
                             type=str,
                             required=True,
                             help="The sample ID column in --sample-id-table.")
-        parser.add_argument("--n_individuals_per_pool",
-                            type=int,
-                            default=1,
-                            help="The number of individuals per pool.")
-
         parser.add_argument("--id_col",
                             type=str,
                             required=True,
@@ -350,15 +343,6 @@ class main():
         aggregation_df = pd.DataFrame(aggregation_data, columns=["sample_id", "molecule_h5"])
         self.save_file(df=aggregation_df,
                        outpath=os.path.join(self.workdir, "aggregation.csv"))
-
-        print("Create sample sheet")
-        sample_sheet_data = []
-        for id_value in ids:
-            sample_sheet_data.append([id_value, self.n_individuals_per_pool])
-        aggregation_df = pd.DataFrame(sample_sheet_data, columns=["Pool", "N_Individuals"])
-        self.save_file(df=aggregation_df,
-                       outpath=os.path.join(self.workdir, "samplesheet.txt"),
-                       sep="\t")
 
         print("Starting job files.")
         for id_value, jobfile_path in zip(ids, jobfile_paths):
