@@ -3,7 +3,7 @@
 """
 File:         filter_WGS_VCF_files.py
 Created:      2022/10/19
-Last Changed: 2022/10/20
+Last Changed: 2022/10/21
 Author:       M.Vochteloo
 
 Copyright (C) 2022 M.Vochteloo
@@ -75,6 +75,7 @@ class main():
         self.mem = getattr(arguments, 'mem')
         outdir = getattr(arguments, 'outdir')
         outfolder = getattr(arguments, 'outfolder')
+        self.dryrun = getattr(arguments, 'dryrun')
 
         if not self.vcf_file_format.endswith(".vcf.gz"):
             print("Error: --vcf_file_format must end with '.vcf.gz'.")
@@ -158,6 +159,10 @@ class main():
                             type=str,
                             required=True,
                             help="The name of the output directory.")
+        parser.add_argument("--dryrun",
+                            action='store_true',
+                            help="Add this flag to disable submitting the"
+                                 "job files.")
 
         return parser.parse_args()
 
@@ -189,17 +194,18 @@ class main():
             )
             job_files.append((joblog_path, jobfile_path))
 
-        print("Starting job files.")
-        for (joblog_path, jobfile_path) in job_files:
-            completed = False
-            if os.path.exists(joblog_path):
-                for line in open(joblog_path, 'r'):
-                    if "Done. How about that!" in line:
-                        completed = True
-                print("\tSkipping '{}'".format(os.path.basename(jobfile_path)))
+        if not self.dryrun:
+            print("Starting job files.")
+            for (joblog_path, jobfile_path) in job_files:
+                completed = False
+                if os.path.exists(joblog_path):
+                    for line in open(joblog_path, 'r'):
+                        if "Done. How about that!" in line:
+                            completed = True
+                    print("\tSkipping '{}'".format(os.path.basename(jobfile_path)))
 
-            if not completed:
-                self.run_command(command=['sbatch', jobfile_path])
+                if not completed:
+                    self.run_command(command=['sbatch', jobfile_path])
 
     def create_job_file(self, chr, infile, outfile):
         job_name = "VCFFilter_CHR{}".format(chr)
@@ -234,13 +240,6 @@ class main():
         print("\t" + " ".join(command))
         subprocess.call(command)
 
-    @staticmethod
-    def save_file(df, outpath, header=True, index=False, sep=","):
-        df.to_csv(outpath, sep=sep, index=index, header=header)
-        print("\tSaved dataframe: {} "
-              "with shape: {}".format(os.path.basename(outpath),
-                                      df.shape))
-
     def print_arguments(self):
         print("Arguments:")
         print("  > filter_script: {}".format(self.filter_script))
@@ -251,6 +250,7 @@ class main():
         print("  > CPU-per-task: {}Gb".format(self.cpus_per_task))
         print("  > Memory: {}Gb".format(self.mem))
         print("  > outdir: {}".format(self.outdir))
+        print("  > Dryrun: {}".format(self.dryrun))
         print("")
 
 

@@ -2,8 +2,8 @@
 
 """
 File:         print_WGS_VCF_filter_overview.py
-Created:      2022/10/22
-Last Changed:
+Created:      2022/10/20
+Last Changed: 2022/10/21
 Author:       M.Vochteloo
 
 Copyright (C) 2022 M.Vochteloo
@@ -55,11 +55,16 @@ Syntax:
 ./print_WGS_VCF_filter_overview.py \
     --workdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/2022-10-20-FilteredGenotypes \
     --vcf_file_format NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_CHR.recalibrated_variants-filtered.log.gz \
-    --exclude X Y others
+    --exclude 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X others
 """
 
 
 CHROMOSOMES = [str(chr) for chr in range(1, 23)] + ["X", "Y", "others"]
+thresh_MAF = 0.01  # minor allele frequency cutoff
+thresh_CR = 0.9  # call rate threshold
+thresh_HWE = 1E-6  # Hardy-Weinberg p-value cutoff
+thresh_AD = 10  # minimum allelic depth
+thresh_DP = 10  # minimum total depth
 
 class main():
     def __init__(self):
@@ -104,30 +109,34 @@ class main():
     def start(self):
         self.print_arguments()
 
-        print("Printing overview:")
+        print("Parsing chromosomes:")
         data = []
         for chr in self.chromosomes:
-            row = [chr, False, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, np.nan, False, "00:00:00"]
+            print("  > CHR{}".format(chr))
+            row = [chr, False, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, np.nan, False, "00:00:00"]
 
             job_logfile_path = os.path.join(self.workdir, "jobs", "output", "VCFFilter_CHR{}.out".format(chr))
             if os.path.exists(job_logfile_path):
                 row[1] = True
-                row[11:] = self.read_job_logfile(filepath=job_logfile_path)
+                row[20:] = self.read_job_logfile(filepath=job_logfile_path)
 
             job_logfile_path = os.path.join(self.workdir, self.vcf_file_format.replace("CHR", chr))
             if os.path.exists(job_logfile_path):
-                row[2:11] = self.read_filter_logfile(filepath=job_logfile_path)
+                row[2:20] = self.read_filter_logfile(filepath=job_logfile_path)
 
             data.append(row)
-
         data.append([])
-        df = pd.DataFrame(data, columns=["Chromosome", "Started", "PASSQC", "FailedVariantStats", "MultiAllelic", "IndelBelowVQSR", "IndelNonPass", "SNVBelowVQSR", "SNVNonPass", "IncorrectInbreedingCoeff", "BelowInbreedingCoeff", "Parsed", "Written", "PctKept", "Finished", "Elapsed"])
-        df.iloc[df.shape[0] - 1, :2] = ["total", df["started"].all()]
-        df.iloc[df.shape[0] - 1, 2:13] = df.iloc[:, 2:13].sum(axis=0)
-        df.iloc[df.shape[0] - 1, 13:] = [np.round((df.iloc[df.shape[0] - 1, 12] / df.iloc[df.shape[0] - 1, 11]) * 100, 1), df["finished"].all(), ""]
-        df.iloc[:, 2:13] = df.iloc[:, 2:13].astype(int)
-        print(df)
 
+        df = pd.DataFrame(data, columns=["Chromosome", "Started", "PASSQC", "FailedVariantStats", "FailedCR", "FailedMAF", "FailedHWE", "NrGenosReplaced", "NrPoorDP", "NrPoorGQ", "NrPoorABHomA", "NrPoorABHomB", "NrPoorABHet", "MultiAllelic", "IndelBelowVQSR", "IndelNonPass", "SNVBelowVQSR", "SNVNonPass", "IncorrectInbreedingCoeff", "BelowInbreedingCoeff", "Parsed", "Written", "PctKept", "Finished", "Elapsed"])
+        df.iloc[df.shape[0] - 1, :2] = ["total", df["Started"].all()]
+        df.iloc[df.shape[0] - 1, 2:22] = df.iloc[:, 2:22].sum(axis=0)
+        df.iloc[df.shape[0] - 1, 22:] = [np.round((df.iloc[df.shape[0] - 1, 21] / df.iloc[df.shape[0] - 1, 20]) * 100, 1), df["Finished"].all(), ""]
+        df.iloc[:, 2:22] = df.iloc[:, 2:22].astype(int)
+
+        print("\nVCF filter overview:")
+        print(df.iloc[:, [i for i in range(0, 4)] + [i for i in range(13, 25)]])
+        print("\nFailed variant stats:")
+        print(df.iloc[:, 3:13])
         self.save_file(
             df=df,
             outpath=os.path.join(self.workdir, "VCFFilterSummaryStats.txt.gz")
@@ -162,6 +171,15 @@ class main():
     def read_filter_logfile(filepath):
         pass_qc = 0
         failed_variant_stats = 0
+        n_failed_cr = 0
+        n_failed_maf = 0
+        n_failed_hwe = 0
+        n_genos_replaced = 0
+        n_poor_dp = 0
+        n_poor_gp = 0
+        n_poor_ab_hom_a = 0
+        n_poor_ab_hom_b = 0
+        n_poor_ab_het = 0
         multi_allelic = 0
         indel_below_vqsr = 0
         indel_non_pass = 0
@@ -173,11 +191,39 @@ class main():
         try:
             with gzip.open(filepath, 'rt') as f:
                 for line in f:
-                    reason = line.split("\t")[1]
+                    (_, reason, stats) = line.split("\t")
                     if reason == "PASSQC":
                         pass_qc += 1
                     elif reason == "FailedVariantStats":
                         failed_variant_stats += 1
+
+                        splitted_stats = stats.split(";")
+                        cr = float(splitted_stats[0].replace("CR=", ""))
+                        maf = float(splitted_stats[1].replace("MAF=", ""))
+                        hwe = float(splitted_stats[2].replace("HWE=", ""))
+                        nr_genos_replaced = int(splitted_stats[3].replace("NrGenosReplaced:", ""))
+                        poor_dp = int(splitted_stats[4].replace("PoorDP:", ""))
+                        # avg_dp = float(splitted_stats[5].split(" ")[0].replace("AvgDP:", ""))
+                        # avg_dp_calls = int(splitted_stats[5].split(" ")[1].replace("(", ""))
+                        poor_gq = int(splitted_stats[6].replace("PoorGQ:", ""))
+                        poor_ab_hom_a = int(splitted_stats[7].replace("PoorABHomA:", ""))
+                        poor_ab_hom_b = int(splitted_stats[8].replace("PoorABHomB:", ""))
+                        poor_ab_het = int(splitted_stats[9].replace("PoorABHet:", ""))
+
+                        if cr <= thresh_CR:
+                            n_failed_cr += 1
+                        if maf <= thresh_MAF:
+                            n_failed_maf += 1
+                        if hwe != -1 and hwe <= thresh_HWE:
+                            n_failed_hwe += 1
+
+                        n_genos_replaced += nr_genos_replaced
+                        n_poor_dp += poor_dp
+                        n_poor_gp += poor_gq
+                        n_poor_ab_hom_a += poor_ab_hom_a
+                        n_poor_ab_hom_b += poor_ab_hom_b
+                        n_poor_ab_het += poor_ab_het
+
                     elif reason == "MultiAllelic":
                         multi_allelic += 1
                     elif reason == "IndelBelowVQSR":
@@ -198,7 +244,7 @@ class main():
         except EOFError:
             pass
 
-        return [pass_qc, failed_variant_stats, multi_allelic, indel_below_vqsr, indel_non_pass, snv_below_vqsr, snv_non_pass, incorrect_inbreeding_coeff, below_inbreeding_coeff]
+        return [pass_qc, failed_variant_stats, n_failed_cr, n_failed_maf, n_failed_hwe, n_genos_replaced, n_poor_dp, n_poor_gp, n_poor_ab_hom_a, n_poor_ab_hom_b, n_poor_ab_het, multi_allelic, indel_below_vqsr, indel_non_pass, snv_below_vqsr, snv_non_pass, incorrect_inbreeding_coeff, below_inbreeding_coeff]
 
     @staticmethod
     def save_file(df, outpath, header=True, index=False, sep=","):
