@@ -55,7 +55,7 @@ Syntax:
 ./print_WGS_VCF_filter_overview.py \
     --workdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/2022-10-20-FilteredGenotypes \
     --vcf_file_format NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_CHR.recalibrated_variants-filtered.log.gz \
-    --exclude 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X others
+    --exclude 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X Y others
 """
 
 
@@ -154,7 +154,7 @@ class main():
                 if re.match("([0-9]+) lines parsed, ([0-9]+) written", line):
                     match = re.search("([0-9]+) lines parsed, ([0-9]+) written", line)
                     parsed = int(match.group(1))
-                    written = int(match.group(2))
+                    written = int(match.group(2)) - 199
                     pct_kept = np.round((written / parsed) * 100, 1)
                 elif re.match("Done. How about that!", line):
                     finished = True
