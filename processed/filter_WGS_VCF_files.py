@@ -3,7 +3,7 @@
 """
 File:         filter_WGS_VCF_files.py
 Created:      2022/10/19
-Last Changed: 2022/11/03
+Last Changed: 2022/11/04
 Author:       M.Vochteloo
 
 Copyright (C) 2022 M.Vochteloo
@@ -189,17 +189,10 @@ class main():
                 commands=["bcftools norm -m -any {} -o {}".format(file, norm_vcf_outfile)]
             )
 
-            completed = False
-            if os.path.exists(norm_logfile):
-                    for line in open(norm_logfile, 'r'):
-                        if line == "Job finished":
-                            completed = True
-
-            norm_jobid = None
-            if completed:
-                print("\t\tSkipping '{}'".format(os.path.basename(norm_jobfile)))
-            else:
-                norm_jobid = self.submit_job(jobfile=norm_jobfile)
+            norm_jobid = self.submit_job(
+                jobfile=norm_jobfile,
+                logfile=norm_logfile
+            )
 
             ####################################################################
 
@@ -212,19 +205,11 @@ class main():
             )
             filter_vcf_outfiles.append(filter_vcf_outfile)
 
-            completed = False
-            if os.path.exists(filter_logfile):
-                    for line in open(filter_logfile, 'r'):
-                        if line == "Job finished":
-                            completed = True
-
-            filter_jobid = None
-            if completed:
-                print("\t\tSkipping '{}'".format(os.path.basename(filter_jobfile)))
-            else:
-                if norm_jobid is not None:
-                    time.sleep(1)
-                filter_jobid = self.submit_job(jobfile=filter_jobfile, depend=norm_jobid)
+            filter_jobid = self.submit_job(
+                jobfile=filter_jobfile,
+                logfile=filter_logfile,
+                depend=norm_jobid
+            )
             filter_jobids.append(filter_jobid)
 
             ####################################################################
@@ -240,22 +225,14 @@ class main():
             job_name="BCFTOOLS_CONCAT",
             module_load=["BCFtools/1.16-GCCcore-7.3.0"],
             commands=["bcftools concat {} -o {}".format(" ".join(["{}-filtered.vcf.gz".format(filter_vcf_outfile) for filter_vcf_outfile in filter_vcf_outfiles]),
-                                                          concat_outfile)],
-            mem=64
+                                                          concat_outfile)]
         )
 
-        completed = False
-        if os.path.exists(concat_logfile):
-            for line in open(concat_logfile, 'r'):
-                if line == "Job finished":
-                    completed = True
-
-        concat_jobid = None
-        if completed:
-            print("\t\tSkipping '{}'".format(os.path.basename(concat_jobfile)))
-        else:
-            concat_jobid = self.submit_job(jobfile=concat_jobfile,
-                                           depend=filter_jobids)
+        concat_jobid = self.submit_job(
+            jobfile=concat_jobfile,
+            logfile=concat_logfile,
+            depend=filter_jobids
+        )
 
         ####################################################################
 
@@ -269,16 +246,11 @@ class main():
             mem=64
         )
 
-        completed = False
-        if os.path.exists(concat_logfile):
-            for line in open(concat_logfile, 'r'):
-                if line == "Job finished":
-                    completed = True
-
-        if completed:
-            print("\t\tSkipping '{}'".format(os.path.basename(concat_jobfile)))
-        else:
-            _ = self.submit_job(jobfile=plink_jobfile, depend=concat_jobid)
+        _ = self.submit_job(
+            jobfile=plink_jobfile,
+            logfile=plink_logfile,
+            depend=concat_jobid
+        )
 
     def create_jobfile(self, job_name, commands, time="short", cpu=1,
                        mem=1, module_load=None):
@@ -321,15 +293,22 @@ class main():
         f.close()
         print("\tSaved jobfile: {}".format(os.path.basename(filepath)))
 
-    def submit_job(self, jobfile, depend=None):
+    def submit_job(self, jobfile, logfile, depend=None):
         if self.dryrun:
             return None
+
+        if os.path.exists(logfile):
+            for line in open(logfile, 'r'):
+                if line == "Job finished":
+                    print("\t\tSkipping '{}'".format(os.path.basename(jobfile)))
+                    return None
 
         command = ['sbatch', jobfile]
         if depend is not None and (isinstance(depend, str) or isinstance(depend, list)):
             if isinstance(depend, str):
                 depend = [depend]
             command.insert(1, '--depend=afterok:{}'.format(":".join(depend)))
+            time.sleep(1)
 
         print("\t\t" + " ".join(command))
         sucess, output = self.run_command(command=command)
