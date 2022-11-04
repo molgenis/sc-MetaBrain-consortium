@@ -58,7 +58,7 @@ Syntax:
     --vcf_file_format NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_CHR.recalibrated_variants.vcf.gz \
     --exclude X Y others \
     --outdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD \
-    --outfolder FilteredGenotypes \
+    --outfolder 2022-11-03-FilteredGenotypes \
     --dryrun
 """
 
@@ -78,7 +78,6 @@ class main():
         self.vcf_indir = getattr(arguments, 'vcf_indir')
         self.vcf_file_format = getattr(arguments, 'vcf_file_format')
         self.exclude = getattr(arguments, 'exclude')
-        self.naive_merge = getattr(arguments, 'naive_merge')
         outdir = getattr(arguments, 'outdir')
         outfolder = getattr(arguments, 'outfolder')
         self.dryrun = getattr(arguments, 'dryrun')
@@ -142,18 +141,6 @@ class main():
                             choices=CHROMOSOMES,
                             default=None,
                             help="Exclude certain chromosomes.")
-        parser.add_argument("--naive_merge",
-                            action='store_false',
-                            help="Concatenate VCF or BCF files without "
-                                 "recompression. This is very fast but "
-                                 "requires that all files are of the same "
-                                 "type (all VCF or all BCF) and have the same "
-                                 "headers. This is because all tags and "
-                                 "chromosome names in the BCF body rely on "
-                                 "the order of the contig and tag definitions "
-                                 "in the header. A header check compatibility "
-                                 "is performed and the program throws an "
-                                 "error if it is not safe to use the option.")
         parser.add_argument("--outdir",
                             type=str,
                             required=True,
@@ -191,6 +178,8 @@ class main():
         filter_vcf_outfiles = []
         filter_jobids = []
         for (chr, file) in files:
+            print("")
+
             ####################################################################
 
             norm_vcf_outfile = os.path.join(self.norm_outdir, os.path.basename(file).replace(".vcf.gz", "_norm.vcf.gz"))
@@ -203,15 +192,14 @@ class main():
             completed = False
             if os.path.exists(norm_logfile):
                     for line in open(norm_logfile, 'r'):
-                        if line.startswith("Lines   total/split/realigned/skipped:"):
+                        if line == "Job finished":
                             completed = True
 
             norm_jobid = None
             if completed:
-                print("\tSkipping '{}'".format(os.path.basename(norm_jobfile)))
+                print("\t\tSkipping '{}'".format(os.path.basename(norm_jobfile)))
             else:
                 norm_jobid = self.submit_job(jobfile=norm_jobfile)
-            time.sleep(1)
 
             ####################################################################
 
@@ -227,13 +215,15 @@ class main():
             completed = False
             if os.path.exists(filter_logfile):
                     for line in open(filter_logfile, 'r'):
-                        if "Done. How about that!" in line:
+                        if line == "Job finished":
                             completed = True
 
             filter_jobid = None
             if completed:
-                print("\tSkipping '{}'".format(os.path.basename(filter_jobfile)))
+                print("\t\tSkipping '{}'".format(os.path.basename(filter_jobfile)))
             else:
+                if norm_jobid is not None:
+                    time.sleep(1)
                 filter_jobid = self.submit_job(jobfile=filter_jobfile, depend=norm_jobid)
             filter_jobids.append(filter_jobid)
 
@@ -242,29 +232,53 @@ class main():
         if len(files) < 2:
             return
 
-        print("\nGenerating merge and convert script")
-        merged_outfile = os.path.join(self.merged_outdir,
-                                      os.path.basename(filter_vcf_outfiles[0]).replace(".vcf.gz", "_allchromosomes.vcf.gz"))
-        if "CHR" in self.vcf_file_format and set([chr_file.replace("CHR", "") for chr_file in filter_vcf_outfiles]) == 0:
-            merged_outfile = os.path.join(self.merged_outdir,
-                                          os.path.basename(filter_vcf_outfiles[0]).replace("CHR", "all"))
+        ####################################################################
 
-        plink_outfile = os.path.join(self.plink_outdir, os.path.basename(merged_outfile).replace(".vcf.gz", ""))
-        merge_jobfile, _ = self.create_jobfile(
-            job_name="CONCAT_AND_MAKEPGEN",
-            module_load=["BCFtools/1.16-GCCcore-7.3.0",
-                         "PLINK/2.0-alpha2-20191006"],
-            commands=["bcftools concat {}{} -o {}".format(" ".join(filter_vcf_outfiles),
-                                                          " --naive" if self.naive_merge else "",
-                                                          merged_outfile),
-                      "plink2 --vcf {} --make-pgen --out {}".format(merged_outfile,
-                                                                    plink_outfile)],
-            time="medium",
-            cpu=4,
-            mem=32
+        print("\nSubmitting merge job script")
+        concat_outfile = os.path.join(self.merged_outdir, self.vcf_file_format.replace(".vcf.gz", "_norm_vcffilter_concat.vcf.gz"))
+        concat_jobfile, concat_logfile = self.create_jobfile(
+            job_name="BCFTOOLS_CONCAT",
+            module_load=["BCFtools/1.16-GCCcore-7.3.0"],
+            commands=["bcftools concat {} -o {}".format(" ".join(["{}-filtered.vcf.gz".format(filter_vcf_outfile) for filter_vcf_outfile in filter_vcf_outfiles]),
+                                                          concat_outfile)],
+            mem=64
         )
 
-        # _ = self.submit_job(jobfile=merge_jobfile, depend=filter_jobids)
+        completed = False
+        if os.path.exists(concat_logfile):
+            for line in open(concat_logfile, 'r'):
+                if line == "Job finished":
+                    completed = True
+
+        concat_jobid = None
+        if completed:
+            print("\t\tSkipping '{}'".format(os.path.basename(concat_jobfile)))
+        else:
+            concat_jobid = self.submit_job(jobfile=concat_jobfile,
+                                           depend=filter_jobids)
+
+        ####################################################################
+
+        print("\nSubmitting Plink job script")
+        plink_outfile = os.path.join(self.plink_outdir, os.path.basename(concat_outfile).replace(".vcf.gz", ""))
+        plink_jobfile, plink_logfile = self.create_jobfile(
+            job_name="PLINK2_MAKEPGEN",
+            module_load=["PLINK/2.0-alpha2-20191006"],
+            commands=["plink2 --vcf {} --make-pgen --out {}".format(concat_outfile,
+                                                                    plink_outfile)],
+            mem=64
+        )
+
+        completed = False
+        if os.path.exists(concat_logfile):
+            for line in open(concat_logfile, 'r'):
+                if line == "Job finished":
+                    completed = True
+
+        if completed:
+            print("\t\tSkipping '{}'".format(os.path.basename(concat_jobfile)))
+        else:
+            _ = self.submit_job(jobfile=plink_jobfile, depend=concat_jobid)
 
     def create_jobfile(self, job_name, commands, time="short", cpu=1,
                        mem=1, module_load=None):
@@ -289,6 +303,8 @@ class main():
 
         for command in commands:
             lines.extend(["", command])
+
+        lines.extend(["", "echo 'Job finished'"])
 
         jobfile_path = os.path.join(self.jobdir, job_name + ".sh")
         self.write_lines_to_file(
@@ -342,7 +358,6 @@ class main():
         print("  > vcf_indir: {}".format(self.vcf_indir))
         print("  > vcf_file_format: {}".format(self.vcf_file_format))
         print("  > exclude: {}".format(self.exclude))
-        print("  > Naive merge: {}".format(self.naive_merge))
         print("  > outdir: {}".format(self.outdir))
         print("  > dryrun: {}".format(self.dryrun))
         print("")
