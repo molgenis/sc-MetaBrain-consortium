@@ -3,7 +3,7 @@
 """
 File:         filter_WGS_VCF_files.py
 Created:      2022/10/19
-Last Changed: 2022/11/04
+Last Changed: 2022/11/07
 Author:       M.Vochteloo
 
 Copyright (C) 2022 M.Vochteloo
@@ -238,12 +238,18 @@ class main():
 
         print("\nSubmitting Plink job script")
         plink_outfile = os.path.join(self.plink_outdir, os.path.basename(concat_outfile).replace(".vcf.gz", ""))
+        plink_cpu = 4
+        plink_mem = 8
         plink_jobfile, plink_logfile = self.create_jobfile(
             job_name="PLINK2_MAKEPGEN",
             module_load=["PLINK/2.0-alpha2-20191006"],
-            commands=["plink2 --vcf {} --make-pgen --out {}".format(concat_outfile,
-                                                                    plink_outfile)],
-            mem=64
+            commands=["plink2 --vcf {} --make-pgen --threads THREADS "
+                      "--memory MEMORY --out {}".format(concat_outfile,
+                                                          plink_cpu * 2,
+                                                          plink_mem * 1000,
+                                                          plink_outfile)],
+            cpu=plink_cpu,
+            mem=plink_mem
         )
 
         _ = self.submit_job(
