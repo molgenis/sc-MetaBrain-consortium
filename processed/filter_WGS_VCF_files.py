@@ -56,7 +56,7 @@ Syntax:
     --filter_script /groups/umcg-biogen/tmp01/input/rawdata/2017-GTExV8Genotypes/customVCFFilterV4.py \
     --vcf_indir /groups/umcg-biogen/tmp01/input/AMP-AD/2017-12-08-joint-WGS \
     --vcf_file_format NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_CHR.recalibrated_variants.vcf.gz \
-    --exclude X Y others \
+    --exclude Y others \
     --outdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD \
     --outfolder 2022-11-03-FilteredGenotypes \
     --dryrun
