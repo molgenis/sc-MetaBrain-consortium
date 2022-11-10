@@ -43,6 +43,11 @@ __description__ = "{} is a program developed and maintained by {}. " \
                                         __author__,
                                         __license__)
 
+"""
+Syntax: 
+
+./prepare_amp_ad_sex_file.py
+"""
 
 def start():
     df1 = pd.read_csv(

@@ -72,7 +72,7 @@ class main():
         self.thresh_dp = getattr(arguments, 'filtered_depth')
         self.strip_info_col = getattr(arguments, 'keep_info_column')
 
-        self.debug = True
+        self.debug = False
         self.stopafterlines = 10000
 
     @staticmethod
@@ -534,7 +534,7 @@ class main():
             average_depth = 0
 
         # variant level quals
-        _, _, _, _, maf_postfilter = self.get_maf(
+        _, _, _, _, _, maf_postfilter = self.get_maf(
             dosages=dosages_post_filter,
             sample_male_mask=sample_male_mask,
             chr=chr
@@ -589,7 +589,7 @@ class main():
             return lower >= self.thresh_vqsr_snv
 
     def get_stats(self, dosages, sample_male_mask, chr):
-        nrcalled, nrhoma, nrhets, nrhomb, maf = self.get_maf(
+        nrcalled, nrdosages, nrhoma, nrhets, nrhomb, maf = self.get_maf(
             dosages=dosages,
             sample_male_mask=sample_male_mask,
             chr=chr
@@ -598,7 +598,7 @@ class main():
             return [False, "CR=0.000;MAF=0.000;HWE=-1.000e+00"]
 
         var_ok = True
-        callrate = nrcalled / len(dosages)
+        callrate = nrcalled / nrdosages
         hwe = -1
         if callrate >= self.thresh_cr and maf >= self.thresh_maf:
             hwe = self.calculate_hwe(
@@ -619,36 +619,30 @@ class main():
         nrhoma = 0
         nrhets = 0
         nrhomb = 0
-        nralleles = 0
+        nrmiss = 0
 
         for dosage, is_male in zip(dosages, sample_male_mask):
-            if dosage not in [0, 1, 2]:
+            if chr in ["X", "y"] and (is_male is None or is_male):
                 continue
 
             if dosage == 0:
                 nrhoma += 1
-                nralleles += 2
             elif dosage == 1:
-                if is_male is not None and is_male and chr in ["X", "y"]:
-                    nrhomb += 1
-                    nralleles += 1
-                else:
-                    nrhets += 1
-                    nralleles += 2
+                nrhets += 1
             elif dosage == 2:
                 nrhomb += 1
-                nralleles += 2
             else:
-                pass
+                nrmiss += 1
 
         nrcalled = nrhoma + nrhets + nrhomb
+        nrdosages = nrcalled + nrmiss
         maf = 0
         if nrcalled > 0:
-            maf = (nrhoma * 2 + nrhets) / nralleles
+            maf = (nrhoma * 2 + nrhets) / (nrcalled * 2)
             if maf > 0.5:
                 maf = 1 - maf
 
-        return nrcalled, nrhoma, nrhets, nrhomb, maf
+        return nrcalled, nrdosages, nrhoma, nrhets, nrhomb, maf
 
     @staticmethod
     def calculate_hwe(obs_hets, obs_hom1, obs_hom2):
