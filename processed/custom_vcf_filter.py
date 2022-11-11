@@ -3,7 +3,7 @@
 """
 File:         custom_vcf_filter.py
 Created:      2022/10/17
-Last Changed: 2022/11/10
+Last Changed: 2022/11/11
 Author:       H.J.Westra (Edited by M.Vochteloo)
 """
 
@@ -227,28 +227,29 @@ class main():
             if line.startswith("#CHROM"):
                 outln = "##{} tresh_GQ ={};tresh_AB_lower ={};" \
                         "tresh_AB_upper ={};tresh_IB ={};check_VQSR_SNV ={}" \
-                        ";check_VQSR_Indel ={};tresh_VQSR_Indel ={}" \
-                        ";remove_multiAllelic ={};remove_nonPASS_indel ={}" \
-                        ";remove_nonPASS_SNV ={};filter_lowcomplexity ={}" \
-                        ";tresh_MAF ={};tresh_HWE ={};tresh_CR ={}" \
-                        ";tresh_DP ={}\n".format(self.input_path,
-                                                 self.thresh_gq,
-                                                 self.thresh_ab_lower,
-                                                 self.thresh_ab_upper,
-                                                 self.thresh_ib,
-                                                 self.check_vqsr_snv,
-                                                 self.thresh_vqsr_snv,
-                                                 self.check_vqsr_indel,
-                                                 self.thresh_vqsr_indel,
-                                                 self.remove_multiallelic,
-                                                 self.remove_non_pass_indel,
-                                                 self.remove_non_pass_snv,
-                                                 self.filer_low_complexity,
-                                                 self.thresh_maf,
-                                                 self.thresh_hwe,
-                                                 self.thresh_cr,
-                                                 self.thresh_dp
-                                                 )
+                        ";tresh_VQSR_SNV ={};check_VQSR_Indel ={}" \
+                        ";tresh_VQSR_Indel ={};remove_multiAllelic ={}" \
+                        ";remove_nonPASS_indel ={};remove_nonPASS_SNV ={};" \
+                        "filter_lowcomplexity ={};tresh_MAF ={};" \
+                        "tresh_HWE ={};tresh_CR ={};" \
+                        "tresh_DP ={}\n".format(self.input_path,
+                                                self.thresh_gq,
+                                                self.thresh_ab_lower,
+                                                self.thresh_ab_upper,
+                                                self.thresh_ib,
+                                                self.check_vqsr_snv,
+                                                self.thresh_vqsr_snv,
+                                                self.check_vqsr_indel,
+                                                self.thresh_vqsr_indel,
+                                                self.remove_multiallelic,
+                                                self.remove_non_pass_indel,
+                                                self.remove_non_pass_snv,
+                                                self.filer_low_complexity,
+                                                self.thresh_maf,
+                                                self.thresh_hwe,
+                                                self.thresh_cr,
+                                                self.thresh_dp
+                                                )
                 fho.write(outln)
 
                 # header line with samples

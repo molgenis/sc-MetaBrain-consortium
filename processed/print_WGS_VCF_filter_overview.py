@@ -3,7 +3,7 @@
 """
 File:         print_WGS_VCF_filter_overview.py
 Created:      2022/10/20
-Last Changed: 2022/10/21
+Last Changed: 2022/11/11
 Author:       M.Vochteloo
 
 Copyright (C) 2022 M.Vochteloo
@@ -54,20 +54,19 @@ Syntax:
 ### AMP-AD ###
 ./print_WGS_VCF_filter_overview.py \
     --workdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/2022-11-03-FilteredGenotypes \
-    --filter_script /groups/umcg-biogen/tmp01/input/rawdata/2017-GTExV8Genotypes/customVCFFilterV4.py \
     --vcf_file_format NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_CHR.recalibrated_variants.vcf.gz \
-    --exclude X Y others
+    --exclude Y others
 """
 
 
 CHROMOSOMES = [str(chr) for chr in range(1, 23)] + ["X", "Y", "others"]
+
 
 class main():
     def __init__(self):
         # Get the command line arguments.
         arguments = self.create_argument_parser()
         self.workdir = getattr(arguments, 'workdir')
-        self.filter_script = getattr(arguments, 'filter_script')
         self.vcf_file_format = getattr(arguments, 'vcf_file_format')
         self.exclude = getattr(arguments, 'exclude')
 
@@ -89,11 +88,6 @@ class main():
                             type=str,
                             required=True,
                             help="The path to the working directory")
-        parser.add_argument("--filter_script",
-                            type=str,
-                            required=True,
-                            help="The path to the customVCFFilter.py of "
-                                 "Harm-Jan Westra.")
         parser.add_argument("--vcf_file_format",
                             type=str,
                             required=True,
@@ -111,15 +105,9 @@ class main():
     def start(self):
         self.print_arguments()
 
-        print("Parse thresholds")
-        thresh_maf, thresh_cr, thresh_hwe = self.parse_thresholds(filepath=self.filter_script)
-        print("  > MAF threshold: {}".format(thresh_maf))
-        print("  > CR threshold: {}".format(thresh_cr))
-        print("  > HWE threshold: {}".format(thresh_hwe))
-        print("")
-
         print("Parsing chromosomes:")
         data = []
+        prev_filter_thresh = None
         for chr in self.chromosomes:
             print("  > CHR{}".format(chr))
             row = [chr, False, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, np.nan, False, ""]
@@ -129,14 +117,28 @@ class main():
                 row[1] = True
                 row[15:] = self.read_job_logfile(filepath=job_logfile_path)
 
-            job_logfile_path = os.path.join(self.workdir, "2-custom_vcffilter", self.vcf_file_format.replace("CHR", chr).replace(".vcf.gz", "_norm_vcffilter-filtered.log.gz"))
-            if os.path.exists(job_logfile_path):
+            # Parse thresholds
+            job_file_path_prefix = os.path.join(self.workdir, "2-custom_vcffilter", self.vcf_file_format.replace("CHR", chr).replace(".vcf.gz", "_norm_vcffilter-filtered"))
+            job_vcffile_path = job_file_path_prefix + ".vcf.gz"
+            job_logfile_path = job_file_path_prefix + ".log.gz"
+            if os.path.exists(job_vcffile_path) and os.path.exists(job_logfile_path):
+                filter_thresh = self.parse_thresholds(
+                    filepath=job_vcffile_path
+                )
+                if prev_filter_thresh is not None:
+                    if filter_thresh != prev_filter_thresh:
+                        print("Error, not all VCF files are filtered with the "
+                              "same settings.")
+                        exit()
+
                 row[2:15] = self.read_filter_logfile(
                     filepath=job_logfile_path,
-                    thresh_maf=thresh_maf,
-                    thresh_cr=thresh_cr,
-                    thresh_hwe=thresh_hwe
+                    thresh_maf=filter_thresh["tresh_MAF"],
+                    thresh_cr=filter_thresh["tresh_CR"],
+                    thresh_hwe=filter_thresh["tresh_HWE"]
                 )
+
+                prev_filter_thresh = filter_thresh
 
             data.append(row)
         data.append([])
@@ -164,22 +166,35 @@ class main():
 
     @staticmethod
     def parse_thresholds(filepath):
-        maf = None
-        call_rate = None
-        hwe = None
-        with open(filepath, 'r') as f:
+        filter_thresh = {}
+        prev_line = None
+        with gzip.open(filepath, 'rt') as f:
             for line in f:
-                if line.startswith("tresh_MAF = "):
-                    maf = float(line.split("#")[0].replace("tresh_MAF = ", "").replace(" ", ""))
-                elif line.startswith("tresh_CR = "):
-                    call_rate = float(line.split("#")[0].replace("tresh_CR = ", "").replace(" ", ""))
-                elif line.startswith("tresh_HWE = "):
-                    hwe = float(line.split("#")[0].replace("tresh_HWE = ", "").replace(" ", ""))
-                else:
-                    pass
+                if line.startswith("#CHROM"):
+                    settings_line = "".join(prev_line.split(" ")[1:]).replace("\n", "")
+                    settings = [(argument, value) for argument, value in [x.split("=") for x in settings_line.split(";")]]
+                    for argument, value in settings:
+                        try:
+                            value = float(value)
+                        except ValueError:
+                            try:
+                                value = bool(value)
+                            except ValueError:
+                                pass
+                        filter_thresh[argument] = value
+                    break
+
+                if not line.startswith("##"):
+                    break
+
+                prev_line = line
         f.close()
 
-        return maf, call_rate, hwe
+        if "tresh_MAF" not in filter_thresh or "tresh_CR" not in filter_thresh or "tresh_HWE" not in filter_thresh:
+            print("Error, missing required thresholds MAF, CR, or HWE in filter settings.")
+            exit()
+
+        return filter_thresh
 
     @staticmethod
     def read_job_logfile(filepath):
@@ -280,7 +295,6 @@ class main():
     def print_arguments(self):
         print("Arguments:")
         print("  > Working directory: {}".format(self.workdir))
-        print("  > filter_script: {}".format(self.filter_script))
         print("  > vcf_file_format: {}".format(self.vcf_file_format))
         print("  > Exclude: {}".format(self.exclude))
         print("")
