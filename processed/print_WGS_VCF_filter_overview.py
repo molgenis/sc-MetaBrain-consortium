@@ -215,8 +215,9 @@ class main():
             finished = False
             elapsed = ""
             for line in f:
-                if re.match("([0-9]+) lines parsed, ([0-9]+) written", line):
-                    match = re.search("([0-9]+) lines parsed, ([0-9]+) written", line)
+                line = line.replace(",", "")
+                if re.match("([0-9]+) lines parsed ([0-9]+) written", line):
+                    match = re.search("([0-9]+) lines parsed ([0-9]+) written", line)
                     parsed = int(match.group(1))
                     written = int(match.group(2))
                     pct_kept = np.round((written / parsed) * 100, 1)
