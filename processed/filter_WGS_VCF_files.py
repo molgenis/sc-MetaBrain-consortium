@@ -53,10 +53,11 @@ Syntax:
 
 ### AMP-AD ###
 ./filter_WGS_VCF_files.py \
-    --filter_script /groups/umcg-biogen/tmp01/input/rawdata/2017-GTExV8Genotypes/customVCFFilterV4.py \
+    --filter_script /groups/umcg-biogen/tmp01/input/processeddata/single-cell/custom_vcf_filter.py \
     --vcf_indir /groups/umcg-biogen/tmp01/input/AMP-AD/2017-12-08-joint-WGS \
     --vcf_file_format NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_CHR.recalibrated_variants.vcf.gz \
     --exclude Y others \
+    --sex /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/AMP_AD_sexdata.csv \
     --outdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD \
     --outfolder 2022-11-03-FilteredGenotypes \
     --dryrun
@@ -78,6 +79,7 @@ class main():
         self.vcf_indir = getattr(arguments, 'vcf_indir')
         self.vcf_file_format = getattr(arguments, 'vcf_file_format')
         self.exclude = getattr(arguments, 'exclude')
+        self.sex_path = getattr(arguments, 'sex')
         outdir = getattr(arguments, 'outdir')
         outfolder = getattr(arguments, 'outfolder')
         self.dryrun = getattr(arguments, 'dryrun')
@@ -107,6 +109,10 @@ class main():
                     self.jobs_outdir]:
             if not os.path.exists(dir):
                 os.makedirs(dir)
+
+        if ("X" in self.chromosomes or "Y" in self.chromosomes) and (self.sex_path is None):
+            print("Error, use --sex argument when analyzing sex chromosomes")
+            exit()
 
     @staticmethod
     def create_argument_parser():
@@ -141,6 +147,10 @@ class main():
                             choices=CHROMOSOMES,
                             default=None,
                             help="Exclude certain chromosomes.")
+        parser.add_argument("--sex",
+                            type=str,
+                            required=False,
+                            help="The sample-sex data file.")
         parser.add_argument("--outdir",
                             type=str,
                             required=True,
@@ -200,7 +210,7 @@ class main():
             filter_jobfile, filter_logfile = self.create_jobfile(
                 job_name="CUSTOMVCFFILTER_CHR{}".format(chr),
                 module_load=["Python/3.7.4-GCCcore-7.3.0-bare"],
-                commands=["python3 {} {} {}".format(self.filter_script, norm_vcf_outfile, filter_vcf_outfile)],
+                commands=["python3 {} -i {}{} -o {}".format(self.filter_script, norm_vcf_outfile, " --sex {}".format(self.sex_path) if chr in ["X", "Y"] else "", filter_vcf_outfile)],
                 time="medium"
             )
             filter_vcf_outfiles.append(filter_vcf_outfile)
@@ -239,15 +249,15 @@ class main():
         print("\nSubmitting Plink job script")
         plink_outfile = os.path.join(self.plink_outdir, os.path.basename(concat_outfile).replace(".vcf.gz", ""))
         plink_cpu = 4
-        plink_mem = 8
+        plink_mem = 6
         plink_jobfile, plink_logfile = self.create_jobfile(
             job_name="PLINK2_MAKEPGEN",
             module_load=["PLINK/2.0-alpha2-20191006"],
-            commands=["plink2 --vcf {} --make-pgen --threads THREADS "
-                      "--memory MEMORY --out {}".format(concat_outfile,
-                                                          plink_cpu * 2,
-                                                          plink_mem * 1000,
-                                                          plink_outfile)],
+            commands=["plink2 --vcf {} --make-pgen --threads {} "
+                      "--memory {} --out {}".format(concat_outfile,
+                                                    plink_cpu * 2,
+                                                    plink_mem * 1000,
+                                                    plink_outfile)],
             cpu=plink_cpu,
             mem=plink_mem
         )
@@ -343,6 +353,7 @@ class main():
         print("  > vcf_indir: {}".format(self.vcf_indir))
         print("  > vcf_file_format: {}".format(self.vcf_file_format))
         print("  > exclude: {}".format(self.exclude))
+        print("  > Sex input: {}".format(self.sex_path))
         print("  > outdir: {}".format(self.outdir))
         print("  > dryrun: {}".format(self.dryrun))
         print("")

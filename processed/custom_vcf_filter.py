@@ -294,7 +294,7 @@ class main():
             if self.debug and linectr == self.stopafterlines:
                 print("DEBUG: stopped after " + str(linectr) + " lines")
                 break
-            if (linectr == 1) or (linectr % 10000 == 0):
+            if linectr % 10000 == 0:
                 print("{:,} lines parsed, {:,} written".format(linectr, lineswritten), end='\r')
                 fho.flush()
                 fhlog.flush()
@@ -710,7 +710,7 @@ class main():
         print("Arguments:")
         print("  > VCF input: {}".format(self.input_path))
         print("  > Output filename: {}".format(self.output_filename))
-        print("  > Samples: N={}    {}".format("" if self.sample_filter_set is None else "{:,}".format(len(self.sample_filter_set)), self.sample_filter_set))
+        print("  > Samples: {}".format("" if self.sample_filter_set is None else "N={:,}\t{:,}".format(len(self.sample_filter_set), self.sample_filter_set)))
         print("  > Sex input: {}".format(self.sex_path))
         print("  > Thresholds:")
         print("    > Genotype quality (GQ): >={}".format(self.thresh_gq))
