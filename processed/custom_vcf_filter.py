@@ -226,10 +226,10 @@ class main():
         for line in fh:
             if line.startswith("#CHROM"):
                 outln = "##{} tresh_GQ ={};tresh_AB_lower ={};" \
-                        "tresh_AB_upper ={};tresh_IB ={};check_VQSR_SNV ={}" \
-                        ";tresh_VQSR_SNV ={};check_VQSR_Indel ={}" \
-                        ";tresh_VQSR_Indel ={};remove_multiAllelic ={}" \
-                        ";remove_nonPASS_indel ={};remove_nonPASS_SNV ={};" \
+                        "tresh_AB_upper ={};tresh_IB ={};check_VQSR_SNV ={};" \
+                        "tresh_VQSR_SNV ={};check_VQSR_Indel ={};" \
+                        "tresh_VQSR_Indel ={};remove_multiAllelic ={};" \
+                        "remove_nonPASS_indel ={};remove_nonPASS_SNV ={};" \
                         "filter_lowcomplexity ={};tresh_MAF ={};" \
                         "tresh_HWE ={};tresh_CR ={};" \
                         "tresh_DP ={}\n".format(self.input_path,
