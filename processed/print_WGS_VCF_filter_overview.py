@@ -108,6 +108,7 @@ class main():
         print("Parsing chromosomes:")
         data = []
         prev_filter_thresh = None
+        prev_failed_var_thresh = None
         for chr in self.chromosomes:
             print("  > CHR{}".format(chr))
             row = [chr, False, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, np.nan, False, ""]
@@ -125,20 +126,29 @@ class main():
                 filter_thresh = self.parse_thresholds(
                     filepath=job_vcffile_path
                 )
+                # first check the settings that matter.
+                failed_var_thresh = dict((key, filter_thresh[key]) for key in ('tresh_MAF', 'tresh_CR', 'tresh_HWE'))
+                if prev_failed_var_thresh is not None:
+                    if failed_var_thresh != prev_failed_var_thresh:
+                        print("Error, not all VCF files are filtered with "
+                              "the same MAF, CR, or HWE settings.")
+                        exit()
+
+                # give warning if other settings differ.
                 if prev_filter_thresh is not None:
                     if filter_thresh != prev_filter_thresh:
-                        print("Error, not all VCF files are filtered with the "
-                              "same settings.")
-                        exit()
+                        print("Warning, not all VCF files are filtered with "
+                              "the same settings.")
 
                 row[2:15] = self.read_filter_logfile(
                     filepath=job_logfile_path,
-                    thresh_maf=filter_thresh["tresh_MAF"],
-                    thresh_cr=filter_thresh["tresh_CR"],
-                    thresh_hwe=filter_thresh["tresh_HWE"]
+                    thresh_maf=failed_var_thresh["tresh_MAF"],
+                    thresh_cr=failed_var_thresh["tresh_CR"],
+                    thresh_hwe=failed_var_thresh["tresh_HWE"]
                 )
 
                 prev_filter_thresh = filter_thresh
+                prev_failed_var_thresh = failed_var_thresh
 
             data.append(row)
         data.append([])
