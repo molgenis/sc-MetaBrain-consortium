@@ -67,15 +67,15 @@ Syntax:
     --step 1 \
     --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC \
     --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/hg38 \
-    --dataset_outdir Mathys2019 \
+    --dataset_outdir AMP_AD \
     --imputation_subdir 2022-10-07-Imputation \
-    --plink_dir 
+    --plink_dir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/2022-11-03-FilteredGenotypes/4-plink2_makepgen
     
 ./initialize_wg1_files.py \
     --step 2 \
     --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC \
     --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/hg38 \
-    --dataset_outdir Mathys2019 \
+    --dataset_outdir AMP_AD \
     --demultiplexing_subdir 2022-10-10-DemultiplexingAndDoubletRemoval \
     --samplesheet_filepath /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019/samplesheet.txt \
     --scRNAseq_dir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019 \
