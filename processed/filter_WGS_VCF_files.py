@@ -3,7 +3,7 @@
 """
 File:         filter_WGS_VCF_files.py
 Created:      2022/10/19
-Last Changed: 2022/11/07
+Last Changed: 2023/01/13
 Author:       M.Vochteloo
 
 Copyright (C) 2022 M.Vochteloo
@@ -56,11 +56,16 @@ Syntax:
     --filter_script /groups/umcg-biogen/tmp01/input/processeddata/single-cell/custom_vcf_filter.py \
     --vcf_indir /groups/umcg-biogen/tmp01/input/AMP-AD/2017-12-08-joint-WGS \
     --vcf_file_format NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_CHR.recalibrated_variants.vcf.gz \
-    --exclude Y others \
+    --exclude_chr Y others \
+    --exclude_snp rs1361839 \
     --sex /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/AMP_AD_sexdata.csv \
+    --annotations /groups/umcg-biogen/tmp01/annotation/GenomeReference/dbsnp/b37/All_b37_b151_20180418.vcf.gz \
     --outdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD \
     --outfolder 2022-11-03-FilteredGenotypes \
     --dryrun
+    
+    
+
 """
 
 CHROMOSOMES = [str(chr) for chr in range(1, 23)] + ["X", "Y", "others"]
@@ -78,8 +83,10 @@ class main():
         self.filter_script = getattr(arguments, 'filter_script')
         self.vcf_indir = getattr(arguments, 'vcf_indir')
         self.vcf_file_format = getattr(arguments, 'vcf_file_format')
-        self.exclude = getattr(arguments, 'exclude')
+        self.exclude_chr = getattr(arguments, 'exclude_chr')
+        self.exclude_snp = getattr(arguments, 'exclude_snp')
         self.sex_path = getattr(arguments, 'sex')
+        self.annotations = getattr(arguments, 'annotations')
         outdir = getattr(arguments, 'outdir')
         outfolder = getattr(arguments, 'outfolder')
         self.dryrun = getattr(arguments, 'dryrun')
@@ -91,7 +98,8 @@ class main():
             print("Error: --vcf_file_format must only contain 'CHR' once.")
             exit()
 
-        self.chromosomes = [CHR for CHR in CHROMOSOMES if (self.exclude is None) or (CHR not in self.exclude)]
+        self.chromosomes = [CHR for CHR in CHROMOSOMES if (self.exclude_chr is None) or (CHR not in self.exclude_chr)]
+        self.default_id = "%CHROM:%POS:%REF{10}:%ALT{10}"
 
         # Pre-process the dataset output directory.
         date_str = datetime.now().strftime("%Y-%m-%d")
@@ -101,12 +109,13 @@ class main():
         self.norm_outdir = os.path.join(self.outdir, "1-bcftools_norm")
         self.filter_outdir = os.path.join(self.outdir, "2-custom_vcffilter")
         self.merged_outdir = os.path.join(self.outdir, "3-bcftools_concat")
-        self.plink_outdir = os.path.join(self.outdir, "4-plink2_makepgen")
+        self.annotate_outdir = os.path.join(self.outdir, "4-bcftools_annotate")
+        self.plink_outdir = os.path.join(self.outdir, "5-plink2_makepgen")
         self.jobdir = os.path.join(self.outdir, "jobs")
         self.jobs_outdir = os.path.join(self.jobdir, "output")
         for dir in [self.outdir, self.norm_outdir, self.filter_outdir,
-                    self.merged_outdir, self.plink_outdir, self.jobdir,
-                    self.jobs_outdir]:
+                    self.merged_outdir, self.annotate_outdir,
+                    self.plink_outdir, self.jobdir, self.jobs_outdir]:
             if not os.path.exists(dir):
                 os.makedirs(dir)
 
@@ -141,16 +150,26 @@ class main():
                             required=True,
                             help="The file format of the VCF files. CHR"
                                  "will be replaced with the chromosome number.")
-        parser.add_argument("--exclude",
+        parser.add_argument("--exclude_chr",
                             nargs="*",
                             type=str,
                             choices=CHROMOSOMES,
                             default=None,
                             help="Exclude certain chromosomes.")
+        parser.add_argument("--exclude_snp",
+                            nargs="*",
+                            type=str,
+                            default=None,
+                            help="Exclude certain variants.")
         parser.add_argument("--sex",
                             type=str,
                             required=False,
                             help="The sample-sex data file.")
+        parser.add_argument("--annotations",
+                            type=str,
+                            required=True,
+                            help="Bgzip-compressed and tabix-indexed file "
+                                 "with annotations..")
         parser.add_argument("--outdir",
                             type=str,
                             required=True,
@@ -232,10 +251,10 @@ class main():
         print("\nSubmitting merge job script")
         concat_outfile = os.path.join(self.merged_outdir, self.vcf_file_format.replace(".vcf.gz", "_norm_vcffilter_concat.vcf.gz"))
         concat_jobfile, concat_logfile = self.create_jobfile(
-            job_name="BCFTOOLS_CONCAT",
+            job_name="BCFTOOLS_CONCAT_AND_INDEX",
             module_load=["BCFtools/1.16-GCCcore-7.3.0"],
-            commands=["bcftools concat {} -o {}".format(" ".join(["{}-filtered.vcf.gz".format(filter_vcf_outfile) for filter_vcf_outfile in filter_vcf_outfiles]),
-                                                          concat_outfile)]
+            commands=["bcftools concat {} -o {}".format(" ".join(["{}-filtered.vcf.gz".format(filter_vcf_outfile) for filter_vcf_outfile in filter_vcf_outfiles]), concat_outfile),
+                      "bcftools index {}".format(concat_outfile)]
         )
 
         concat_jobid = self.submit_job(
@@ -246,15 +265,40 @@ class main():
 
         ####################################################################
 
+        print("\nSubmitting annotate script")
+        annotate_outfile = os.path.join(self.annotate_outdir, os.path.basename(concat_outfile).replace(".vcf.gz", "_annotate.vcf.gz"))
+        annotate_jobfile, annotate_logfile = self.create_jobfile(
+            job_name="BCFTOOLS_ANNOTATE",
+            module_load=["BCFtools/1.16-GCCcore-7.3.0"],
+            commands=["bcftools annotate -a {} -c ID {} --set-id +'{}' -o {}".format(self.annotations, concat_outfile, self.default_id, annotate_outfile)],
+            time="medium",
+            cpu=1,
+            mem=2,
+        )
+
+        annotate_jobid = self.submit_job(
+            jobfile=annotate_jobfile,
+            logfile=annotate_logfile,
+            depend=concat_jobid
+        )
+
+        ####################################################################
+
         print("\nSubmitting Plink job script")
-        plink_outfile = os.path.join(self.plink_outdir, os.path.basename(concat_outfile).replace(".vcf.gz", ""))
+        exclude_str = ""
+        if self.exclude_snp:
+            exclude_filepath = os.path.join(self.outdir, "exclude_variants.txt")
+            exclude_str = " --exclude {}".format(exclude_filepath)
+            self.write_lines_to_file(lines=[self.exclude_snp], filepath=exclude_filepath)
+        plink_outfile = os.path.join(self.plink_outdir, os.path.basename(annotate_outfile).replace(".vcf.gz", ""))
         plink_cpu = 4
         plink_mem = 6
         plink_jobfile, plink_logfile = self.create_jobfile(
             job_name="PLINK2_MAKEPGEN",
             module_load=["PLINK/2.0-alpha2-20191006"],
-            commands=["plink2 --vcf {} --make-pgen --threads {} "
-                      "--memory {} --out {}".format(concat_outfile,
+            commands=["plink2 --vcf {} --make-pgen{} --threads {} "
+                      "--memory {} --out {}".format(annotate_outfile,
+                                                    exclude_str,
                                                     plink_cpu * 2,
                                                     plink_mem * 1000,
                                                     plink_outfile)],
@@ -265,7 +309,7 @@ class main():
         _ = self.submit_job(
             jobfile=plink_jobfile,
             logfile=plink_logfile,
-            depend=concat_jobid
+            depend=annotate_jobid
         )
 
     def create_jobfile(self, job_name, commands, time="short", cpu=1,
@@ -352,7 +396,8 @@ class main():
         print("  > filter_script: {}".format(self.filter_script))
         print("  > vcf_indir: {}".format(self.vcf_indir))
         print("  > vcf_file_format: {}".format(self.vcf_file_format))
-        print("  > exclude: {}".format(self.exclude))
+        print("  > exclude chr: {}".format(self.exclude_chr))
+        print("  > exclude SNP: {}".format(self.exclude_snp))
         print("  > Sex input: {}".format(self.sex_path))
         print("  > outdir: {}".format(self.outdir))
         print("  > dryrun: {}".format(self.dryrun))

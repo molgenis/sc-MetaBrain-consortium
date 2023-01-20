@@ -55,7 +55,7 @@ Syntax:
     --sample_id_table /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Mathys2019/metadata/snRNAseqPFC_BA10_biospecimen_metadata.csv \
     --sample_col specimenID \
     --id_col projid \
-	--fastqs=/groups/umcg-biogen/tmp01/input/rawdata/single-cell/Mathys2019/fastq \
+	--fastqs /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Mathys2019/fastq \
     --transcriptome /groups/umcg-biogen/tmp01/input/processeddata/single-cell/refdata-gex-GRCh38-2020-A \
 	--localcores 2 \
 	--localmem 16

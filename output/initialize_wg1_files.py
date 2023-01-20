@@ -62,14 +62,14 @@ Syntax:
     --snp_genotypes_filepath /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall/test_dataset.vcf \
     --individual_list_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall/individuals_list_dir
     
-### Mathys 2019 ###
+### AMP-AD ###
 ./initialize_wg1_files.py \
     --step 1 \
     --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC \
     --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/hg38 \
     --dataset_outdir AMP_AD \
     --imputation_subdir 2022-10-07-Imputation \
-    --plink_dir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/2022-11-03-FilteredGenotypes/4-plink2_makepgen
+    --plink_dir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/2022-11-03-FilteredGenotypes/5-plink2_makepgen_after_fill_all_eur_test
     
 ./initialize_wg1_files.py \
     --step 2 \
@@ -91,7 +91,7 @@ class main():
         self.step = getattr(arguments, 'step')
         self.work_dir = getattr(arguments, 'work_dir')
         self.ref_dir = getattr(arguments, 'ref_dir')
-        self.bind_paths = ", ".join(getattr(arguments, 'bind_paths'))
+        self.bind_paths = ",".join(getattr(arguments, 'bind_paths'))
         dataset_outdir = getattr(arguments, 'dataset_outdir')
 
         # Pre-process the dataset output directory.
@@ -162,7 +162,8 @@ class main():
         parser.add_argument("--bind_paths",
                             nargs="*",
                             type=str,
-                            default=["/groups/umcg-biogen/tmp01/"],
+                            default=["/groups/umcg-biogen/tmp01/",
+                                     "/groups/umcg-biogen/tmp01/umcg-mvochteloo/simulated_home:/home/umcg-mvochteloo"],
                             help="List of paths to bind to Singularity. "
                                  "Default: ['/groups/umcg-biogen/tmp01/']")
         parser.add_argument("--dataset_outdir",

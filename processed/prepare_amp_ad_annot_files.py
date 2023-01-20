@@ -84,13 +84,25 @@ def start():
     msbb_df = construct_msbb_df()
 
     # Merging data.
-    coi = ["sex", "platform", "ageDeath", "Study"]
+    coi = ["sex", "race", "platform", "wgs_available", "ageDeath", "Study"]
     df = pd.concat([rosmap_df[coi], mayo_df[coi], msbb_df[coi]], axis=0)
 
     # Construct PSAM data frame.
     psam_df = df.loc[[sample for sample in samples if sample in df.index], :].copy()
-    psam_df.columns = ["SEX", "genotyping_platform", "age", "Study"]
+    psam_df.columns = ["SEX", "race", "genotyping_platform", "wgs_available", "ageDeath", "Study"]
+    psam_df["SEX"] = round_float(psam_df["SEX"], na="0")
+    psam_df["Provided_Ancestry"] = psam_df["race"].map(
+        {"White": "EUR",
+         "Black or African American": "AFR",
+         "Hispanic or Latino": "AMR",
+         "American Native or Alaskan Native": "AMR",
+         "Black, Negro, African-American": "AFR",
+         "NA": "EUR"})
+    psam_df["Provided_Ancestry"].fillna("EUR", inplace=True)
+    psam_df["age"] = round_float(psam_df["ageDeath"], na="NA")
     for col in psam_df.columns:
+        if col not in psam_template:
+            continue
         psam_df.loc[psam_df[col].isnull(), col] = psam_template[col]
 
     # Print overview.
@@ -98,6 +110,8 @@ def start():
     print(psam_df)
     print("")
     for col in psam_df.columns:
+        if col not in psam_template:
+            continue
         print(col)
         print(psam_df[col].value_counts())
         print("")
@@ -109,7 +123,7 @@ def start():
     psam_df = pd.concat([psam_df, pd.DataFrame(psam_template, index=[sample for sample in samples if sample not in psam_df.index])], axis=0)
     psam_df["#FID"] = psam_df.index
     psam_df["IID"] = psam_df.index
-    psam_df["age_range"] = np.floor(psam_df["age"] / 10) * 10
+    psam_df["age_range"] = np.floor(psam_df["ageDeath"] / 10) * 10
 
     psam_df = psam_df.loc[samples, ['#FID', 'IID', 'PAT', 'MAT', 'SEX', 'Provided_Ancestry', 'genotyping_platform', 'array_available', 'wgs_available', 'wes_available', 'age', 'age_range', 'Study', 'smoking_status', 'hormonal_contraception_use_currently', 'menopause', 'pregnancy_status']]
     psam_df.fillna("NA", inplace=True)
@@ -131,6 +145,8 @@ def construct_rosmap_df():
     # Load data.
     wgs_metadata_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/ROSMAP_assay_wholeGenomeSeq_metadata.csv", sep=",", header=0, index_col=None)
     wgs_metadata_df["specimenID"] = wgs_metadata_df["specimenID"].astype(str)
+    wgs_metadata_df["wgs_available"] = "N"
+    wgs_metadata_df.loc[wgs_metadata_df["assay"] == "wholeGenomeSeq", "wgs_available"] = "Y"
 
     biospecimen_metadata_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/ROSMAP_biospecimen_metadata.csv", sep=",", header=0, index_col=None)
     biospecimen_metadata_df["specimenID"] = biospecimen_metadata_df["specimenID"].astype(str)
@@ -140,21 +156,21 @@ def construct_rosmap_df():
     clinical_df["individualID"] = clinical_df["individualID"].astype(str)
 
     # Merge together.
-    df = idkey_df.merge(wgs_metadata_df, left_on="wgs_id", right_on="specimenID", how="left").merge(biospecimen_metadata_df, left_on="wgs_id", right_on="specimenID", how="left").merge(clinical_df, on="projid", how="left")
+    df = idkey_df.merge(wgs_metadata_df, left_on="wgs_id", right_on="specimenID", how="left").merge(biospecimen_metadata_df, on="specimenID", how="left").merge(clinical_df, on="projid", how="left")
     df.index = df["wgs_id"]
     df.index.name = None
 
     # Reformat columns.
     df["sex"] = df["msex"].map({1.0: 1, 0.0: 2}, na_action='ignore')
-    # df["race"] = df["race"].map({1: "White",
-    #                              2: "Black, Negro, African-American",
-    #                              3: "Native American, Indian",
-    #                              4: "Eskimo",
-    #                              5: "Aleut",
-    #                              6: "Asian or Pacific Island",
-    #                              8: "NA",
-    #                              9: "NA"},
-    #                             na_action='ignore')
+    df["race"] = df["race"].map({1: "White",
+                                 2: "Black, Negro, African-American",
+                                 3: "Native American, Indian",
+                                 4: "Eskimo",
+                                 5: "Aleut",
+                                 6: "Asian or Pacific Island",
+                                 8: "NA",
+                                 9: "NA"},
+                                na_action='ignore')
     df["ageDeath"] = [90 if age == "90+" else float(age) for age in df["age_death"]]
     df["Study"] = df["Study"].fillna("ROSMAP")
 
@@ -169,6 +185,8 @@ def construct_mayo_df():
     # Load data.
     wgs_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/MayoRNAseq_assay_wholeGenomeSeq_metadata.csv", sep=",", header=0, index_col=None)
     wgs_df["specimenID"] = wgs_df["specimenID"].astype(str)
+    wgs_df["wgs_available"] = "N"
+    wgs_df.loc[wgs_df["assay"] == "wholeGenomeSeq", "wgs_available"] = "Y"
 
     biospecimen_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/MayoRNAseq_biospecimen_metadata.csv", sep=",", header=0, index_col=None)
     biospecimen_df["specimenID"] = biospecimen_df["specimenID"].astype(str)
@@ -198,6 +216,8 @@ def construct_msbb_df():
     # Load data.
     wgs_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/MSBB_assay_wholeGenomeSeq_metadata.csv", sep=",", header=0, index_col=None)
     wgs_df["specimenID"] = wgs_df["specimenID"].astype(str)
+    wgs_df["wgs_available"] = "N"
+    wgs_df.loc[wgs_df["assay"] == "wholeGenomeSeq", "wgs_available"] = "Y"
 
     biospecimen_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/MSBB_biospecimen_metadata.csv", sep=",", header=0, index_col=None)
     biospecimen_df["specimenID"] = biospecimen_df["specimenID"].astype(str)
@@ -213,12 +233,12 @@ def construct_msbb_df():
 
     # Reformat columns.
     df["sex"] = df["sex"].map({"male": 1, "female": 2}, na_action='ignore')
-    # df["race"] = df["race"].map({"W": "White",
-    #                              "B": "Black or African American",
-    #                              "H": "Hispanic or Latino",
-    #                              "A": "American Native or Alaskan Native",
-    #                              "U": "NA"},
-    #                             na_action='ignore')
+    df["race"] = df["race"].map({"W": "White",
+                                 "B": "Black or African American",
+                                 "H": "Hispanic or Latino",
+                                 "A": "American Native or Alaskan Native",
+                                 "U": "NA"},
+                                na_action='ignore')
     df["ageDeath"] = [90 if age == "90+" else float(age) for age in df["ageDeath"]]
     df["Study"] = "MSBB"
 
@@ -227,6 +247,22 @@ def construct_msbb_df():
     del wgs_df, biospecimen_df, individual_df
 
     return df
+
+
+def round_float(s, na):
+    rounded_values = []
+    for age in s:
+        if np.isnan(age):
+            rounded_values.append(na)
+            continue
+
+        if isinstance(age, float):
+            rounded_values.append("{:.0f}".format(np.round(age)))
+            continue
+
+        rounded_values.append(age)
+
+    return rounded_values
 
 
 if __name__ == '__main__':
