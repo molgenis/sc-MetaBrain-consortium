@@ -3,7 +3,7 @@
 """
 File:         initialize_wg1_files.py
 Created:      2022/10/07
-Last Changed: 2022/10/14
+Last Changed: 2023/02/02
 Author:       M.Vochteloo
 
 Copyright (C) 2022 M.Vochteloo
@@ -67,19 +67,20 @@ Syntax:
     --step 1 \
     --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC \
     --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/hg38 \
-    --dataset_outdir AMP_AD \
+    --dataset_outdir 2023-02-02-AMP_AD \
     --imputation_subdir 2022-10-07-Imputation \
-    --plink_dir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/2022-11-03-FilteredGenotypes/5-plink2_makepgen_after_fill_all_eur_test
+    --plink_dir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/2022-11-03-FilteredGenotypes/5-plink2_makepgen_after_fill_all_eur
     
 ./initialize_wg1_files.py \
     --step 2 \
     --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC \
     --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/hg38 \
-    --dataset_outdir AMP_AD \
+    --dataset_outdir 2023-02-02-AMP_AD \
     --demultiplexing_subdir 2022-10-10-DemultiplexingAndDoubletRemoval \
+    --demultiplexing_singularity /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/WG1-pipeline-QC_wgpipeline.simg \
     --samplesheet_filepath /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019/samplesheet.txt \
     --scRNAseq_dir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019 \
-    --snp_genotypes_filepath  \
+    --snp_genotypes_filepath /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation/vcf_all_merged/Mathys/Mathys_imputed_hg38_R2_0.3_MAF0.05.vcf \
     --individual_list_dir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019/individual_list_dir
 """
 
@@ -98,7 +99,7 @@ class main():
         date_str = datetime.now().strftime("%Y-%m-%d")
         if not re.match("^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])", dataset_outdir):
             dataset_outdir = "{}-{}".format(date_str, dataset_outdir)
-        self.dataset_outdir =dataset_outdir
+        self.dataset_outdir = dataset_outdir
 
         # Step 1 arguments.
         self.imputation_subdir = getattr(arguments, 'imputation_subdir')
@@ -152,10 +153,12 @@ class main():
         parser.add_argument("--work_dir",
                             type=str,
                             required=True,
+                            default=None,
                             help="The working directory.")
         parser.add_argument("--ref_dir",
                             type=str,
                             required=True,
+                            default=None,
                             help="This is the path to the directory containing "
                                  "the imputation references provided for the "
                                  "SNP processing and imputation")
@@ -169,6 +172,7 @@ class main():
         parser.add_argument("--dataset_outdir",
                             type=str,
                             required=True,
+                            default=None,
                             help="The name of the output directory where you "
                                  "would like all outputs/results saved.")
 
@@ -200,8 +204,9 @@ class main():
                                  "subdirectory.")
         parser.add_argument("--demultiplexing_singularity",
                             type=str,
-                            default="WG1-pipeline-QC_wgpipeline.sif",
-                            help="")
+                            default="WG1-pipeline-QC_wgpipeline.simg",
+                            help="The complete path to the singularity image "
+                                 "that has all the softwares")
         parser.add_argument("--demultiplexing_config",
                             type=str,
                             default="sceQTL-Gen_Demultiplex.yaml",
@@ -288,12 +293,16 @@ class main():
                              configtemplate, configfile):
         """
         Step 1) run 'dry_run.sh'
-        Step 2) run 'run.sh'
-        Step 3) check 'pca_sex_checks/check_sex_update_remove.tsv'
-        Step 4) check 'pca_sex_checks/ancestry_update_remove.tsv'
-        Step 5) run 'dry_run.sh'
-        Step 6) run 'run_20jobs.sh'
-        Step 7) run 'report.sh'
+        Step 2) run 'build_dag1.sh'
+        Step 3) run 'run_20jobs_short.sh'
+        Step 4) check 'pca_sex_checks/check_sex_update_remove.tsv'
+        Step 5) check 'pca_sex_checks/ancestry_update_remove.tsv'
+        Step 6) run 'dry_run.sh'
+        Step 7) run 'build_dag2.sh'
+        Step 8) run 'run_22jobs_until_prehasing.sh'
+        Step 9) run 'run_22jobs_until_combine.sh'
+        Step 10) run 'run_22jobs_short.sh'
+        Step 11) run 'report.sh'
         """
         config_arguments = (
             ("ref_dir", self.ref_dir),
@@ -314,11 +323,40 @@ class main():
             output_dir=output_dir
         )
 
+        self.write_unlock_script(
+            snakefile=snakefile,
+            configfile=configfile,
+            output_dir=output_dir
+        )
+
+        for i in range(1, 3):
+            self.write_build_dag_script(
+                snakefile=snakefile,
+                configfile=configfile,
+                output_dir=output_dir,
+                outfile="dag{}".format(i)
+            )
+
+        for time in ["short", "medium", "long"]:
+            self.write_run_script(
+                snakefile=snakefile,
+                configfile=configfile,
+                output_dir=output_dir,
+                log_dir=log_dir,
+                jobs=22,
+                time=time,
+                outfile="run_22jobs_{}".format(time)
+            )
+
         self.write_run_script(
             snakefile=snakefile,
             configfile=configfile,
             output_dir=output_dir,
-            log_dir=log_dir
+            log_dir=log_dir,
+            until="eagle_prephasing",
+            jobs=22,
+            time="short",
+            outfile="run_22jobs_until_prehasing"
         )
 
         self.write_run_script(
@@ -326,8 +364,10 @@ class main():
             configfile=configfile,
             output_dir=output_dir,
             log_dir=log_dir,
-            jobs=20,
-            outfile="run_20jobs"
+            until="combine_vcfs_ancestry",
+            jobs=22,
+            time="long",
+            outfile="run_22jobs_until_combine"
         )
 
         self.write_report_script(
@@ -343,14 +383,17 @@ class main():
         """
 
         Step 1) run 'dry_run.sh'
-        Step 2) run 'run_4jobs.sh'
-        Step 3) run 'dry_run.sh'
-        Step 4) run 'run_4jobs.sh'
-        Step 5) check 'manual_selections/DoubletDetection/DoubletDetection_manual_selection.tsv'
-        Step 6) check 'manual_selections/scrublet/scrublet_percentile_manual_selection.tsv'
-        Step 7) run 'dry_run.sh'
-        Step 8) run 'run_4jobs.sh'
-        Step 9) run 'report.sh'
+        Step 2) run 'build_dag1.sh'
+        Step 3) run 'run_22jobs_short.sh'
+        Step 4) run 'dry_run.sh'
+        Step 5) run 'build_dag2.sh'
+        Step 6) run 'run_22jobs_short.sh'
+        Step 7) check 'manual_selections/DoubletDetection/DoubletDetection_manual_selection.tsv'
+        Step 8) check 'manual_selections/scrublet/scrublet_percentile_manual_selection.tsv'
+        Step 9) run 'dry_run.sh'
+        Step 10) run 'build_dag3.sh'
+        Step 11) run 'run_22jobs_short.sh'
+        Step 12) run 'report.sh'
         """
         config_arguments = (
             ("ref_dir", self.ref_dir),
@@ -374,14 +417,30 @@ class main():
             output_dir=output_dir
         )
 
-        self.write_run_script(
+        self.write_unlock_script(
             snakefile=snakefile,
             configfile=configfile,
-            output_dir=output_dir,
-            log_dir=log_dir,
-            jobs=4,
-            outfile="run_4jobs"
+            output_dir=output_dir
         )
+
+        for i in range(1, 4):
+            self.write_build_dag_script(
+                snakefile=snakefile,
+                configfile=configfile,
+                output_dir=output_dir,
+                outfile="dag{}".format(i)
+            )
+
+        for time in ["short", "medium", "long"]:
+            self.write_run_script(
+                snakefile=snakefile,
+                configfile=configfile,
+                output_dir=output_dir,
+                log_dir=log_dir,
+                jobs=22,
+                time=time,
+                outfile="run_20jobs_{}".format(time)
+            )
 
         self.write_report_script(
             snakefile=snakefile,
@@ -405,6 +464,23 @@ class main():
             path=outpath
         )
 
+    def write_build_dag_script(self, snakefile, configfile, output_dir,
+                               outfile="dag"):
+        lines = [
+            '#!/bin/bash',
+            '',
+            'snakemake \\',
+            '    --snakefile {} \\'.format(snakefile),
+            '    --configfile {} \\'.format(configfile),
+            '    --dag | \\',
+            '    dot -Tsvg \\',
+            '        > {}.svg'.format(outfile)
+        ]
+        self.write_lines_to_file(
+            lines=lines,
+            path=os.path.join(output_dir, "build_{}.sh".format(outfile))
+        )
+
     def write_dry_run_script(self, snakefile, configfile, output_dir, cores=1):
         lines = [
             '#!/bin/bash',
@@ -421,11 +497,25 @@ class main():
             path=os.path.join(output_dir, "dry_run.sh")
         )
 
+    def write_unlock_script(self, snakefile, configfile, output_dir):
+        lines = [
+            '#!/bin/bash',
+            '',
+            'snakemake \\',
+            '    --snakefile {} \\'.format(snakefile),
+            '    --configfile {} \\'.format(configfile),
+            '    --unlock'
+        ]
+        self.write_lines_to_file(
+            lines=lines,
+            path=os.path.join(output_dir, "unlock.sh")
+        )
+
     def write_run_script(self, snakefile, configfile, output_dir, log_dir,
-                         jobs=1, restart_times=2, latency_wait=180, nodes=1,
-                         time="short", outfile="run"):
+                         until=None, jobs=1, restart_times=2, latency_wait=30,
+                         nodes=1, time="short", outfile="run"):
         time_dict = {
-            "short": "05:59:59",
+            "short": "05:59:00",
             "medium": "23:59:00",
             "long": "6-23:59:00"
         }
@@ -449,18 +539,23 @@ class main():
             '    --latency-wait {} \\'.format(latency_wait),
             '    --cluster \\',
             '       "sbatch \\',
-            '       --qos regular \\',
-            '       -N {threads} \\',
             '       --nodes={} \\'.format(nodes),
-            '       --mem={resources.mem_per_thread_gb}G \\',
-            '       --tmp={resources.disk_per_thread_gb}G \\',
-            '       -o {} \\'.format(os.path.join(log_dir, '{rule}.out')),
-            '       --export ALL \\',
-            '       --time={}" \\'.format(time_dict[time]),
+            '       --cpus-per-task={threads} \\',
+            '       --mem=\$(({resources.mem_per_thread_gb} * {threads}))G \\',
+            '       --tmp=\$(({resources.disk_per_thread_gb} * {threads}))G \\',
+            '       --time={} \\'.format(time_dict[time]),
+            '       --output={} \\'.format(os.path.join(log_dir, '{rule}.out')),
+            '       --error={} \\'.format(os.path.join(log_dir, '{rule}.out')),
+            '       --export=ALL \\',
+            '       --qos=regular" \\',
             '    > {}/nohup_`date +%Y-%m-%d.%H:%M:%S`.log &'.format(log_dir),
             '',
             'echo "Check status of command with:" ps -p $! -u'
         ]
+
+        if until is not None:
+            lines.insert(6, '    --until {} \\'.format(until))
+
         self.write_lines_to_file(
             lines=lines,
             path=os.path.join(output_dir, "{}.sh".format(outfile))

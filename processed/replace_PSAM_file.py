@@ -138,7 +138,12 @@ class main():
 
     @staticmethod
     def save_file(df, outpath, header=True, index=False, sep="\t"):
-        df.to_csv(outpath, sep=sep, index=index, header=header)
+        compression = 'infer'
+        if outpath.endswith('.gz'):
+            compression = 'gzip'
+
+        df.to_csv(outpath, sep=sep, index=index, header=header,
+                  compression=compression)
         print("\tSaved dataframe: {} "
               "with shape: {}".format(os.path.basename(outpath),
                                       df.shape))

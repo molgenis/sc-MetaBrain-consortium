@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 """
-File:         prepare_Mathys2019_wg1_files.py
-Created:      2022/10/14
-Last Changed: 2022/10/19
+File:         prepare_Fujita2022_wg1_files.py
+Created:      2023/02/27
+Last Changed:
 Author:       M.Vochteloo
 
 Copyright (C) 2022 M.Vochteloo
@@ -32,7 +32,7 @@ import pandas as pd
 # Local application imports.
 
 # Metadata
-__program__ = "Prepare Mathys2019 Workgroup 1 Files"
+__program__ = "Prepare Fujita2022 Workgroup 1 Files"
 __author__ = "Martijn Vochteloo"
 __maintainer__ = "Martijn Vochteloo"
 __email__ = "m.vochteloo@rug.nl"
@@ -48,10 +48,11 @@ __description__ = "{} is a program developed and maintained by {}. " \
 """
 Syntax: 
 
-./prepare_Mathys2019_wg1_files.py \
-    --workdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019 \
-    --sample_id_table /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Mathys2019/metadata/snRNAseqPFC_BA10_biospecimen_metadata.csv \
+./prepare_Fujita2022_wg1_files.py \
+    --workdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Fujita2022 \
+    --sample_id_table /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Fujita2022/unique_individualID.txt.gz \
     --idkey /groups/umcg-biogen/tmp01/input/ROSMAP-scRNAseq/meta/ROSMAP_IDkey.csv \
+    --clinical /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/ROSMAP_clinical.csv \
     --vcf /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation/vcf_all_merged/imputed_hg38.vcf.gz
 """
 
@@ -64,6 +65,7 @@ class main():
         self.sample_id_table = getattr(arguments, 'sample_id_table')
         self.n_individuals_per_pool = getattr(arguments, 'n_individuals_per_pool')
         self.idkey = getattr(arguments, 'idkey')
+        self.clinical = getattr(arguments, 'clinical')
         self.vcf = getattr(arguments, 'vcf')
 
         # Creating output directory
@@ -99,6 +101,10 @@ class main():
                             type=str,
                             required=True,
                             help="")
+        parser.add_argument("--clinical",
+                            type=str,
+                            required=True,
+                            help="")
         parser.add_argument("--vcf",
                             type=str,
                             required=True,
@@ -112,9 +118,12 @@ class main():
         sit_df = self.load_file(self.sample_id_table)
         print("\t  > Found {} samples".format(sit_df.shape[0]))
         idkey_df = self.load_file(self.idkey)
+        clinical_df = self.load_file(self.clinical)
 
         print("Adding genotype column")
+        projid_dict = dict(zip(clinical_df["individualID"], clinical_df["projid"]))
         wgs_dict = dict(zip(idkey_df["projid"], idkey_df["wgs_id"]))
+        sit_df["projid"] = sit_df["individualID"].map(projid_dict)
         sit_df["genotype_id"] = sit_df["projid"].map(wgs_dict)
 
         print("Subsetting GTE columns")
@@ -124,21 +133,16 @@ class main():
         del sit_df
 
         print("Checking if all data is available")
-        expr_samples = set([file for file in os.listdir(self.workdir) if os.path.isdir(os.path.join(self.workdir, file))])
         geno_samples = set(self.load_file(inpath=self.vcf, sep="\t", skiprows=39, nrows=1).columns.tolist()[9:])
 
         mask = []
         for _, (expr_id, geno_id) in gte_df.iterrows():
-            expr_found = True
-            if expr_id not in expr_samples:
-                expr_found = False
-
             geno_found = True
             if geno_id not in geno_samples:
                 geno_found = False
 
-            if not expr_found or not geno_found:
-                print("\tExpression ID: {} [{}]\tGenotype ID: {} [{}]".format(expr_id, expr_found, geno_id, geno_found))
+            if not geno_found:
+                print("\tExpression ID: {} [NA]\tGenotype ID: {} [{}]".format(expr_id, geno_id, geno_found))
                 mask.append(False)
             else:
                 mask.append(True)
@@ -149,28 +153,12 @@ class main():
         gte_df = gte_df.loc[mask, :].copy()
 
         self.save_file(df=gte_df,
-                       outpath=os.path.join(self.workdir, "Mathys_GTE.txt.gz"),
+                       outpath=os.path.join(self.workdir, "Fujita_GTE.txt.gz"),
                        sep="\t")
         self.save_file(df=gte_df[["genotype_id"]],
                        header=False,
-                       outpath=os.path.join(self.workdir, "Mathys_genotype_samples.txt"),
+                       outpath=os.path.join(self.workdir, "Fujita_genotype_samples.txt"),
                        sep="\t")
-
-        print("Create sample sheet")
-        sample_sheet_df = gte_df[["projid"]].copy()
-        sample_sheet_df["projid"] = sample_sheet_df["projid"].astype(str)
-        sample_sheet_df.columns = ["Pool"]
-        sample_sheet_df["N_Individuals"] = self.n_individuals_per_pool
-        self.save_file(df=sample_sheet_df,
-                       outpath=os.path.join(self.workdir, "samplesheet.txt"),
-                       sep="\t")
-
-        print("Saving data")
-        for _, (projid_id, genotype_id) in gte_df.iterrows():
-            self.save_lines_to_file(
-                outpath=os.path.join(self.out_dir, "{}.txt".format(projid_id)),
-                lines=["{}_{}".format(projid_id, genotype_id)]
-            )
 
     @staticmethod
     def load_file(inpath, header=0, index_col=None, sep=",", skiprows=None,
@@ -194,20 +182,13 @@ class main():
               "with shape: {}".format(os.path.basename(outpath),
                                       df.shape))
 
-    @staticmethod
-    def save_lines_to_file(lines, outpath):
-        with open(outpath, "w") as f:
-            for line in lines:
-                f.write(line + "\n")
-        f.close()
-        print("\tSaved file: {}".format(os.path.basename(outpath)))
-
     def print_arguments(self):
         print("Arguments:")
         print("  > Working directory: {}".format(self.workdir))
         print("  > N-individuals per pool: {}".format(self.n_individuals_per_pool))
         print("  > Sample-ID file: {}".format(self.sample_id_table))
         print("  > IDkey file: {}".format(self.idkey))
+        print("  > Clinical file: {}".format(self.clinical))
         print("  > VCF file: {}".format(self.vcf))
         print("")
 

@@ -295,10 +295,14 @@ class main():
                 snv_below_vqsr, snv_non_pass, incorrect_inbreeding_coeff,
                 below_inbreeding_coeff, no_gt_col, failed_pre_filter_var_stats,
                 n_failed_cr, n_failed_maf, n_failed_hwe, pass_qc]
-
     @staticmethod
     def save_file(df, outpath, header=True, index=False, sep=","):
-        df.to_csv(outpath, sep=sep, index=index, header=header)
+        compression = 'infer'
+        if outpath.endswith('.gz'):
+            compression = 'gzip'
+
+        df.to_csv(outpath, sep=sep, index=index, header=header,
+                  compression=compression)
         print("\tSaved dataframe: {} "
               "with shape: {}".format(os.path.basename(outpath),
                                       df.shape))
