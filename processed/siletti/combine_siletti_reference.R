@@ -1,17 +1,22 @@
+#!/usr/bin/env Rscript
+
 # Title     : combine_siletti_reference.R
 # Objective :
 # Created by: mvochteloo
-# Created on: 2023/03/15
+# Created on: 2023/03/20
 
 # install.packages('Seurat')
-# install.packages('SeuratDisk')
+# install.packages('Matrix')
 library(Seurat)
-library(SeuratDisk)
+library(Matrix)
 
-Convert("h5ad/nonneurons.h5ad", "h5Seurat/nonneurons.h5Seurat")
-nonneurons <- LoadH5Seurat("h5Seurat/nonneurons.h5Seurat")
-Convert("h5ad/neurons.h5ad", "h5Seurat/neurons.h5Seurat")
-neurons <- LoadH5Seurat("h5Seurat/neurons.h5Seurat")
+args <- commandArgs(trailingOnly=TRUE)
+work_dir <- args[1]
+
+nonneurons <- readRDS(paste0(work_dir, '/nonneurons/seurat_object.rds'))
+nonneurons <- UpdateSeuratObject(nonneurons)
+neurons <- readRDS(paste0(work_dir, '/neurons/seurat_object.rds'))
+neurons <- UpdateSeuratObject(neurons)
 
 reference <- merge(nonneurons, neurons)
 reference <- SCTransform(reference)
@@ -20,4 +25,4 @@ reference <- RunPCA(reference)
 reference <- RunUMAP(reference, dims = 1:30, return.model = T)
 reference <- FindNeighbors(reference, dims = 1:30, k.param = 20)
 reference <- FindClusters(reference, resolution = 1.2)
-saveRDS(reference, "siletti.rds")
+saveRDS(reference, paste0(work_dir, 'siletti.rds'))
