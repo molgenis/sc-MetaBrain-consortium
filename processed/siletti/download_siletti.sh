@@ -10,7 +10,7 @@ ml R
 source /groups/umcg-biogen/tmp01/umcg-mvochteloo/sc_env_3.10.4/bin/activate
 # anndata==0.8.0
 
-cd /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Siletti2022_test/ || exit
+cd /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Siletti2022/ || exit
 
 mkdir raw
 curl -o raw/nonneurons.h5ad https://storage.googleapis.com/linnarsson-lab-human/Nonneurons.h5ad
