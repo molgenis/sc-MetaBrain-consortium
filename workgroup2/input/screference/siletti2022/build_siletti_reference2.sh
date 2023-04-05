@@ -4,13 +4,12 @@ ml HDF5/1.12.2-gompi-2022a
 ml Python/3.10.4-GCCcore-11.3.0
 ml R
 # Seurat_4.3.0
-# SeuratObject_4.1.3
 # Matrix_1.5-3
 
 source /groups/umcg-biogen/tmp01/umcg-mvochteloo/sc_env_3.10.4/bin/activate
 # anndata==0.8.0
 
-cd /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Siletti2022/ || exit
+cd /groups/umcg-biogen/tmp01/input/processeddata/single-cell/screference/Siletti2022/ || exit
 
 mkdir raw
 curl -o raw/nonneurons.h5ad https://storage.googleapis.com/linnarsson-lab-human/Nonneurons.h5ad
