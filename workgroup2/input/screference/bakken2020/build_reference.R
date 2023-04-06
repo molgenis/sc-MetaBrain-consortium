@@ -14,12 +14,17 @@ args <- commandArgs(trailingOnly = TRUE)
 ref <- readRDS(file = args[1])
 
 downsample <- args[2]
-appendix <- ""
 if (downsample != "all") {
   ref <- subset(x = ref, downsample = strtoi(args[2]))
-  appendix <- paste0("downsample", downsample)
 }
-ref <- RunUMAP(object = ref, reduction = "pca", dims = 1:50, return.model = TRUE)
+
+ref <- SCTransform(ref)
+set.seed(7777)
+ref <- RunPCA(ref, verbose = FALSE)
+ref <- RunUMAP(ref, reduction = "pca", dims = 1:50, return.model = T)
+# Only one graph name supplied, storing nearest-neighbor graph only
+ref <- FindNeighbors(ref, dims = 1:50, k.param = 20)
+ref <- FindClusters(ref, resolution = 1.2)
 
 ref <- AzimuthReference(
   object = ref,
@@ -32,5 +37,5 @@ ref <- AzimuthReference(
   reference.version = "1.0.0"
 )
 
-SaveAnnoyIndex(object = ref[["refdr.annoy.neighbors"]], file = paste0("reference/idx", appendix,".annoy"))
-saveRDS(object = ref, file = paste0("reference/ref", appendix,".Rds"))
+SaveAnnoyIndex(object = ref[["refdr.annoy.neighbors"]], file = paste0(args[2], "idx.annoy"))
+saveRDS(object = ref, file = paste0(args[2], "ref.Rds"))
