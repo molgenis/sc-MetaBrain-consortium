@@ -3,7 +3,7 @@
 """
 File:         plot_confusion_matrix.py
 Created:      2023/04/06
-Last Changed:
+Last Changed: 2023/04/07
 Author:       M.Vochteloo
 
 Copyright (C) 2022 M.Vochteloo
@@ -85,7 +85,7 @@ class main():
         }
 
         # Creating output directory
-        self.outdir = os.path.join(self.workdir, "confusion_matrices")
+        self.outdir = os.path.join(self.workdir, "plots", "confusion_matrices")
         if not os.path.exists(self.outdir):
             os.makedirs(self.outdir)
 
@@ -118,7 +118,7 @@ class main():
     def start(self):
         self.print_arguments()
         print("Loading data")
-        meta_data_df = self.load_file("{}/seurat_metadata.csv".format(self.workdir))
+        meta_data_df = self.load_file(os.path.join(self.workdir, "data", "seurat_metadata.csv"))
         meta_data_df["predicted.major_subclass"] = meta_data_df["predicted.major_subclass"].map(self.major_subclass_map)
 
         print("\tPlotting.")
