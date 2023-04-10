@@ -14,13 +14,13 @@ library(ggplot2)
 
 # work_dir <- "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-02-02-WorkGroup2CellType/2023-04-05-Mathys2019"
 # query_file <- "/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/Mathys2019/2023-04-05-SeuratObject/Mathys2019.rds"
-# ref_dir <- "/groups/umcg-biogen/tmp01/input/processeddata/single-cell/screference/Bakken2020/reference"
+# ref_file <- "/groups/umcg-biogen/tmp01/input/processeddata/single-cell/screference/Bakken2020/reference"
 # subset <- "all"
 
 args <- commandArgs(trailingOnly = TRUE)
 work_dir <- args[1]
 query_file <- args[2]
-ref_dir <- args[3]
+ref_file <- args[3]
 subset <- args[4]
 
 dir.create(file.path(work_dir, subset), showWarnings = FALSE)
@@ -31,7 +31,7 @@ dir.create(file.path(work_dir, subset, "plots", "dimplots"), showWarnings = FALS
 dir.create(file.path(work_dir, subset, "plots", "prediction_scores"), showWarnings = FALSE)
 dir.create(file.path(work_dir, subset, "plots", "prediction_scores", "feature_plots"), showWarnings = FALSE)
 dir.create(file.path(work_dir, subset, "plots", "prediction_scores", "violin_plots"), showWarnings = FALSE)
-dir.create(file.path(work_dir, subset, "plots", "tables"), showWarnings = FALSE)
+dir.create(file.path(work_dir, subset, "tables"), showWarnings = FALSE)
 
 query_broad_cell_type_colors <- c(
   "Ast" = "#D55E00",
@@ -57,7 +57,7 @@ reference_major_subclass_colors <- c(
 
 # read the query and the reference
 query <- readRDS(query_file)
-reference <- readRDS(paste0(ref_dir, "/", subset, "/ref.Rds"))
+reference <- readRDS(ref_file)
 
 # find transfer anchors
 anchors <- FindTransferAnchors(
@@ -109,7 +109,7 @@ query <- MapQuery(
 # 18:19:27 Finished
 
 # save the result
-saveRDS(query, paste0(work_dir, "/", subset, "/data/mathys2019_bakken2020training.rds"))
+# saveRDS(query, paste0(work_dir, "/", subset, "/data/mathys2019_bakken2020training.rds"))
 write.csv(query@meta.data, paste0(work_dir, "/", subset, "/data/seurat_metadata.csv"))
 
 p1 <- DimPlot(object = reference,
