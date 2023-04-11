@@ -454,7 +454,7 @@ class main():
         yaml_lines = []
         for line in open(template, 'r'):
             for label, argument in arguments:
-                if label in line:
+                if line.statswith("  {}".format(label)):
                     line = "  {}: {}\n".format(label, argument)
                 line = line.replace("\n", "")
             yaml_lines.append(line)
