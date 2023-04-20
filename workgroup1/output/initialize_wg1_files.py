@@ -453,10 +453,10 @@ class main():
     def write_configfile(self, template, arguments, outpath):
         yaml_lines = []
         for line in open(template, 'r'):
+            line = line.replace("\n", "")
             for label, argument in arguments:
                 if line.statswith("  {}".format(label)):
-                    line = "  {}: {}\n".format(label, argument)
-                line = line.replace("\n", "")
+                    line = "  {}: {}".format(label, argument)
             yaml_lines.append(line)
 
         self.write_lines_to_file(
@@ -512,8 +512,8 @@ class main():
         )
 
     def write_run_script(self, snakefile, configfile, output_dir, log_dir,
-                         until=None, jobs=1, restart_times=2, latency_wait=30,
-                         nodes=1, time="short", outfile="run"):
+                         jobs=1, restart_times=2, latency_wait=30, nodes=1,
+                         time="short", until=None, outfile="run"):
         time_dict = {
             "short": "05:59:00",
             "medium": "23:59:00",

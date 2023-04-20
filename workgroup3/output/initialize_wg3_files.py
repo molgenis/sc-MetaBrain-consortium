@@ -25,6 +25,7 @@ root directory of this source tree. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import print_function
 from datetime import datetime
 import argparse
+import socket
 import os
 import re
 
@@ -49,26 +50,40 @@ __description__ = "{} is a program developed and maintained by {}. " \
 """
 Syntax: 
 
-### Mathys2019 ###
+### Mathys2019 - Gearshift ###
 ./initialize_wg3_files.py \
     --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA \
-    --dataset_outdir Mathys2019 \
+    --dataset_outdir 2023-04-12-Mathys2019 \
     --image_folder /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/WG3-pipeline-QTL/ \
+    --top_dir /groups/umcg-biogen/tmp01/ /groups/umcg-biogen/tmp01/umcg-mvochteloo/simulated_home:/home/umcg-mvochteloo \
     --wg1_folder /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation/ \
     --wg2_folder /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-02-02-WorkGroup2CellType/2023-04-05-Mathys2019/all/ \
     --unimputed_folder /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation/harmonize_hg38/EUR_harmonised_hg38 \
-    --ancestry_split_vcf vcf_merged_by_ancestries/ \
+    --genotype_input_file /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation/vcf_all_merged/Mathys/Mathys_imputed_hg38.vcf.gz \
     --wg1_psam update_sex_ancestry/update_sex.psam \
     --gtf_annotation_file /groups/umcg-biogen/tmp01/input/processeddata/single-cell/refdata-gex-GRCh38-2020-A/genes/genes.gtf \
-    --cell_annotation /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-02-02-WorkGroup2CellType/2023-04-05-Mathys2019/all/data/seurat_metadata.csv \
-    --wg1_singlets_assigned ../Step2-DemultiplexingAndDoubletRemoval/QC_figures/seurat_object_all_pools_singlet_barcodes_final_assignments.rds
-    
+    --cell_annotation /groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/Mathys2019/Mathys_cell_annotations.tsv \
+    --wg1_singlets_assigned ../Step2-DemultiplexingAndDoubletRemoval/QC_figures/seurat_object_all_pools_singlet_barcodes_final_assignments.rds \
+    --number_of_permutations 100 \
+    --exclude_ct L1/END
+ 
+### Mathys2019 - Nibbler step 2 ###   
+./initialize_wg3_files.py \
+    --step 2 \
+    --work_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA \
+    --dataset_outdir 2023-04-12-Mathys2019 \
+    --image_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/WG3-pipeline-QTL/ \
+    --top_dir /groups/umcg-biogen/tmp02/ /groups/umcg-biogen/tmp02/users/umcg-mvochteloo/simulated_home:/home/umcg-mvochteloo \
+    --number_of_permutations 100 \
+    --minor_allele_frequency 0.05 \
+    --exclude_ct L1/END
 
 """
 
-
 class main():
     def __init__(self):
+        self.hostname = socket.gethostname()
+
         # Get the command line arguments.
         arguments = self.create_argument_parser()
         self.step = getattr(arguments, 'step')
@@ -88,7 +103,7 @@ class main():
         self.wg1_folder = getattr(arguments, 'wg1_folder')
         self.wg2_folder = getattr(arguments, 'wg2_folder')
         self.unimputed_folder = getattr(arguments, 'unimputed_folder')
-        self.ancestry_split_vcf = getattr(arguments, 'ancestry_split_vcf')
+        self.genotype_input_file = getattr(arguments, 'genotype_input_file')
         self.wg1_psam = getattr(arguments, 'wg1_psam')
         self.gtf_annotation_file = getattr(arguments, 'gtf_annotation_file')
         self.cell_annotation = getattr(arguments, 'cell_annotation')
@@ -102,7 +117,7 @@ class main():
                                  ("--wg1_folder", self.wg1_folder),
                                  ("--wg2_folder", self.wg2_folder),
                                  ("--unimputed_folder", self.unimputed_folder),
-                                 ("--ancestry_split_vcf", self.ancestry_split_vcf),
+                                 ("--genotype_input_file", self.genotype_input_file),
                                  ("--wg1_psam", self.wg1_psam),
                                  ("--gtf_annotation_file", self.gtf_annotation_file),
                                  ("--cell_annotation", self.cell_annotation),
@@ -115,9 +130,21 @@ class main():
 
         # Step 2 arguments.
         self.qtl_config = getattr(arguments, 'qtl_config')
+        self.number_of_permutations = getattr(arguments, 'number_of_permutations')
+        self.minor_allele_frequency = getattr(arguments, 'minor_allele_frequency')
+        self.window_size = getattr(arguments, 'window_size')
+        self.hardy_weinberg_cutoff = getattr(arguments, 'hardy_weinberg_cutoff')
+        self.compress_files = getattr(arguments, 'compress_files')
+        self.exclude_ct = getattr(arguments, 'exclude_ct')
 
         if self.step is None or self.step == 2:
-            for label, value in [("--qtl_config", self.qtl_config)]:
+            for label, value in [("--qtl_config", self.qtl_config),
+                                 ("--number_of_permutations", self.number_of_permutations),
+                                 ("--minor_allele_frequency", self.minor_allele_frequency),
+                                 ("--window_size", self.window_size),
+                                 ("--hardy_weinberg_cutoff", self.hardy_weinberg_cutoff),
+                                 ("--compress_files", self.compress_files),
+                                 ("--exclude_ct", self.exclude_ct)]:
                 if value is None:
                     print("Argument {} is required when --step equals {}.".format(label, self.step))
                     exit()
@@ -160,8 +187,7 @@ class main():
         parser.add_argument("--top_dir",
                             nargs="*",
                             type=str,
-                            default=["/groups/umcg-biogen/tmp01/",
-                                     "/groups/umcg-biogen/tmp01/umcg-mvochteloo/simulated_home:/home/umcg-mvochteloo"],
+                            required=True,
                             help="List of paths to bind to Singularity. "
                                  "Default: ['/groups/umcg-biogen/tmp01/']")
 
@@ -184,12 +210,10 @@ class main():
                             help="The path, and base filename to the "
                                  "unimputed genotype file. These are created "
                                  "in WG1 and are in plink2 formats.")
-        parser.add_argument("--ancestry_split_vcf",
+        parser.add_argument("--genotype_input_file",
                             type=str,
                             default=None,
-                            help="Relative path, relative to WG1_folder, "
-                                 "where the ancestry split imputation "
-                                 "results are stored. ")
+                            help="")
         parser.add_argument("--wg1_psam",
                             type=str,
                             default=None,
@@ -233,6 +257,30 @@ class main():
                             type=str,
                             default="Qtl_wp3.yaml",
                             help="")
+        parser.add_argument("--number_of_permutations",
+                            type=int,
+                            default=1000,
+                            help="")
+        parser.add_argument("--minor_allele_frequency",
+                            type=float,
+                            default=0.01,
+                            help="")
+        parser.add_argument("--window_size",
+                            type=int,
+                            default=1000000,
+                            help="gene + cis window from one side")
+        parser.add_argument("--hardy_weinberg_cutoff",
+                            type=float,
+                            default=0.0001,
+                            help="")
+        parser.add_argument("--compress_files",
+                            action='store_false',
+                            help="")
+        parser.add_argument("--exclude_ct",
+                            nargs="*",
+                            type=str,
+                            default=[],
+                            help="")
 
         return parser.parse_args()
 
@@ -240,8 +288,10 @@ class main():
         self.print_arguments()
 
         dataset_work_dir = os.path.join(self.work_dir, self.dataset_outdir)
-        if not os.path.exists(dataset_work_dir):
-            os.makedirs(dataset_work_dir)
+        ct_expression_out_dir = os.path.join(self.work_dir, self.dataset_outdir, "input", "L1")
+        for dir in [dataset_work_dir, ct_expression_out_dir]:
+            if not os.path.exists(dir):
+                os.makedirs(dir)
 
         if self.step is None or self.step == 1:
             print("Generating step 1 files")
@@ -259,10 +309,6 @@ class main():
                 self.wg2_folder += "/"
             if not dataset_work_dir.endswith("/"):
                 dataset_work_dir += "/"
-            if self.ancestry_split_vcf.startswith("/"):
-                self.ancestry_split_vcf = self.ancestry_split_vcf[1:]
-            if not self.ancestry_split_vcf.endswith("/"):
-                self.ancestry_split_vcf += "/"
             if self.wg1_singlets_assigned.startswith("/"):
                 self.wg1_singlets_assigned = self.wg1_singlets_assigned[1:]
             if self.genotype_dir.startswith("/"):
@@ -292,13 +338,17 @@ class main():
                 if not os.path.exists(outdir):
                     os.makedirs(outdir)
 
+            if not dataset_work_dir.endswith("/"):
+                dataset_work_dir += "/"
+
             self.generate_step2_files(
                 wg3_folder=dataset_work_dir,
                 output_dir=output_dir,
                 log_dir=log_dir,
                 snakefile=os.path.join(self.image_folder, "Qtl_Snakefile"),
                 configtemplate=os.path.join(self.image_folder, self.qtl_config),
-                configfile=os.path.join(output_dir, self.qtl_config)
+                configfile=os.path.join(output_dir, self.qtl_config),
+                exclude_ct=self.exclude_ct
             )
 
             print("")
@@ -314,7 +364,7 @@ class main():
             ("WG2_folder", self.wg2_folder),
             ("WG3_folder", wg3_folder),
             ("unimputed_folder", self.unimputed_folder),
-            ("ancestry_split_vcf", self.ancestry_split_vcf),
+            ("genotype_input_file", self.genotype_input_file),
             ("wg1_psam", self.wg1_psam),
             ("gtf_annotation_file", self.gtf_annotation_file),
             ("cellAnnotation", self.cell_annotation),
@@ -345,23 +395,49 @@ class main():
             snakefile=snakefile,
             configfile=configfile,
             output_dir=output_dir,
-            outfile="dag1"
+            outfile="wg3_step1_dag"
+        )
+
+        self.write_run_script(
+            snakefile=snakefile,
+            configfile=configfile,
+            output_dir=output_dir,
+            log_dir=log_dir,
+            jobs=1,
+            restart_times=0,
+            outfile="run_test"
+        )
+
+        self.write_run_script(
+            snakefile=snakefile,
+            configfile=configfile,
+            output_dir=output_dir,
+            log_dir=log_dir,
+            jobs=4,
+            mem=16,
+            outfile="run_4jobs_short"
         )
 
     def generate_step2_files(self, wg3_folder, output_dir, log_dir, snakefile,
-                             configtemplate, configfile):
+                             configtemplate, configfile, exclude_ct):
         """
         """
         config_arguments = (
             ("image_folder", self.image_folder),
             ("top_dir", self.top_dir),
             ("WG3_folder", wg3_folder),
-            ("out_folder", os.path.join(wg3_folder, "output"))
+            ("out_folder", os.path.join(wg3_folder, "output")),
+            ("numberOfPermutations", "'{}'".format(self.number_of_permutations)),
+            ("minorAlleleFrequency", "'{}'".format(self.minor_allele_frequency)),
+            ("windowSize", "'{}'".format(self.window_size)),
+            ("hardyWeinbergCutoff", "'{}'".format(self.hardy_weinberg_cutoff)),
+            ("compressFiles", "true" if self.compress_files else "false"),
         )
         self.write_configfile(
             template=configtemplate,
             arguments=config_arguments,
-            outpath=configfile
+            outpath=configfile,
+            exclude_ct=exclude_ct
         )
 
         self.write_dry_run_script(
@@ -380,16 +456,40 @@ class main():
             snakefile=snakefile,
             configfile=configfile,
             output_dir=output_dir,
-            outfile="dag1"
+            outfile="wg3_step2_dag"
         )
 
-    def write_configfile(self, template, arguments, outpath):
+        self.write_run_script(
+            snakefile=snakefile,
+            configfile=configfile,
+            output_dir=output_dir,
+            log_dir=log_dir,
+            jobs=1,
+            restart_times=0,
+            outfile="run_test"
+        )
+
+        self.write_run_script(
+            snakefile=snakefile,
+            configfile=configfile,
+            output_dir=output_dir,
+            log_dir=log_dir,
+            mem=4,
+            outfile="run_maxjobs_short"
+        )
+
+    def write_configfile(self, template, arguments, outpath, exclude_ct=None):
         yaml_lines = []
         for line in open(template, 'r'):
-            for label, argument in arguments:
-                if line.startswith(label):
-                    line = "{}: {}\n".format(label, argument)
-                line = line.replace("\n", "")
+            line = line.replace("\n", "")
+            if line.startswith("ancestry_split_vcf"):
+                line = "genotype_input_file: {}".format(self.genotype_input_file)
+            else:
+                if line.startswith("    - ") and exclude_ct is not None and line.replace("    - ", "") in exclude_ct:
+                    continue
+                for label, argument in arguments:
+                    if line.startswith(label):
+                        line = "{}: {}".format(label, argument)
             yaml_lines.append(line)
 
         self.write_lines_to_file(
@@ -445,17 +545,41 @@ class main():
         )
 
     def write_run_script(self, snakefile, configfile, output_dir, log_dir,
-                         until=None, jobs=1, restart_times=2, latency_wait=30,
-                         nodes=1, time="short", outfile="run"):
+                         jobs=None, restart_times=2, latency_wait=30,
+                         nodes=1, cpu=1, mem=8,
+                         time="short", until=None, outfile="run"):
         time_dict = {
             "short": "05:59:00",
             "medium": "23:59:00",
             "long": "6-23:59:00"
         }
+        max_submit_pu_dict = {
+            "short": 5000,
+            "medium": 5000,
+            "long": 1000
+        }
 
         if time not in time_dict.keys():
             print("Error, time not recognized.")
             exit()
+
+        mem_units = ''
+        resource_allocation = 'qos'
+        max_submit_pu = 50
+        if self.hostname == 'gearshift':
+            mem_units = 'G'
+            resource_allocation = 'qos'
+            max_submit_pu = max_submit_pu_dict[time]
+        elif self.hostname == 'nibbler':
+            mem_units = 'gb'
+            resource_allocation = 'partition'
+            max_submit_pu = max_submit_pu_dict[time]
+        else:
+            print("Error, nrecognised hostname")
+            exit()
+
+        if jobs is None:
+            jobs = max_submit_pu
 
         lines = [
             '#!/bin/bash',
@@ -463,7 +587,13 @@ class main():
             'nohup \\',
             '  snakemake \\',
             '    --snakefile {} \\'.format(snakefile),
-            '    --configfile {} \\'.format(configfile),
+            '    --configfile {} \\'.format(configfile)
+        ]
+
+        if until is not None:
+            lines.extend('    --until {} \\'.format(until))
+
+        lines.extend([
             '    --rerun-incomplete \\',
             '    --jobs {} \\'.format(jobs),
             '    --use-singularity \\',
@@ -473,21 +603,23 @@ class main():
             '    --cluster \\',
             '       "sbatch \\',
             '       --nodes={} \\'.format(nodes),
-            '       --cpus-per-task={threads} \\',
-            '       --mem=\$(({resources.mem_per_thread_gb} * {threads}))G \\',
-            '       --tmp=\$(({resources.disk_per_thread_gb} * {threads}))G \\',
+            '       --cpus-per-task={} \\'.format(cpu),
+            '       --mem={}{} \\'.format(mem, mem_units)
+        ])
+
+        if self.hostname != "nibbler":
+            lines.extend('       --tmp={}{} \\'.format(mem, mem_units))
+
+        lines.extend([
             '       --time={} \\'.format(time_dict[time]),
             '       --output={} \\'.format(os.path.join(log_dir, '{rule}.out')),
             '       --error={} \\'.format(os.path.join(log_dir, '{rule}.out')),
             '       --export=ALL \\',
-            '       --qos=regular" \\',
+            '       --{}=regular" \\'.format(resource_allocation),
             '    > {}/nohup_`date +%Y-%m-%d.%H:%M:%S`.log &'.format(log_dir),
             '',
             'echo "Check status of command with:" ps -p $! -u'
-        ]
-
-        if until is not None:
-            lines.insert(6, '    --until {} \\'.format(until))
+        ])
 
         self.write_lines_to_file(
             lines=lines,
@@ -504,6 +636,7 @@ class main():
 
     def print_arguments(self):
         print("General arguments")
+        print("  > Host name:                         {}".format(self.hostname))
         print("  > Step:                              {}".format("1 & 2" if self.step is None else str(self.step)))
         print("  > Working directory:                 {}".format(self.work_dir))
         print("  > Dataset output directory:          {}".format(self.dataset_outdir))
@@ -517,7 +650,7 @@ class main():
             print("  > Workgroup 1 folder:                {}".format(self.wg1_folder))
             print("  > Workgroup 2 folder:                {}".format(self.wg2_folder))
             print("  > Unimputed genotype folder:         {}".format(self.unimputed_folder))
-            print("  > Ancestry splitted VCF:             {}".format(self.ancestry_split_vcf))
+            print("  > Genotype input file:               {}".format(self.genotype_input_file))
             print("  > Workgroup 1 PSAM:                  {}".format(self.wg1_psam))
             print("  > GTF annotation file:               {}".format(self.gtf_annotation_file))
             print("  > Cell annotation:                   {}".format(self.cell_annotation))
@@ -530,6 +663,12 @@ class main():
         if self.step is None or self.step == 2:
             print("[Step2] QTL arguments:")
             print("  > Configuration file:                {}".format(self.qtl_config))
+            print("  > Number of permutations:            {}".format(self.number_of_permutations))
+            print("  > Minor allele frequency (MAF):      {}".format(self.minor_allele_frequency))
+            print("  > Window size:                       {}".format(self.window_size))
+            print("  > Hardy-Weinberg cutoff:             {}".format(self.hardy_weinberg_cutoff))
+            print("  > Compress files:                    {}".format(self.compress_files))
+            print("  > Exclude cell types:                {}".format(", ".join(self.exclude_ct)))
             print("")
 
 

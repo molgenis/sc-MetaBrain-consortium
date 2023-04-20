@@ -14,7 +14,7 @@ library(ggplot2)
 
 # work_dir <- "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-02-02-WorkGroup2CellType/2023-04-05-Mathys2019"
 # query_file <- "/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/Mathys2019/2023-04-05-SeuratObject/Mathys2019.rds"
-# ref_file <- "/groups/umcg-biogen/tmp01/input/processeddata/single-cell/screference/Bakken2020/reference"
+# ref_file <- "/groups/umcg-biogen/tmp01/input/processeddata/single-cell/screference/Bakken2020/reference/reference.Rds"
 # subset <- "all"
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -45,19 +45,47 @@ query_broad_cell_type_colors <- c(
   "NA" = "#000000"
 )
 reference_major_subclass_colors <- c(
-  "astrocyte" = "#D55E00",
-  "endothelial cell" = "#CC79A7",
-  "excitatory neuron" = "#0072B2",
-  "inhibitory neuron" = "#56B4E9",
-  "perivascular macrophage" = "#E69F00",
-  "oligodendrocyte" = "#009E73",
-  "oligodendrocyte precursor cell" = "#F0E442",
-  "pericyte" = "#808080"
+  "AST" = "#D55E00",
+  "END" = "#CC79A7",
+  "EX" = "#0072B2",
+  "IN" = "#56B4E9",
+  "PER" = "#E69F00",
+  "OLI" = "#009E73",
+  "OPC" = "#F0E442",
+  "PER" = "#808080"
 )
 
 # read the query and the reference
 query <- readRDS(query_file)
 reference <- readRDS(ref_file)
+
+# get_minor_to_major_subclass_dict <- function(){
+#   cell_type_dict <- list()
+#   # major cell types
+#   cell_type_dict[["Astro"]] <- "AST"
+#   cell_type_dict[["Endo"]] <- "END"
+#   cell_type_dict[["L2/3 IT"]] <- "EX"
+#   cell_type_dict[["L5 ET"]] <- "EX"
+#   cell_type_dict[["L5 IT"]] <- "EX"
+#   cell_type_dict[["L5/6 NP"]] <- "EX"
+#   cell_type_dict[["L6 CT"]] <- "EX"
+#   cell_type_dict[["L6 IT"]] <- "EX"
+#   cell_type_dict[["L6 IT Car3"]] <- "EX"
+#   cell_type_dict[["L6b"]] <- "EX"
+#   cell_type_dict[["Lamp5"]] <- "IN"
+#   cell_type_dict[["Micro-PVM"]] <- "MIC"
+#   cell_type_dict[["Oligo"]] <- "OLI"
+#   cell_type_dict[["OPC"]] <- "OPC"
+#   cell_type_dict[["Pvalb"]] <- "IN"
+#   cell_type_dict[["Sncg"]] <- "IN"
+#   cell_type_dict[["Sst"]] <- "IN"
+#   cell_type_dict[["Sst Chodl"]] <- "IN"
+#   cell_type_dict[["Vip"]] <- "IN"
+#   cell_type_dict[["VLMC"]] <- "PER"
+#   return(cell_type_dict)
+# }
+# cell_type_dict <- get_minor_to_major_subclass_dict()
+# reference@meta.data[['major_subclass']] <- as.vector(unlist(cell_type_dict[reference@meta.data[['minor_subclass']]]))
 
 # find transfer anchors
 anchors <- FindTransferAnchors(

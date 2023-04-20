@@ -58,7 +58,8 @@ Syntax:
 ./compare_confusion_matrices.py \
     --workdir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-02-02-WorkGroup2CellType/2023-04-05-Mathys2019 \
     --truths broad.cell.type Subcluster \
-    --predictions predicted.major_subclass predicted.minor_subclass
+    --predictions predicted.major_subclass predicted.minor_subclass \
+    --extension pdf
 """
 
 
@@ -86,6 +87,10 @@ class main():
         self.outdir = os.path.join(self.workdir, "plots", "confusion_matrices")
         if not os.path.exists(self.outdir):
             os.makedirs(self.outdir)
+
+        # Set the right pdf font for exporting.
+        matplotlib.rcParams['pdf.fonttype'] = 42
+        matplotlib.rcParams['ps.fonttype'] = 42
 
     @staticmethod
     def create_argument_parser():

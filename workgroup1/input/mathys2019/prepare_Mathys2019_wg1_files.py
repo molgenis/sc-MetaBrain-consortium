@@ -49,7 +49,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 Syntax: 
 
 ./prepare_Mathys2019_wg1_files.py \
-    --workdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019 \
+    --workdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/Mathys2019 \
     --sample_id_table /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Mathys2019/metadata/snRNAseqPFC_BA10_biospecimen_metadata.csv \
     --idkey /groups/umcg-biogen/tmp01/input/ROSMAP-scRNAseq/meta/ROSMAP_IDkey.csv \
     --vcf /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation/vcf_all_merged/imputed_hg38.vcf.gz
