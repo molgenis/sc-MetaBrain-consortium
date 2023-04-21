@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 """
-File:         replicate_sn_eqtls_in_bryois.py
+File:         scmetabrain_and_bryois_replication.py
 Created:      2023/04/20
-Last Changed:
+Last Changed: 2023/04/21
 Author:       M.Vochteloo
 
 Copyright (C) 2020 M.Vochteloo
@@ -25,7 +25,6 @@ root directory of this source tree. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import print_function
 from datetime import datetime
 import argparse
-import gzip
 import glob
 import re
 import os
@@ -33,8 +32,9 @@ import os
 # Third party imports.
 import numpy as np
 import pandas as pd
+import h5py
 from statsmodels.stats import multitest
-# import rpy2.robjects as robjects
+import rpy2.robjects as robjects
 from scipy import stats
 import seaborn as sns
 import matplotlib
@@ -46,17 +46,17 @@ from adjustText import adjust_text
 
 """
 Syntax:
-./replicate_sn_eqtls_in_bryois.py \
+./scmetabrain_and_bryois_replication.py \
     --work_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-20-ReplicateInBryois \
-    --dataset_outdir 2023-04-12-Mathys2019 \
+    --dataset_outdir 2023-04-21-Mathys2019 \
     --wg3_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/2023-04-12-Mathys2019 \
-    --exclude_ct END \
+    --exclude_ct EX IN END AST OLI OPC MIC \
     --bryois_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-20-ReplicateInBryois/Bryois2022
     
 """
 
 # Metadata
-__program__ = "Replicate sneQTLs in Bryois et al. 2022"
+__program__ = "scMetaBrain and Bryois et al. 2022 Replication"
 __author__ = "Martijn Vochteloo"
 __maintainer__ = "Martijn Vochteloo"
 __email__ = "m.vochteloo@rug.nl"
@@ -83,6 +83,7 @@ class main():
         self.bryois_n = 196
         self.extensions = getattr(arguments, 'extensions')
         self.force = getattr(arguments, 'force')
+        self.verbose = getattr(arguments, 'verbose')
         self.qvalues_script = getattr(arguments, 'qvalues')
         self.rb_script = getattr(arguments, 'rb')
 
@@ -99,15 +100,15 @@ class main():
 
         ########################################################################
 
-        self.dist_to_repl_ct_dict = {
-            "AST": "Astrocytes",
-            "END": "Endothelial.cells",
-            "EX": "Excitatory.neurons",
-            "IN": "Inhibitory.neurons",
-            "MIC": "Microglia",
-            "OLI": "Oligodendrocytes",
-            "OPC": "OPCs...COPs",
-            "PER": "Pericytes"
+        self.bryois_ct_dict = {
+            "Astrocytes": "AST",
+            "Endothelial.cells": "END",
+            "Excitatory.neurons": "EX",
+            "Inhibitory.neurons": "IN",
+            "Microglia": "MIC",
+            "Oligodendrocytes": "OLI",
+            "OPCs...COPs": "OPC",
+            "Pericytes": "PER"
         }
 
         self.palette = {
@@ -160,7 +161,7 @@ class main():
         parser.add_argument("--exclude_ct",
                             nargs="+",
                             type=str,
-                            default=None,
+                            default=[],
                             help="The cell types results to exclude.")
         parser.add_argument("--bryois_folder",
                             type=str,
@@ -177,6 +178,9 @@ class main():
         parser.add_argument("--force",
                             action='store_true',
                             help="Force a rerun of all files.")
+        parser.add_argument("--verbose",
+                            action='store_true',
+                            help="Print all info.")
 
         # Required external scripts.
         parser.add_argument("--qvalues",
@@ -193,26 +197,55 @@ class main():
     def start(self):
         self.print_arguments()
 
-        disc_df_path = os.path.join(self.dataset_outdir, "discovery.txt.gz")
-        repl_df_path = os.path.join(self.dataset_outdir, "replication.txt.gz")
-        df_path = os.path.join(self.dataset_outdir, "merged.txt.gz")
-
         print("Loading data")
-        if os.path.exists(df_path) and not self.force:
-            df = self.load_file(df_path, header=0, index_col=0)
-        else:
-            if os.path.exists(disc_df_path) and os.path.exists(repl_df_path) and not self.force:
-                disc_df = self.load_file(disc_df_path, header=0, index_col=0)
-                repl_df = self.load_file(repl_df_path, header=0, index_col=0)
-            else:
-                disc_df, ids = self.load_disc_data(disc_df_path=disc_df_path)
-                repl_df = self.load_repl_data(repl_df_path=repl_df_path, ids=ids)
+        plot_data = {}
+        for filename, cell_type in self.bryois_ct_dict.items():
+            if cell_type in self.exclude_ct:
+                continue
 
-            print("Merging discovery and replication")
-            df = self.merge_data(disc_df=disc_df, repl_df=repl_df, df_path=df_path)
+            print("  Working on '{}'".format(cell_type))
+
+            ct_workdir = os.path.join(self.dataset_outdir, cell_type)
+            if not os.path.exists(ct_workdir):
+                os.makedirs(ct_workdir)
+
+            bryois_df_path = os.path.join(ct_workdir, "bryois2022.txt.gz")
+            scmetabrain_df_path = os.path.join(ct_workdir, "scmetabrain.txt.gz")
+            merged_df_path = os.path.join(ct_workdir, "merged.txt.gz")
+
+            if os.path.exists(merged_df_path) and not self.force:
+                df = self.load_file(merged_df_path, header=0, index_col=0)
+            else:
+                if os.path.exists(bryois_df_path):
+                # if os.path.exists(bryois_df_path) and not self.force:
+                    bryois_df = self.load_file(bryois_df_path, header=0, index_col=0)
+                else:
+                    bryois_df = self.load_bryois_data(outpath=bryois_df_path, filename=filename)
+
+                bryois_df = bryois_df.loc[~bryois_df["pos_hg38"].isna(), :]
+                bryois_df["pos_hg38"] = bryois_df["pos_hg38"].astype(int)
+                bryois_df.index = bryois_df["ENSG"] + "_" + bryois_df["pos_hg38"].astype(str) + "_" + bryois_df["alleles"]
+
+                if os.path.exists(scmetabrain_df_path):
+                # if os.path.exists(scmetabrain_df_path) and not self.force:
+                    scmetabrain_df = self.load_file(scmetabrain_df_path, header=0, index_col=0)
+                else:
+                    scmetabrain_df = self.load_wg3_data(cell_type=cell_type,
+                                                        outpath=scmetabrain_df_path,
+                                                        ensg_hits=set(bryois_df["ENSG"].values),
+                                                        index_hits=set(bryois_df.index.values))
+                    if scmetabrain_df is None:
+                        print("  Warning, no overlapping eQTLs found.")
+                        continue
+
+                scmetabrain_df.index = scmetabrain_df["ENSG"] + "_" + scmetabrain_df["snp_position"].astype(int).astype(str) + "_" + scmetabrain_df["alleles"]
+
+                df = self.merge_data(bryois_df=bryois_df, scmetabrain_df=scmetabrain_df, outpath=merged_df_path)
+
+            plot_data[cell_type] = df
 
         print("\nVisualizing comparison")
-        replication_stats_df = self.visualise_data(df=df)
+        replication_stats_df = self.visualise_data(plot_data=plot_data)
 
         print("\nReplication stats:")
         for label in replication_stats_df["label"].unique():
@@ -233,245 +266,229 @@ class main():
                        outpath=os.path.join(self.dataset_outdir,
                                             "replication_stats.txt.gz"))
 
-    def load_disc_data(self, disc_df_path):
-        disc_key_columns = ["snp_id",
-                            "feature_chromosome",
-                            "feature_start",
-                            "feature_end",
-                            "ENSG",
-                            "biotype",
-                            "snp_chromosome",
-                            "snp_position",
-                            "Alleles",
-                            "feature_id"]
+    def load_bryois_data(self, filename, outpath):
+        print("  Loading Bryois et al. 2022 data")
 
-        disc_df = None
-        for cell_type_path in glob.glob(os.path.join(self.wg3_folder, "output", self.annotation_level, "*")):
-            cell_type = os.path.basename(cell_type_path)
-            cell_type_qtl_path = os.path.join(cell_type_path, "top_qtl_results_all.txt.gz")
-            if not os.path.isdir(cell_type_path) or not os.path.exists(cell_type_qtl_path) or (self.exclude_ct is not None and cell_type in self.exclude_ct):
+        dfs = []
+        for chr in range(1, 23):
+            print("   Loading chromosome {}".format(chr))
+            ct_chr_path = os.path.join(self.bryois_folder, "{}.{}.gz".format(filename, chr))
+            if not os.path.exists(ct_chr_path):
                 continue
 
-            print("\tProcessing '{}'".format(cell_type))
+            ct_chr_df = self.load_file(ct_chr_path, sep=" ", header=None, index_col=None)
+            ct_chr_df.columns = ["Gene_id", "SNP_id", "Distance to TSS", "Nominal p-value", "Beta"]
+            ct_chr_df = ct_chr_df.loc[ct_chr_df.groupby('Gene_id')["Nominal p-value"].idxmin(), :]
+            dfs.append(ct_chr_df)
 
-            ####################################################################
+            del ct_chr_df
 
-            print("\t  Loading discovery eQTLs")
-            ct_disc_df = self.load_file(cell_type_qtl_path, header=0, index_col=None)
-            effect_allele_data = []
-            other_allele_data = []
-            alleles_data = []
-            mask = []
-            for _, row in ct_disc_df.iterrows():
-                splitted_snp_id = row["snp_id"].split(":")
-                if len(splitted_snp_id) != 4:
-                    effect_allele_data.append(np.nan)
-                    other_allele_data.append(np.nan)
-                    alleles_data.append(np.nan)
-                    mask.append(False)
-                    continue
+        if len(dfs) == 0:
+            print("  Warning, no data loaded for this cell type")
+            return None
 
-                (_, _, allele1, allele2) = splitted_snp_id
+        df = pd.concat(dfs, axis=0)
 
-                mask_value = True
-                if row["assessed_allele"] == allele1:
-                    effect_allele_data.append(allele1)
-                    other_allele_data.append(allele2)
-                elif row["assessed_allele"] == allele2:
-                    effect_allele_data.append(allele2)
-                    other_allele_data.append(allele1)
-                else:
-                    effect_allele_data.append(np.nan)
-                    other_allele_data.append(np.nan)
-                    mask_value = False
+        if df.shape[0] == 0:
+            print("  Warning, no data loaded for this cell type")
+            return None
 
-                alleles = [allele1, allele2]
-                alleles.sort()
-                alleles_data.append("/".join(alleles))
+        gene_id_df = df["Gene_id"].str.split("_", n=None, expand=True)
+        gene_id_df.columns = ["HGNC", "ENSG"]
+        df = pd.concat([gene_id_df, df], axis=1)
+        del gene_id_df
 
-                if len(allele1) != 1 or len(allele2) != 1:
-                    mask_value = False
+        print("\tLoading SNP position file")
+        snp_pos_df = self.load_file(inpath=os.path.join(self.bryois_folder, "snp_pos.txt"), header=0, index_col=None)
+        snp_pos_df['allele1'] = np.minimum(snp_pos_df['effect_allele'], snp_pos_df['other_allele'])
+        snp_pos_df['allele2'] = np.maximum(snp_pos_df['effect_allele'], snp_pos_df['other_allele'])
+        snp_pos_df['alleles'] = snp_pos_df['allele1'] + snp_pos_df['allele2']
+        snp_pos_df.drop(['allele1', 'allele2'], axis=1, inplace=True)
+        snp_pos_df.columns = ["SNP_id" if col == "SNP" else col for col in snp_pos_df.columns]
 
-                mask.append(mask_value)
+        print("  Merging with SNP position file")
+        df = df.merge(snp_pos_df, on="SNP_id", how="left")
 
-            ct_disc_df["EA"] = effect_allele_data
-            ct_disc_df["OA"] = other_allele_data
-            ct_disc_df["Alleles"] = alleles_data
-            ct_disc_df = ct_disc_df.loc[mask, :]
-            ct_disc_df.drop(["assessed_allele"], axis=1, inplace=True)
-            ct_disc_df.columns = [col if col in disc_key_columns else "{} {}".format(cell_type, col) for col in ct_disc_df.columns]
-
-            if disc_df is None:
-                disc_df = ct_disc_df
-            else:
-                disc_df = disc_df.merge(ct_disc_df,
-                                        on=disc_key_columns,
-                                        how="outer")
-
-            del ct_disc_df
-
-        disc_df.index = disc_df["ENSG"] + "_" + disc_df["snp_position"].astype(int).astype(str) + "_" + disc_df["Alleles"]
-
-        col_order = disc_key_columns + [col for col in disc_df.columns if col not in disc_key_columns]
-        disc_df = disc_df.loc[:, col_order]
-        disc_df.columns = ["scMetaBrain " + col for col in disc_df.columns]
-        print(disc_df)
-
-        print("\tSaving data")
-        self.save_file(df=disc_df, outpath=disc_df_path)
-
-        return disc_df, set((disc_df["scMetaBrain ENSG"] + "_" + disc_df["scMetaBrain snp_position"].astype(int).astype(str)).values)
-
-
-    def load_repl_data(self, repl_df_path, ids):
-        repl_key_columns = ["HGNC",
-                            "Ensembl",
-                            "SNP",
-                            "Distance to TSS"]
-
-        print("\tLoading replication SNP position file")
-        repl_snp_pos_df = self.load_file(inpath=os.path.join(self.bryois_folder, "snp_pos.txt"), header=0, index_col=None)
-        repl_snp_pos_df.columns = ["SNP", "chr", "pos hg19", "pos hg38", "EA", "OA"]
-        snp_info_dict = dict(zip(repl_snp_pos_df["SNP"], repl_snp_pos_df["pos hg38"]))
-
-        repl_df = None
-        for cell_type, repl_cell_type in self.dist_to_repl_ct_dict.items():
-            print("\t  Loading replication eQTLs")
-            repl_data = []
-            for chr in range(1, 23):
-                repl_file_path = os.path.join(self.bryois_folder, "{}.{}.gz".format(repl_cell_type, chr))
-                if not os.path.exists(repl_file_path):
-                    continue
-                print("\t\t{}".format(os.path.basename(repl_file_path)))
-                repl_data.extend(self.read_repl_file(repl_file_path, ids, snp_info_dict))
-
-            if len(repl_data) == 0:
-                print("\t  Warning, no overlap found in replication datasets.")
-                continue
-
-            print("\t  {:,.0f} / {:,.0f} of eQTLs found in replication datasets.".format(len(repl_data), len(ids)))
-
-            ct_repl_df = pd.DataFrame(repl_data,
-                                      columns=["HGNC",
-                                               "Ensembl",
-                                               "SNP",
-                                               "Distance to TSS",
-                                               "{} p-value".format(cell_type),
-                                               "{} beta".format(cell_type)])
-            if repl_df is None:
-                repl_df = ct_repl_df
-            else:
-                repl_df = repl_df.merge(ct_repl_df,
-                                        on=repl_key_columns,
-                                        how="outer")
-
-            del ct_repl_df
-
-        ####################################################################
-
-        if repl_df.shape[0] == 0:
-            print("Error, replication data is empty.")
-            exit()
-
-        print("\tMerging with SNP position file")
-        repl_df = repl_df.merge(repl_snp_pos_df, on="SNP", how="left")
-
-        alleles_data = []
-        for index, row in repl_df.iterrows():
-            alleles = [row["EA"], row["OA"]]
-            alleles.sort()
-            alleles_data.append("/".join(alleles))
-        repl_df["Alleles"] = alleles_data
-
-        repl_df.index = repl_df["Ensembl"] + "_" + repl_df["pos hg38"].astype(int).astype(str) + "_" + repl_df["Alleles"]
-        repl_df["N"] = self.bryois_n
-
-        repl_key_columns = repl_key_columns + ["chr", "pos hg19", "pos hg38", "EA", "OA", "Alleles", "N"]
-        col_order = repl_key_columns + [col for col in repl_df.columns if col not in repl_key_columns]
-        repl_df = repl_df.loc[:, col_order]
-        repl_df.columns = ["Bryois " + col for col in repl_df.columns]
-        print(repl_df)
-
-        self.save_file(df=repl_df, outpath=repl_df_path)
-
-        return repl_df
-
-    def merge_data(self, disc_df, repl_df, df_path):
-        # Check what cell types we have.
-        discovery_cell_types = [col.replace("scMetaBrain ", "").replace(" beta", "") for col in disc_df.columns if col.startswith("scMetaBrain ") and col.endswith(" beta")]
-        replication_cell_types = [col.replace("Bryois ", "").replace(" beta", "") for col in repl_df.columns if col.startswith("Bryois ") and col.endswith(" beta")]
-
-        print("\tMerging discovery and replication eQTLs")
-        df = disc_df.merge(repl_df, left_index=True, right_index=True)
-
-        print("\tMatching the direction of effect")
-        drop_columns = []
-        for cell_type in discovery_cell_types:
-            df["{} flip".format(cell_type)] = df["scMetaBrain {} EA".format(cell_type)] != df["Bryois EA"]
-            df.loc[:, "scMetaBrain {} beta".format(cell_type)] = df["scMetaBrain {} beta".format(cell_type)] * df["{} flip".format(cell_type)].map({True: -1, False: 1})
-            drop_columns.extend(["{} flip".format(cell_type), "scMetaBrain {} EA".format(cell_type), "scMetaBrain {} OA".format(cell_type)])
-        df.drop(drop_columns, axis=1, inplace=True)
-
-        # print("\tAdding BH-FDR for the replication.")
-        # overlapping_cell_types = list(set(discovery_cell_types).intersection(set(replication_cell_types)))
-        # for cell_type in overlapping_cell_types:
-        #     print("\t  {}".format(cell_type))
-        #     df["Bryois {} BH-FDR".format(cell_type)] = np.nan
-        #     discovery_mask = (df["scMetaBrain {} BH-FDR".format(cell_type)] <= 0.05).to_numpy()
-        #     print("\t\tDiscovery N-ieqtls: {:,}".format(np.sum(discovery_mask)))
-        #     replication_mask = (~df["Bryois {} p-value".format(cell_type)].isna()).to_numpy()
-        #     mask = np.logical_and(discovery_mask, replication_mask)
-        #     n_overlap = np.sum(mask)
-        #     if n_overlap > 1:
-        #         df.loc[mask, "Bryois {} BH-FDR".format(cell_type)] = \
-        #         multitest.multipletests(df.loc[mask, "Bryois {} p-value".format(cell_type)], method='fdr_bh')[1]
-        #     n_replicating = df.loc[df["Bryois {} BH-FDR".format(cell_type)] <= 0.05, :].shape[0]
-        #     print("\t\tReplication N-ieqtls: {:,} / {:,} [{:.2f}%]".format(n_replicating, n_overlap, (100 / n_overlap) * n_replicating))
-
-        # print("\tReordering columns")
-        # TODO
-
-        print("\tSaving output")
-        self.save_file(df=df,
-                       outpath=df_path,
-                       index=False)
-        # self.save_file(df=df,
-        #                outpath=df_path.replace(".txt.gz", "xlsx"),
-        #                index=False,
-        #                sheet_name="Bryois et al. 2022 replication")
+        print("  Saving file")
+        self.save_file(df=df, outpath=outpath)
+        # self.save_file(df=df, outpath=outpath.replace(".txt.gz", ".xlsx"))
 
         return df
 
-    @staticmethod
-    def load_file(inpath, header, index_col, sep="\t", low_memory=True,
+    def load_wg3_data(self, cell_type, outpath, ensg_hits, index_hits):
+        print("  Loading scMetaBrain data")
+
+        results_file_prefix = "qtl_results_"
+
+        h5_files = glob.glob(os.path.join(self.wg3_folder, "output", self.annotation_level, cell_type, "qtl", "{}*.h5".format(results_file_prefix)))
+        h5_files = [(int(os.path.basename(h5_file).split("_")[2]), h5_file) for h5_file in h5_files]
+        h5_files.sort(key=lambda x: x[0])
+        if len(h5_files) == 0:
+            print("  Warning, no h5 files found for this cell type")
+            return None
+
+        dfs = []
+        prev_chr = None
+        for chr, h5_filepath in h5_files:
+            if prev_chr is None or chr != prev_chr:
+                print("   Loading chromosome {}".format(os.path.basename(h5_filepath).split("_")[2]))
+            h5_df = self.load_h5_file(filepath=h5_filepath,
+                                      cell_type=cell_type,
+                                      results_file_prefix=results_file_prefix,
+                                      ensg_hits=ensg_hits,
+                                      index_hits=index_hits)
+            if h5_df is None:
+                continue
+
+            dfs.append(h5_df)
+            prev_chr = chr
+            del h5_df
+
+        if len(dfs) == 0:
+            print("  Warning, no data loaded for this cell type")
+            return None
+
+        df = pd.concat(dfs, axis=0)
+
+        if df.shape[0] == 0:
+            print("  Warning, no data loaded for this cell type")
+            return None
+
+        print("  Saving file")
+        self.save_file(df=df, outpath=outpath)
+        # self.save_file(df=df, outpath=outpath.replace(".txt.gz", ".xlsx"))
+
+        return df
+
+    def load_h5_file(self, filepath, cell_type, results_file_prefix, ensg_hits, index_hits):
+        analysis_subset = os.path.basename(filepath).replace(results_file_prefix, "").replace(".h5", "")
+        snp_metadata_file = os.path.join(self.wg3_folder, "output", self.annotation_level, cell_type, "qtl", "snp_metadata_{}.txt".format(analysis_subset))
+        feature_metadata_file = os.path.join(self.wg3_folder, "output", self.annotation_level, cell_type, "qtl", "feature_metadata_{}.txt".format(analysis_subset))
+
+        if os.path.exists(feature_metadata_file):
+            ffea_df = self.load_file(feature_metadata_file, header=0, index_col=None)
+        elif os.path.exists(feature_metadata_file + ".gz"):
+            ffea_df = self.load_file(feature_metadata_file + ".gz", header=0, index_col=None)
+        else:
+            print("  Warning, skipping: '{}' missing feature metadata file.".format(analysis_subset))
+            return None
+
+        if os.path.exists(snp_metadata_file):
+            fsnp_df = self.load_file(snp_metadata_file, header=0, index_col=None)
+        elif os.path.exists(snp_metadata_file + ".gz"):
+            fsnp_df = self.load_file(snp_metadata_file + ".gz", header=0, index_col=None)
+        else:
+            print("  Warning, skipping: '{}' missing SNP metadata file.".format(analysis_subset))
+            return None
+
+        ffea_df = ffea_df.rename(index=str,
+                                 columns={"chromosome": "feature_chromosome",
+                                          "start": "feature_start",
+                                          "end": "feature_end"})
+        fsnp_df = fsnp_df.rename(index=str,
+                                 columns={"chromosome": "snp_chromosome",
+                                          "position": "snp_position"})
+
+        ########################################################################
+
+        snp_id_df = fsnp_df["snp_id"].str.split(":", n=None, expand=True)
+        snp_id_df.columns = ["snp_chromosome", "snp_position", "alleleA", "alleleB"]
+        snp_id_df.drop(["snp_chromosome", "snp_position"], axis=1, inplace=True)
+        fsnp_df = pd.concat([fsnp_df, snp_id_df], axis=1)
+        fsnp_df['allele1'] = np.minimum(fsnp_df['alleleA'], fsnp_df['alleleB'])
+        fsnp_df['allele2'] = np.maximum(fsnp_df['alleleA'], fsnp_df['alleleB'])
+        fsnp_df['alleles'] = fsnp_df['allele1'] + fsnp_df['allele2']
+        fsnp_df.drop(['alleleA', 'alleleB', 'allele1', 'allele2'], axis=1, inplace=True)
+
+        ########################################################################
+
+        frez = h5py.File(filepath, 'r')
+        frez_keys = [k.replace('_i_', '') for k in list(frez.keys())]
+
+        # Filter on Bryois ENSG hits.
+        hgnc_to_ensg_dict = dict(zip(ffea_df["feature_id"], ffea_df["ENSG"]))
+        frez_keys = [frez_key for frez_key in frez_keys if frez_key in hgnc_to_ensg_dict and hgnc_to_ensg_dict[frez_key] in ensg_hits]
+        if len(frez_keys) == 0:
+            return None
+
+        dfs = []
+        for frez_key in frez_keys:
+            frez_df = pd.DataFrame(np.array(frez[frez_key]))
+            frez_df['feature_id'] = frez_key
+            dfs.append(frez_df)
+        df = pd.concat(dfs, axis=0)
+        df['snp_id'] = df['snp_id'].astype(str)
+
+        if self.verbose:
+            print("\tLoaded h5 file: {} with shape: {}".format(os.path.basename(filepath), df.shape))
+
+        df = pd.merge(df, ffea_df, on='feature_id', how='left')
+
+        ########################################################################
+
+        if(len(glob.glob(os.path.join(self.wg3_folder, "output", self.annotation_level, cell_type, "qtl", "snp_qc_metrics_naContaining_feature_*.txt"))) > 0):
+            print("  Error, code not implemented yet")
+            exit()
+            # tmp_df = pd.DataFrame(columns=df.columns)
+            # for key in frez_keys:
+            #     qc_metrics_inpath = os.path.join(self.wg3_folder, "output", self.annotation_level, cell_type, "qtl", "snp_qc_metrics_naContaining_feature_{}.txt".format(key))
+            #     if os.path.isfile(qc_metrics_inpath):
+            #         fsnp_rel = self.load_file(qc_metrics_inpath, header=0, index_col=None)
+            #         tmp_t = df.loc[df["feature_id"] == key]
+            #         fsnp_t = fsnp_df.loc[:,["snp_id", "snp_chromosome", "snp_position", "assessed_allele"]]
+            #         fsnp_t = pd.merge(fsnp_t, fsnp_rel, on='snp_id', how='right')
+            #         tmp_t = pd.merge(tmp_t, fsnp_t, on='snp_id', how='left')
+            #         tmp_df = tmp_df.append(tmp_t, sort=False)
+            #     else:
+            #         tmp_t = df.loc[df["feature_id"] == key]
+            #         tmp_t = pd.merge(tmp_t, fsnp_df, on='snp_id', how='left')
+            #         tmp_df = tmp_df.append(tmp_t,sort=False)
+            #     data[key]=np.zeros(len(np.unique(list(frez_keys))),dtype='object')+np.nan
+            # df = tmp_df
+            # del tmp_df
+        else:
+            df = pd.merge(df, fsnp_df, on='snp_id', how='left')
+
+        df.index = df["ENSG"] + "_" + df["snp_position"].astype(str) + "_" + df["alleles"]
+        df = df.loc[[index for index in df.index if index in index_hits], :].copy()
+
+        df['empirical_feature_p_value'] = df['empirical_feature_p_value'].astype(float)
+        df['p_value'] = df['p_value'].astype(float)
+
+        del ffea_df, fsnp_df
+
+        return df
+
+    def merge_data(self, bryois_df, scmetabrain_df, outpath):
+        # Make columns unique.
+        bryois_df.columns = ["bryois_{}".format(col) for col in bryois_df.columns]
+        scmetabrain_df.columns = ["scmetabrain_{}".format(col) for col in scmetabrain_df.columns]
+
+        print("  Merging discovery and replication eQTLs")
+        df = bryois_df.merge(scmetabrain_df, left_index=True, right_index=True)
+        print("\t{} overlapping entries".format(df.shape[0]))
+
+        df["flip"] = df["scmetabrain_assessed_allele"] != df["bryois_effect_allele"]
+        df["scmetabrain_beta"] = df["scmetabrain_beta"] * df["flip"].map({True: -1, False: 1})
+
+        print("\tSaving file")
+        self.save_file(df=df, outpath=outpath)
+        # self.save_file(df=df, outpath=outpath.replace(".txt.gz", ".xlsx"))
+
+        return df
+
+    def load_file(self, inpath, header, index_col, sep="\t", low_memory=True,
                   nrows=None, skiprows=None):
         df = pd.read_csv(inpath, sep=sep, header=header, index_col=index_col,
                          low_memory=low_memory, nrows=nrows, skiprows=skiprows)
-        print("\tLoaded dataframe: {} "
-              "with shape: {}".format(os.path.basename(inpath),
-                                      df.shape))
+
+        if self.verbose:
+            print("\tLoaded dataframe: {} "
+                  "with shape: {}".format(os.path.basename(inpath),
+                                          df.shape))
         return df
 
-    @staticmethod
-    def read_repl_file(filepath, ids, snp_info_dict):
-        lines = []
-        with gzip.open(filepath, 'rt') as f:
-            for line in f:
-                (gene_id, snp_id, dist_to_tss, nom_pval, beta) = line.strip("\n").split(" ")
-                (hgnc_name, ensembl_name) = gene_id.split("_")
-                if snp_id not in snp_info_dict.keys():
-                    continue
-                line_id = ensembl_name + "_" + str(int(snp_info_dict[snp_id]))
-                if line_id not in ids:
-                    continue
-
-                lines.append([hgnc_name, ensembl_name, snp_id, dist_to_tss, nom_pval, beta])
-        f.close()
-
-        return lines
-
-    @staticmethod
-    def save_file(df, outpath, header=True, index=True, sep="\t", na_rep="NA",
+    def save_file(self, df, outpath, header=True, index=True, sep="\t", na_rep="NA",
                   sheet_name="Sheet1"):
         if outpath.endswith('xlsx'):
             df.to_excel(outpath,
@@ -486,17 +503,14 @@ class main():
 
             df.to_csv(outpath, sep=sep, index=index, header=header,
                       compression=compression)
-        print("\tSaved dataframe: {} "
-              "with shape: {}".format(os.path.basename(outpath),
-                                      df.shape))
 
-    def visualise_data(self, df):
-        print(df)
-        print(df.columns.tolist())
+        if self.verbose:
+            print("\tSaved dataframe: {} "
+                  "with shape: {}".format(os.path.basename(outpath),
+                                          df.shape))
 
-        discovery_cell_types = [col.replace("scMetaBrain ", "").replace(" beta", "") for col in df.columns if col.startswith("scMetaBrain ") and col.endswith(" beta")]
-        replication_cell_types = [col.replace("Bryois ", "").replace(" beta", "") for col in df.columns if col.startswith("Bryois ") and col.endswith(" beta")]
-        cell_types = list(set(discovery_cell_types).intersection(set(replication_cell_types)))
+    def visualise_data(self, plot_data):
+        cell_types = list(plot_data.keys())
         cell_types.sort()
 
         nrows = 3
@@ -514,19 +528,21 @@ class main():
                                  sharex='col',
                                  sharey='row')
 
-        for col_index, ct in enumerate(cell_types):
-            print("\tWorking on '{}'".format(ct))
+        for col_index, cell_type in enumerate(cell_types):
+            print("\tWorking on '{}'".format(cell_type))
 
             # Select the required columns.
-            plot_df = df.loc[:, ["Bryois HGNC",
-                                 "scMetaBrain {} n_samples".format(ct),
-                                 "scMetaBrain {} maf".format(ct),
-                                 "scMetaBrain {} empirical_feature_p_value".format(ct),
-                                 "scMetaBrain {} beta".format(ct),
-                                 "scMetaBrain {} beta_se".format(ct),
-                                 "Bryois N",
-                                 "Bryois {} p-value".format(ct),
-                                 "Bryois {} beta".format(ct)
+            df = plot_data[cell_type]
+            df["bryois_n_samples"] = self.bryois_n
+            plot_df = df.loc[:, ["bryois_HGNC",
+                                 "scmetabrain_n_samples",
+                                 "scmetabrain_maf",
+                                 "scmetabrain_empirical_feature_p_value",
+                                 "scmetabrain_beta",
+                                 "scmetabrain_beta_se",
+                                 "bryois_n_samples",
+                                 "bryois_Nominal p-value",
+                                 "bryois_Beta"
                                  ]].copy()
             plot_df.columns = ["Gene symbol",
                                "scMetaBrain N",
@@ -537,7 +553,7 @@ class main():
                                "Bryois N",
                                "Bryois pvalue",
                                "Bryois beta"]
-            plot_df = plot_df.loc[(~plot_df["scMetaBrain pvalue"].isna()) & (~plot_df["Bryois pvalue"].isna()), :]
+            plot_df = plot_df.loc[~plot_df["Bryois pvalue"].isna(), :]
             plot_df.sort_values(by="scMetaBrain pvalue", inplace=True)
             print(plot_df)
 
@@ -576,45 +592,45 @@ class main():
                 df=plot_df,
                 fig=fig,
                 ax=axes[0, col_index],
-                x="scMetaBrain log beta",
-                y="Bryois log beta",
+                x="Bryois log beta",
+                y="scMetaBrain log beta",
                 xlabel="",
-                ylabel="Bryois log eQTL beta",
-                title=ct,
-                color=self.palette[ct],
+                ylabel="scMetaBrain log beta",
+                title=cell_type,
+                color=self.palette[cell_type],
                 include_ylabel=include_ylabel
             )
             self.update_limits(xlim, ylim, 0, col_index)
 
             print("\tPlotting row 2.")
             xlim, ylim, stats2 = self.scatterplot(
-                df=plot_df.loc[plot_df["scMetaBrain pvalue"] <= 0.05, :],
+                df=plot_df.loc[plot_df["Bryois pvalue"] <= 0.05, :],
                 fig=fig,
                 ax=axes[1, col_index],
-                x="scMetaBrain log beta",
-                y="Bryois log beta",
+                x="Bryois log beta",
+                y="scMetaBrain log beta",
                 xlabel="",
-                ylabel="Bryois log beta",
+                ylabel="scMetaBrain log beta",
                 title="",
-                color=self.palette[ct],
+                color=self.palette[cell_type],
                 include_ylabel=include_ylabel,
-                #pi1_column="Bryois pvalue",
-                #rb_columns=[("scMetaBrain beta", "scMetaBrain beta se"), ("Bryois zscore-to-beta", "Bryois zscore-to-se")]
+                pi1_column="scMetaBrain pvalue",
+                rb_columns=[("Bryois zscore-to-beta", "Bryois zscore-to-se"), ("scMetaBrain beta", "scMetaBrain beta se")]
             )
             self.update_limits(xlim, ylim, 1, col_index)
 
             print("\tPlotting row 3.")
             xlim, ylim, stats3 = self.scatterplot(
-                df=plot_df.loc[plot_df["Bryois pvalue"] <= 0.05, :],
+                df=plot_df.loc[(plot_df["Bryois pvalue"] <= 0.05) & (plot_df["scMetaBrain pvalue"] <= 0.05), :],
                 fig=fig,
                 ax=axes[2, col_index],
-                x="scMetaBrain log beta",
-                y="Bryois log beta",
+                x="Bryois log beta",
+                y="scMetaBrain log beta",
                 label="Gene symbol",
-                xlabel="scMetaBrain log beta",
-                ylabel="Bryois log beta",
+                xlabel="Bryois log beta",
+                ylabel="scMetaBrain log beta",
                 title="",
-                color=self.palette[ct],
+                color=self.palette[cell_type],
                 include_ylabel=include_ylabel
             )
             self.update_limits(xlim, ylim, 2, col_index)
@@ -623,7 +639,7 @@ class main():
             for stats, label in zip([stats1, stats2, stats3], ["all", "discovery significant", "both significant"]):
                 stats_m = stats.melt()
                 stats_m["label"] = label
-                stats_m["cell type"] = ct
+                stats_m["cell type"] = cell_type
                 replication_stats.append(stats_m)
 
         for (m, n), ax in np.ndenumerate(axes):
@@ -857,6 +873,7 @@ class main():
         print("  > Bryois data folder:          {}".format(self.bryois_folder))
         print("  > Plot extensions:             {}".format(", ".join(self.extensions)))
         print("  > Force:                       {}".format(self.force))
+        print("  > Verbose:                     {}".format(self.verbose))
         print("  > Qvalues script:              {}".format(self.qvalues_script))
         print("  > Rb script:                   {}".format(self.rb_script))
         print("")
