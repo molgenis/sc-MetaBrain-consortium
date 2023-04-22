@@ -3,7 +3,7 @@
 """
 File:         scmetabrain_and_bryois_replication.py
 Created:      2023/04/20
-Last Changed: 2023/04/21
+Last Changed: 2023/04/22
 Author:       M.Vochteloo
 
 Copyright (C) 2020 M.Vochteloo
@@ -35,6 +35,7 @@ import pandas as pd
 import h5py
 from statsmodels.stats import multitest
 import rpy2.robjects as robjects
+# from rpy2.robjects.packages import importr
 from scipy import stats
 import seaborn as sns
 import matplotlib
@@ -216,8 +217,7 @@ class main():
             if os.path.exists(merged_df_path) and not self.force:
                 df = self.load_file(merged_df_path, header=0, index_col=0)
             else:
-                if os.path.exists(bryois_df_path):
-                # if os.path.exists(bryois_df_path) and not self.force:
+                if os.path.exists(bryois_df_path) and not self.force:
                     bryois_df = self.load_file(bryois_df_path, header=0, index_col=0)
                 else:
                     bryois_df = self.load_bryois_data(outpath=bryois_df_path, filename=filename)
@@ -226,8 +226,7 @@ class main():
                 bryois_df["pos_hg38"] = bryois_df["pos_hg38"].astype(int)
                 bryois_df.index = bryois_df["ENSG"] + "_" + bryois_df["pos_hg38"].astype(str) + "_" + bryois_df["alleles"]
 
-                if os.path.exists(scmetabrain_df_path):
-                # if os.path.exists(scmetabrain_df_path) and not self.force:
+                if os.path.exists(scmetabrain_df_path) and not self.force:
                     scmetabrain_df = self.load_file(scmetabrain_df_path, header=0, index_col=0)
                 else:
                     scmetabrain_df = self.load_wg3_data(cell_type=cell_type,
@@ -471,9 +470,20 @@ class main():
         df["flip"] = df["scmetabrain_assessed_allele"] != df["bryois_effect_allele"]
         df["scmetabrain_beta"] = df["scmetabrain_beta"] * df["flip"].map({True: -1, False: 1})
 
+        # Add the qvalues.
+        disc_mask = (~df["bryois_Nominal p-value"].isna()).to_numpy()
+        df["bryois_BH-FDR"] = np.nan
+        df.loc[disc_mask, "bryois_BH-FDR"] = multitest.multipletests(df.loc[disc_mask, "bryois_Nominal p-value"], method='fdr_bh')[1]
+
+        df["scmetabrain_BH-FDR"] = np.nan
+        repl_mask = np.logical_and((df["bryois_BH-FDR"] <= 0.05).to_numpy(), (~df["scmetabrain_empirical_feature_p_value"].isna()).to_numpy())
+        n_overlap = np.sum(repl_mask)
+        if n_overlap > 1:
+            df.loc[repl_mask, "scmetabrain_BH-FDR"] = multitest.multipletests(df.loc[repl_mask, "scmetabrain_empirical_feature_p_value"], method='fdr_bh')[1]
+
         print("\tSaving file")
         self.save_file(df=df, outpath=outpath)
-        # self.save_file(df=df, outpath=outpath.replace(".txt.gz", ".xlsx"))
+        self.save_file(df=df, outpath=outpath.replace(".txt.gz", ".xlsx"))
 
         return df
 
@@ -538,23 +548,28 @@ class main():
                                  "scmetabrain_n_samples",
                                  "scmetabrain_maf",
                                  "scmetabrain_empirical_feature_p_value",
+                                 "scmetabrain_BH-FDR",
                                  "scmetabrain_beta",
                                  "scmetabrain_beta_se",
                                  "bryois_n_samples",
                                  "bryois_Nominal p-value",
+                                 "bryois_BH-FDR",
                                  "bryois_Beta"
                                  ]].copy()
             plot_df.columns = ["Gene symbol",
                                "scMetaBrain N",
                                "scMetaBrain MAF",
                                "scMetaBrain pvalue",
+                               "scMetaBrain FDR",
                                "scMetaBrain beta",
                                "scMetaBrain beta se",
                                "Bryois N",
                                "Bryois pvalue",
+                               "Bryois FDR",
                                "Bryois beta"]
-            plot_df = plot_df.loc[~plot_df["Bryois pvalue"].isna(), :]
-            plot_df.sort_values(by="scMetaBrain pvalue", inplace=True)
+            print(plot_df)
+            plot_df = plot_df.loc[(~plot_df["scMetaBrain pvalue"].isna()) & (~plot_df["Bryois pvalue"].isna()), :]
+            plot_df.sort_values(by="Bryois pvalue", inplace=True)
             print(plot_df)
 
             # Calculate the replication standard error.
@@ -604,7 +619,7 @@ class main():
 
             print("\tPlotting row 2.")
             xlim, ylim, stats2 = self.scatterplot(
-                df=plot_df.loc[plot_df["Bryois pvalue"] <= 0.05, :],
+                df=plot_df.loc[plot_df["Bryois FDR"] <= 0.05, :],
                 fig=fig,
                 ax=axes[1, col_index],
                 x="Bryois log beta",
@@ -621,7 +636,7 @@ class main():
 
             print("\tPlotting row 3.")
             xlim, ylim, stats3 = self.scatterplot(
-                df=plot_df.loc[(plot_df["Bryois pvalue"] <= 0.05) & (plot_df["scMetaBrain pvalue"] <= 0.05), :],
+                df=plot_df.loc[(plot_df["Bryois FDR"] <= 0.05) & (plot_df["scMetaBrain FDR"] <= 0.05), :],
                 fig=fig,
                 ax=axes[2, col_index],
                 x="Bryois log beta",
@@ -843,6 +858,13 @@ class main():
         if xlim[1] > col_xlim[1]:
             col_xlim = (col_xlim[0], xlim[1])
         self.shared_xlim[col] = col_xlim
+
+    # @staticmethod
+    # def qvalues(p):
+    #     qvalue = importr("qvalue")
+    #     pvals = robjects.FloatVector(p)
+    #     qobj = robjects.r['qvalue'](pvals)
+    #     return np.array(qobj.rx2('qvalues'))
 
     @staticmethod
     def calculate_p1(p):
