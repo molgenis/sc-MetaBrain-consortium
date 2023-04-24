@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 """
-File:         scmetabrain_and_bryois_replication.py
-Created:      2023/04/20
-Last Changed: 2023/04/22
+File:         bulk_metabrain_replication.py
+Created:      2022/02/10
+Last Changed: 2022/04/24
 Author:       M.Vochteloo
 
 Copyright (C) 2020 M.Vochteloo
@@ -26,8 +26,8 @@ from __future__ import print_function
 from datetime import datetime
 import argparse
 import glob
-import re
 import os
+import re
 
 # Third party imports.
 import numpy as np
@@ -35,37 +35,26 @@ import pandas as pd
 import h5py
 from statsmodels.stats import multitest
 import rpy2.robjects as robjects
-# from rpy2.robjects.packages import importr
-from scipy import stats
 import seaborn as sns
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from scipy import stats
 from adjustText import adjust_text
 
 # Local application imports.
 
 """
 Syntax:
-./scmetabrain_and_bryois_replication.py \
+./bulk_metabrain_replication.py \
     --work_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-20-ReplicateInBryois \
-    --dataset_outdir 2023-04-24-Mathys2019 \
     --wg3_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/2023-04-12-Mathys2019 \
-    --exclude_ct END \
-    --bryois_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-20-ReplicateInBryois/Bryois2022
-    
-./scmetabrain_and_bryois_replication.py \
-    --work_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-20-ReplicateInBryois \
-    --dataset_outdir 2023-04-24-Mathys2019 \
-    --wg3_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/2023-04-12-Mathys2019 \
-    --exclude_ct END \
-    --bryois_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-20-ReplicateInBryois/Bryois2022 \
-    --discovery Bryois
+    --dataset_outdir 2023-04-24-Mathys2019-vs-BulkMetaBrain
     
 """
 
 # Metadata
-__program__ = "scMetaBrain and Bryois et al. 2022 Replication"
+__program__ = "Bulk MetaBrain Replication"
 __author__ = "Martijn Vochteloo"
 __maintainer__ = "Martijn Vochteloo"
 __email__ = "m.vochteloo@rug.nl"
@@ -81,66 +70,40 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 class main():
     def __init__(self):
-        # Get the command line arguments.
         arguments = self.create_argument_parser()
         self.work_dir = getattr(arguments, 'work_dir')
         dataset_outdir = getattr(arguments, 'dataset_outdir')
         self.wg3_folder = getattr(arguments, 'wg3_folder')
         self.annotation_level = getattr(arguments, 'annotation_level')
         self.exclude_ct = getattr(arguments, 'exclude_ct')
-        self.bryois_folder = getattr(arguments, 'bryois_folder')
-        self.bryois_n = 196
-        self.discovery = getattr(arguments, 'discovery')
         self.extensions = getattr(arguments, 'extensions')
         self.force = getattr(arguments, 'force')
         self.verbose = getattr(arguments, 'verbose')
         self.qvalues_script = getattr(arguments, 'qvalues')
         self.rb_script = getattr(arguments, 'rb')
 
+        # Define the discovery data.
+        self.discovery_path = os.path.join(self.work_dir, "deKlein2023", "merged_decon_results.txt.gz")
+
         # Pre-process the dataset output directory.
         date_str = datetime.now().strftime("%Y-%m-%d")
         if not re.match("^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])", dataset_outdir):
             dataset_outdir = "{}-{}".format(date_str, dataset_outdir)
 
-        self.dataset_outdir = os.path.join(dataset_outdir, "scMetaBrain_replication_in_Bryois" if self.discovery == "scMetaBrain" else "Bryois_replication_in_scMetaBrain")
+        self.dataset_outdir = dataset_outdir
         self.dataset_plot_outdir = os.path.join(self.dataset_outdir, "plot")
 
         for dir in [dataset_outdir, self.dataset_outdir, self.dataset_plot_outdir]:
             if not os.path.exists(dir):
                 os.makedirs(dir)
 
-        ########################################################################
-
-        self.discovery_pvalue = None
-        self.discovery_fdr = None
-        self.replication = None
-        self.replication_pvalue = None
-        self.replication_fdr = None
-        if self.discovery == "scMetaBrain":
-            self.replication = "Bryois"
-            self.discovery_pvalue = "scmetabrain_empirical_feature_p_value"
-            self.discovery_fdr = "scmetabrain_FDR"
-            self.replication_pvalue = "bryois_Nominal p-value"
-            self.replication_fdr = "bryois_FDR"
-        elif self.discovery == "Bryois":
-            self.replication = "scMetaBrain"
-            self.discovery_pvalue = "bryois_Nominal p-value"
-            self.discovery_fdr = "bryois_FDR"
-            self.replication_pvalue = "scmetabrain_empirical_feature_p_value"
-            self.replication_fdr = "scmetabrain_FDR"
-        else:
-            print("Error, unexpected discovery dataset")
-            exit()
-
-        self.bryois_ct_dict = {
-            "Astrocytes": "AST",
-            "Endothelial.cells": "END",
-            "Excitatory.neurons": "EX",
-            "Inhibitory.neurons": "IN",
+        self.metabrain_ct_dict = {
+            "Astrocyte": "AST",
+            "EndothelialCell": "END",
+            "Excitatory": "EX",
+            "Inhibitory": "IN",
             "Microglia": "MIC",
-            "Oligodendrocytes": "OLI",
-            "OPCs...COPs": "OPC",
-            "Pericytes": "PER"
+            "Oligodendrocyte": "OLI"
         }
 
         self.palette = {
@@ -149,9 +112,7 @@ class main():
             "EX": "#0072B2",
             "IN": "#56B4E9",
             "MIC": "#E69F00",
-            "OLI": "#009E73",
-            "OPC": "#F0E442",
-            "PER": "#808080"
+            "OLI": "#009E73"
         }
 
         self.shared_xlim = None
@@ -197,15 +158,6 @@ class main():
                             type=str,
                             default=[],
                             help="The cell types results to exclude.")
-        parser.add_argument("--bryois_folder",
-                            type=str,
-                            default=None,
-                            help="The path to the Bryois et al. 2022 data")
-        parser.add_argument("--discovery",
-                            type=str,
-                            choices=["scMetaBrain", "Bryois"],
-                            default="scMetaBrain",
-                            help="The dataset to consider the discovery.")
         parser.add_argument("-e",
                             "--extensions",
                             nargs="+",
@@ -220,6 +172,7 @@ class main():
         parser.add_argument("--force",
                             action='store_true',
                             help="Force a rerun of all files.")
+
 
         # Required external scripts.
         parser.add_argument("--qvalues",
@@ -236,45 +189,66 @@ class main():
     def start(self):
         self.print_arguments()
 
-        print("Loading data")
+        print("Loading bulk MetaBrain data")
+        full_bulk_metabrain_df = self.load_file(self.discovery_path, header=0, index_col=None)
+        full_bulk_metabrain_df["ENSG"] = full_bulk_metabrain_df["Gene"].str.split(".", n=None, expand=True)[0]
+        snp_id_df = full_bulk_metabrain_df["SNP"].str.split(":", n=None, expand=True)
+        snp_id_df.columns = ["CHR", "Position", "RS_id", "alleles"]
+        alleles_df = snp_id_df["alleles"].str.split("_", n=None, expand=True)
+        alleles_df.columns = ["alleleA", "alleleB"]
+        alleles_df['allele1'] = np.minimum(alleles_df['alleleA'], alleles_df['alleleB'])
+        alleles_df['allele2'] = np.maximum(alleles_df['alleleA'], alleles_df['alleleB'])
+        alleles_df['alleles'] = alleles_df['allele1'] + alleles_df['allele2']
+        full_bulk_metabrain_df = pd.concat([full_bulk_metabrain_df, snp_id_df[["Position"]], alleles_df[["alleles"]]], axis=1)
+        full_bulk_metabrain_df.index = full_bulk_metabrain_df["ENSG"] + "_" + full_bulk_metabrain_df["Position"].astype(str) + "_" + full_bulk_metabrain_df["alleles"]
+        full_bulk_metabrain_df.drop(["alleles"], axis=1, inplace=True)
+        del snp_id_df, alleles_df
+
+        print("Loading single-nucleus MetaBrain data")
         plot_data = {}
-        for filename, cell_type in self.bryois_ct_dict.items():
-            if cell_type in self.exclude_ct:
+        for bulk_cell_type, sn_cell_type in self.metabrain_ct_dict.items():
+            if sn_cell_type in self.exclude_ct:
                 continue
 
-            print("  Working on '{}'".format(cell_type))
+            print("  Working on '{}'".format(sn_cell_type))
 
-            ct_workdir = os.path.join(self.dataset_outdir, cell_type)
+            ct_workdir = os.path.join(self.dataset_outdir, sn_cell_type)
             if not os.path.exists(ct_workdir):
                 os.makedirs(ct_workdir)
 
-            bryois_df_path = os.path.join(ct_workdir, "bryois2022.txt.gz")
-            scmetabrain_df_path = os.path.join(ct_workdir, "scmetabrain.txt.gz")
+            sn_metabrain_df_path = os.path.join(ct_workdir, "scmetabrain.txt.gz")
             merged_df_path = os.path.join(ct_workdir, "merged.txt.gz")
 
             if os.path.exists(merged_df_path) and not self.force:
                 df = self.load_file(merged_df_path, header=0, index_col=0)
             else:
-                if self.discovery == "scMetaBrain":
-                    df = self.scmetabrain_discovery(filename=filename,
-                                                    cell_type=cell_type,
-                                                    bryois_df_path=bryois_df_path,
-                                                    scmetabrain_df_path=scmetabrain_df_path,
-                                                    merged_df_path=merged_df_path)
-                elif self.discovery == "Bryois":
-                    df = self.bryois_discovery(filename=filename,
-                                               cell_type=cell_type,
-                                               bryois_df_path=bryois_df_path,
-                                               scmetabrain_df_path=scmetabrain_df_path,
-                                               merged_df_path=merged_df_path)
+                # Subset bulk.
+                bulk_metabrain_df = full_bulk_metabrain_df.loc[:, ["Gene", "ENSG", "Gene symbol", "SNP", "Alleles", "Allele assessed", "N", "HW pval", "Minor allele", "MAF", "Overall z-score", "{} pvalue".format(bulk_cell_type), "{} beta".format(bulk_cell_type), "{} interaction beta".format(bulk_cell_type), "{} BH-FDR".format(bulk_cell_type)]].copy()
+                bulk_metabrain_df.columns = ["Gene", "ENSG", "Gene symbol", "SNP", "Alleles", "Allele assessed", "N", "HW pval", "Minor allele", "MAF", "Overall z-score", "Pvalue", "Beta", "Interaction beta", "BH-FDR"]
+                print(bulk_metabrain_df)
+
+                if os.path.exists(sn_metabrain_df_path) and not self.force:
+                    sn_metabrain_df = self.load_file(sn_metabrain_df_path,
+                                                     header=0,
+                                                     index_col=0)
                 else:
-                    print("Error, not implemented discovery dataset")
-                    exit()
+                    sn_metabrain_df = self.load_wg3_data(cell_type=sn_cell_type,
+                                                         outpath=sn_metabrain_df_path,
+                                                         top_effect=False,
+                                                         ensg_hits=set(bulk_metabrain_df["ENSG"].values),
+                                                         index_hits=set(bulk_metabrain_df.index.values))
+                    if sn_metabrain_df is None:
+                        print("  Warning, no overlapping eQTLs found.")
+                        return None
 
-                if df is None:
-                    continue
+                print(sn_metabrain_df)
 
-            plot_data[cell_type] = df
+                df = self.merge_data(bulk_metabrain_df=bulk_metabrain_df,
+                                     sn_metabrain_df=sn_metabrain_df,
+                                     outpath=merged_df_path)
+
+
+            plot_data[sn_cell_type] = df
 
         print("\nVisualizing comparison")
         replication_stats_df = self.visualise_data(plot_data=plot_data)
@@ -298,123 +272,6 @@ class main():
                        outpath=os.path.join(self.dataset_outdir,
                                             "replication_stats.txt.gz"))
 
-    def scmetabrain_discovery(self, filename, cell_type, bryois_df_path, scmetabrain_df_path, merged_df_path):
-        if os.path.exists(scmetabrain_df_path) and not self.force:
-            scmetabrain_df = self.load_file(scmetabrain_df_path, header=0, index_col=0)
-        else:
-            scmetabrain_df = self.load_wg3_data(cell_type=cell_type,
-                                                outpath=scmetabrain_df_path,
-                                                top_effect=True,
-                                                remove_indels=True)
-
-        if scmetabrain_df.shape[0] == 0:
-            print("  Warning, no eQTLs found.")
-            return None
-
-        if os.path.exists(bryois_df_path) and not self.force:
-            bryois_df = self.load_file(bryois_df_path, header=0, index_col=0)
-        else:
-            bryois_df = self.load_bryois_data(outpath=bryois_df_path,
-                                              filename=filename,
-                                              top_effect=False,
-                                              index_hits=set(scmetabrain_df.index.values))
-
-        if bryois_df is None:
-            print("  Warning, no overlapping eQTLs found.")
-            return None
-
-        df = self.merge_data(bryois_df=bryois_df,
-                             scmetabrain_df=scmetabrain_df,
-                             outpath=merged_df_path)
-
-        return df
-
-    def bryois_discovery(self, filename, cell_type, bryois_df_path, scmetabrain_df_path, merged_df_path):
-        if os.path.exists(bryois_df_path) and not self.force:
-            bryois_df = self.load_file(bryois_df_path, header=0, index_col=0)
-        else:
-            bryois_df = self.load_bryois_data(outpath=bryois_df_path,
-                                              filename=filename,
-                                              top_effect=True)
-
-        if bryois_df.shape[0] == 0:
-            print("  Warning, no eQTLs found.")
-            return None
-
-        if os.path.exists(scmetabrain_df_path) and not self.force:
-            scmetabrain_df = self.load_file(scmetabrain_df_path, header=0,
-                                            index_col=0)
-        else:
-            scmetabrain_df = self.load_wg3_data(cell_type=cell_type,
-                                                outpath=scmetabrain_df_path,
-                                                top_effect=False,
-                                                ensg_hits=set(bryois_df["ENSG"].values),
-                                                index_hits=set(bryois_df.index.values))
-            if scmetabrain_df is None:
-                print("  Warning, no overlapping eQTLs found.")
-                return None
-
-        df = self.merge_data(bryois_df=bryois_df,
-                             scmetabrain_df=scmetabrain_df,
-                             outpath=merged_df_path)
-
-        return df
-
-    def load_bryois_data(self, filename, outpath, top_effect=False,
-                         index_hits=None):
-        print("  Loading Bryois et al. 2022 data")
-
-        dfs = []
-        for chr in range(1, 23):
-            print("   Loading chromosome {}".format(chr))
-            ct_chr_path = os.path.join(self.bryois_folder, "{}.{}.gz".format(filename, chr))
-            if not os.path.exists(ct_chr_path):
-                continue
-
-            ct_chr_df = self.load_file(ct_chr_path, sep=" ", header=None, index_col=None)
-            ct_chr_df.columns = ["Gene_id", "SNP_id", "Distance to TSS", "Nominal p-value", "Beta"]
-            if top_effect:
-                ct_chr_df = ct_chr_df.loc[ct_chr_df.groupby('Gene_id')["Nominal p-value"].idxmin(), :]
-            dfs.append(ct_chr_df)
-
-            del ct_chr_df
-
-        if len(dfs) == 0:
-            print("  Warning, no data loaded for this cell type")
-            return None
-
-        df = pd.concat(dfs, axis=0)
-
-        if df.shape[0] == 0:
-            print("  Warning, no data loaded for this cell type")
-            return None
-
-        gene_id_df = df["Gene_id"].str.split("_", n=None, expand=True)
-        gene_id_df.columns = ["HGNC", "ENSG"]
-        df = pd.concat([gene_id_df, df], axis=1)
-        del gene_id_df
-
-        print("\tLoading SNP position file")
-        snp_pos_df = self.load_file(inpath=os.path.join(self.bryois_folder, "snp_pos.txt"), header=0, index_col=None)
-        snp_pos_df['allele1'] = np.minimum(snp_pos_df['effect_allele'], snp_pos_df['other_allele'])
-        snp_pos_df['allele2'] = np.maximum(snp_pos_df['effect_allele'], snp_pos_df['other_allele'])
-        snp_pos_df['alleles'] = snp_pos_df['allele1'] + snp_pos_df['allele2']
-        snp_pos_df.drop(['allele1', 'allele2'], axis=1, inplace=True)
-        snp_pos_df.columns = ["SNP_id" if col == "SNP" else col for col in snp_pos_df.columns]
-
-        print("  Merging with SNP position file")
-        df = df.merge(snp_pos_df, on="SNP_id", how="left")
-        df = df.loc[~df["pos_hg38"].isna(), :]
-
-        df.index = df["ENSG"] + "_" + df["pos_hg38"].astype(str) + "_" + df["alleles"]
-        if index_hits is not None:
-            df = df.loc[[index for index in df.index if index in index_hits], :]
-
-        print("  Saving file")
-        self.save_file(df=df, outpath=outpath)
-        # self.save_file(df=df, outpath=outpath.replace(".txt.gz", ".xlsx"))
-
-        return df
 
     def load_wg3_data(self, cell_type, outpath, remove_indels=True,
                       top_effect=False, ensg_hits=None, index_hits=None):
@@ -560,9 +417,9 @@ class main():
             # df = tmp_df
             # del tmp_df
         else:
-            df = pd.merge(df, fsnp_df, on='snp_id', how='left')
+            df = pd.merge(df, fsnp_df, on='snp_id', how='inner')
 
-        df.index = df["ENSG"] + "_" + df["snp_position"].astype(int).astype(str) + "_" + df["alleles"]
+        df.index = df["ENSG"] + "_" + df["snp_position"].astype(str) + "_" + df["alleles"]
 
         if index_hits is not None:
             df = df.loc[[index for index in df.index if index in index_hits], :]
@@ -574,28 +431,23 @@ class main():
 
         return df
 
-    def merge_data(self, bryois_df, scmetabrain_df, outpath):
+    def merge_data(self, bulk_metabrain_df, sn_metabrain_df, outpath):
         # Make columns unique.
-        bryois_df.columns = ["bryois_{}".format(col) for col in bryois_df.columns]
-        scmetabrain_df.columns = ["scmetabrain_{}".format(col) for col in scmetabrain_df.columns]
+        bulk_metabrain_df.columns = ["bulk_{}".format(col) for col in bulk_metabrain_df.columns]
+        sn_metabrain_df.columns = ["sn_{}".format(col) for col in sn_metabrain_df.columns]
 
         print("  Merging discovery and replication eQTLs")
-        df = bryois_df.merge(scmetabrain_df, left_index=True, right_index=True)
+        df = bulk_metabrain_df.merge(sn_metabrain_df, left_index=True, right_index=True)
         print("\t{} overlapping entries".format(df.shape[0]))
 
-        df["flip"] = df["scmetabrain_assessed_allele"] != df["bryois_effect_allele"]
-        df["scmetabrain_beta"] = df["scmetabrain_beta"] * df["flip"].map({True: -1, False: 1})
+        df["flip"] = df["bulk_Allele assessed"] != df["sn_assessed_allele"]
+        df["sn_beta"] = df["sn_beta"] * df["flip"].map({True: -1, False: 1})
 
-        # Calculate the multiple testing corrected signif. thresholds.
-        disc_mask = (~df[self.discovery_pvalue].isna()).to_numpy()
-        df[self.discovery_fdr] = np.nan
-        df.loc[disc_mask, self.discovery_fdr] = multitest.multipletests(df.loc[disc_mask, self.discovery_pvalue], method='fdr_bh')[1]
-
-        df[self.replication_fdr] = np.nan
-        repl_mask = np.logical_and((df[self.discovery_fdr] <= 0.05).to_numpy(), (~df[self.replication_pvalue].isna()).to_numpy())
+        df["sn_BH-FDR"] = np.nan
+        repl_mask = np.logical_and((df["bulk_BH-FDR"] <= 0.05).to_numpy(), (~df["sn_empirical_feature_p_value"].isna()).to_numpy())
         n_overlap = np.sum(repl_mask)
         if n_overlap > 1:
-            df.loc[repl_mask, self.replication_fdr] = multitest.multipletests(df.loc[repl_mask, self.replication_pvalue], method='fdr_bh')[1]
+            df.loc[repl_mask, "sn_BH-FDR"] = multitest.multipletests(df.loc[repl_mask, "sn_empirical_feature_p_value"], method='fdr_bh')[1]
 
         print("\tSaving file")
         self.save_file(df=df, outpath=outpath)
@@ -634,7 +486,6 @@ class main():
             print("\tSaved dataframe: {} "
                   "with shape: {}".format(os.path.basename(outpath),
                                           df.shape))
-
     def visualise_data(self, plot_data):
         cell_types = list(plot_data.keys())
         cell_types.sort()
@@ -662,47 +513,46 @@ class main():
 
             # Select the required columns.
             df = plot_data[cell_type]
-            df["bryois_n_samples"] = self.bryois_n
-            plot_df = df.loc[:, ["bryois_HGNC",
-                                 "scmetabrain_n_samples",
-                                 "scmetabrain_maf",
-                                 "scmetabrain_empirical_feature_p_value",
-                                 "scmetabrain_FDR",
-                                 "scmetabrain_beta",
-                                 "scmetabrain_beta_se",
-                                 "bryois_n_samples",
-                                 "bryois_Nominal p-value",
-                                 "bryois_FDR",
-                                 "bryois_Beta"
+            plot_df = df.loc[:, ["bulk_Gene symbol",
+                                 "bulk_N",
+                                 "bulk_MAF",
+                                 "bulk_Pvalue",
+                                 "bulk_BH-FDR",
+                                 "bulk_Interaction beta",
+                                 "sn_n_samples",
+                                 "sn_empirical_feature_p_value",
+                                 "sn_BH-FDR",
+                                 "sn_beta",
+                                 "sn_beta_se"
                                  ]].copy()
             plot_df.columns = ["Gene symbol",
-                               "scMetaBrain N",
-                               "scMetaBrain MAF",
-                               "scMetaBrain pvalue",
-                               "scMetaBrain FDR",
-                               "scMetaBrain beta",
-                               "scMetaBrain beta se",
-                               "Bryois N",
-                               "Bryois pvalue",
-                               "Bryois FDR",
-                               "Bryois beta"]
-            plot_df = plot_df.loc[(~plot_df["scMetaBrain pvalue"].isna()) & (~plot_df["Bryois pvalue"].isna()), :]
-            plot_df.sort_values(by="{} pvalue".format(self.discovery), inplace=True)
+                               "bulkMetaBrain N",
+                               "bulkMetaBrain MAF",
+                               "bulkMetaBrain pvalue",
+                               "bulkMetaBrain FDR",
+                               "bulkMetaBrain beta",
+                               "snMetaBrain N",
+                               "snMetaBrain pvalue",
+                               "snMetaBrain FDR",
+                               "snMetaBrain beta",
+                               "snMetaBrain beta se"]
+            plot_df = plot_df.loc[(~plot_df["bulkMetaBrain pvalue"].isna()) & (~plot_df["snMetaBrain pvalue"].isna()), :]
+            plot_df.sort_values(by="bulkMetaBrain pvalue", inplace=True)
 
             # Calculate the replication standard error.
             self.pvalue_to_zscore(df=plot_df,
-                                  beta_col="Bryois beta",
-                                  p_col="Bryois pvalue",
-                                  prefix="Bryois ")
+                                  beta_col="bulkMetaBrain beta",
+                                  p_col="bulkMetaBrain pvalue",
+                                  prefix="bulkMetaBrain ")
             self.zscore_to_beta(df=plot_df,
-                                z_col="Bryois z-score",
-                                maf_col="scMetaBrain MAF",
-                                n_col="Bryois N",
-                                prefix="Bryois zscore-to-")
+                                z_col="bulkMetaBrain z-score",
+                                maf_col="bulkMetaBrain MAF",
+                                n_col="bulkMetaBrain N",
+                                prefix="bulkMetaBrain zscore-to-")
 
             # Convert the interaction beta to log scale.
-            plot_df["scMetaBrain log beta"] = [np.log(abs(beta) + 1) * np.sign(beta) for beta in plot_df["scMetaBrain beta"]]
-            plot_df["Bryois log beta"] = [np.log(abs(beta) + 1) * np.sign(beta) for beta in plot_df["Bryois beta"]]
+            plot_df["bulkMetaBrain log beta"] = [np.log(abs(beta) + 1) * np.sign(beta) for beta in plot_df["bulkMetaBrain beta"]]
+            plot_df["snMetaBrain log beta"] = [np.log(abs(beta) + 1) * np.sign(beta) for beta in plot_df["snMetaBrain beta"]]
 
             include_ylabel = False
             if col_index == 0:
@@ -723,10 +573,10 @@ class main():
                 df=plot_df,
                 fig=fig,
                 ax=axes[0, col_index],
-                x="{} log beta".format(self.discovery),
-                y="{} log beta".format(self.replication),
+                x="bulkMetaBrain log beta",
+                y="snMetaBrain log beta",
                 xlabel="",
-                ylabel="{} log beta".format(self.replication),
+                ylabel="snMetaBrain log beta",
                 title=cell_type,
                 color=self.palette[cell_type],
                 include_ylabel=include_ylabel
@@ -735,31 +585,31 @@ class main():
 
             print("\tPlotting row 2.")
             xlim, ylim, stats2 = self.scatterplot(
-                df=plot_df.loc[plot_df["{} FDR".format(self.discovery)] <= 0.05, :],
+                df=plot_df.loc[plot_df["bulkMetaBrain FDR"] <= 0.05, :],
                 fig=fig,
                 ax=axes[1, col_index],
-                x="{} log beta".format(self.discovery),
-                y="{} log beta".format(self.replication),
+                x="bulkMetaBrain log beta",
+                y="snMetaBrain log beta",
                 xlabel="",
-                ylabel="{} log beta".format(self.replication),
+                ylabel="snMetaBrain log beta",
                 title="",
                 color=self.palette[cell_type],
                 include_ylabel=include_ylabel,
-                pi1_column="{} pvalue".format(self.replication),
-                rb_columns=[("Bryois zscore-to-beta", "Bryois zscore-to-se"), ("scMetaBrain beta", "scMetaBrain beta se")]
+                pi1_column="snMetaBrain pvalue",
+                rb_columns=[("bulkMetaBrain zscore-to-beta", "bulkMetaBrain zscore-to-se"), ("snMetaBrain beta", "snMetaBrain beta se")]
             )
             self.update_limits(xlim, ylim, 1, col_index)
 
             print("\tPlotting row 3.")
             xlim, ylim, stats3 = self.scatterplot(
-                df=plot_df.loc[(plot_df["{} FDR".format(self.discovery)] <= 0.05) & (plot_df["{} FDR".format(self.replication)] <= 0.05), :],
+                df=plot_df.loc[(plot_df["bulkMetaBrain FDR"] <= 0.05) & (plot_df["snMetaBrain FDR"] <= 0.05), :],
                 fig=fig,
                 ax=axes[2, col_index],
-                x="{} log beta".format(self.discovery),
-                y="{} log beta".format(self.replication),
+                x="bulkMetaBrain log beta",
+                y="snMetaBrain log beta",
                 label="Gene symbol",
-                xlabel="{} log beta".format(self.discovery),
-                ylabel="{} log beta".format(self.replication),
+                xlabel="bulkMetaBrain log beta",
+                ylabel="snMetaBrain log beta",
                 title="",
                 color=self.palette[cell_type],
                 include_ylabel=include_ylabel
@@ -784,7 +634,7 @@ class main():
             ax.set_ylim(ymin - ymargin, ymax + ymargin)
 
         # Add the main title.
-        fig.suptitle("{} replication in {}".format(self.discovery, self.replication),
+        fig.suptitle("de Klein 2023 replication in scMetaBrain",
                      fontsize=40,
                      color="#000000",
                      weight='bold')
@@ -975,13 +825,6 @@ class main():
             col_xlim = (col_xlim[0], xlim[1])
         self.shared_xlim[col] = col_xlim
 
-    # @staticmethod
-    # def qvalues(p):
-    #     qvalue = importr("qvalue")
-    #     pvals = robjects.FloatVector(p)
-    #     qobj = robjects.r['qvalue'](pvals)
-    #     return np.array(qobj.rx2('qvalues'))
-
     def calculate_p1(self, p):
         robjects.r("source('{}')".format(self.qvalues_script))
         p = robjects.FloatVector(p)
@@ -1006,8 +849,6 @@ class main():
         print("  > Workgroup 3 folder:          {}".format(self.wg3_folder))
         print("  > Annotation level:            {}".format(self.annotation_level))
         print("  > Exclude cell type:           {}".format(", ".join(self.exclude_ct)))
-        print("  > Bryois data folder:          {}".format(self.bryois_folder))
-        print("  > Discovery:                   {}".format(self.discovery))
         print("  > Plot extensions:             {}".format(", ".join(self.extensions)))
         print("  > Force:                       {}".format(self.force))
         print("  > Verbose:                     {}".format(self.verbose))
