@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 """
-File:         bulk_metabrain_replication.py
-Created:      2022/02/10
-Last Changed: 2022/04/24
+File:         replicate_bryois_top_effects_in_mathys.py
+Created:      2023/04/25
+Last Changed:
 Author:       M.Vochteloo
 
 Copyright (C) 2020 M.Vochteloo
@@ -26,8 +26,8 @@ from __future__ import print_function
 from datetime import datetime
 import argparse
 import glob
-import os
 import re
+import os
 
 # Third party imports.
 import numpy as np
@@ -35,26 +35,30 @@ import pandas as pd
 import h5py
 from statsmodels.stats import multitest
 import rpy2.robjects as robjects
+# from rpy2.robjects.packages import importr
+from scipy import stats
 import seaborn as sns
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from scipy import stats
 from adjustText import adjust_text
 
 # Local application imports.
 
 """
 Syntax:
-./bulk_metabrain_replication.py \
-    --work_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-20-ReplicateInBryois \
-    --wg3_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/2023-04-12-Mathys2019 \
-    --dataset_outdir 2023-04-24-Mathys2019-vs-BulkMetaBrain
+./replicate_bryois_top_effects_in_mathys.py \
+    --work_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-mbQTLBryoisRepl \
+    --dataset_outdir 2023-04-25-Mathys2019 \
+    --mbqtl_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-mbQTLBryoisRepl/2023-04-25-BryoisRepl \
+    --bryois_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-20-ReplicateInBryois/Bryois2022 \
+    --qvalues /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-20-ReplicateInBryois/qvalue_truncp.R \
+    --rb /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-20-ReplicateInBryois/Rb.R
     
 """
 
 # Metadata
-__program__ = "Bulk MetaBrain Replication"
+__program__ = "Replicate Bryois et al. 2022 in Mathys et al. 2019"
 __author__ = "Martijn Vochteloo"
 __maintainer__ = "Martijn Vochteloo"
 __email__ = "m.vochteloo@rug.nl"
@@ -70,20 +74,17 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 class main():
     def __init__(self):
+        # Get the command line arguments.
         arguments = self.create_argument_parser()
         self.work_dir = getattr(arguments, 'work_dir')
         dataset_outdir = getattr(arguments, 'dataset_outdir')
-        self.wg3_folder = getattr(arguments, 'wg3_folder')
-        self.annotation_level = getattr(arguments, 'annotation_level')
-        self.exclude_ct = getattr(arguments, 'exclude_ct')
+        self.mbqtl_folder = getattr(arguments, 'mbqtl_folder')
+        self.bryois_folder = getattr(arguments, 'bryois_folder')
+        self.bryois_n = 196
         self.extensions = getattr(arguments, 'extensions')
-        self.force = getattr(arguments, 'force')
         self.verbose = getattr(arguments, 'verbose')
         self.qvalues_script = getattr(arguments, 'qvalues')
         self.rb_script = getattr(arguments, 'rb')
-
-        # Define the discovery data.
-        self.discovery_path = os.path.join(self.work_dir, "deKlein2023", "merged_decon_results.txt.gz")
 
         # Pre-process the dataset output directory.
         date_str = datetime.now().strftime("%Y-%m-%d")
@@ -97,22 +98,26 @@ class main():
             if not os.path.exists(dir):
                 os.makedirs(dir)
 
-        self.metabrain_ct_dict = {
-            "Astrocyte": "AST",
-            "EndothelialCell": "END",
-            "Excitatory": "EX",
-            "Inhibitory": "IN",
+        ########################################################################
+
+        self.bryois_ct_dict = {
+            "Astrocytes": "AST",
+            "Excitatory neurons": "EX",
+            "Inhibitory neurons": "IN",
             "Microglia": "MIC",
-            "Oligodendrocyte": "OLI"
+            "Oligodendrocytes": "OLI",
+            "OPCs / COPs": "OPC",
+            "Pericytes": "PER"
         }
 
         self.palette = {
             "AST": "#D55E00",
-            "END": "#CC79A7",
             "EX": "#0072B2",
             "IN": "#56B4E9",
             "MIC": "#E69F00",
-            "OLI": "#009E73"
+            "OLI": "#009E73",
+            "OPC": "#F0E442",
+            "PER": "#808080"
         }
 
         self.shared_xlim = None
@@ -135,29 +140,21 @@ class main():
         parser.add_argument("--work_dir",
                             type=str,
                             required=True,
-                            default=None,
                             help="The working directory.")
         parser.add_argument("--dataset_outdir",
                             type=str,
                             required=True,
-                            default=None,
                             help="The name of the output directory where you "
                                  "would like all outputs/results saved.")
-        parser.add_argument("--wg3_folder",
+        parser.add_argument("--mbqtl_folder",
                             type=str,
-                            default=None,
-                            help="The path to the outputs from WG3")
-        parser.add_argument("--annotation_level",
+                            required=True,
+                            help="The path to the outputs from Meta-Beta-QTL "
+                                 "output")
+        parser.add_argument("--bryois_folder",
                             type=str,
-                            choices=["L1", "L2"],
-                            default="L1",
-                            help="The annotation level to use. "
-                                 "Default: 'L1'.")
-        parser.add_argument("--exclude_ct",
-                            nargs="+",
-                            type=str,
-                            default=[],
-                            help="The cell types results to exclude.")
+                            required=True,
+                            help="The path to the Bryois et al. 2022 data")
         parser.add_argument("-e",
                             "--extensions",
                             nargs="+",
@@ -172,7 +169,6 @@ class main():
         parser.add_argument("--force",
                             action='store_true',
                             help="Force a rerun of all files.")
-
 
         # Required external scripts.
         parser.add_argument("--qvalues",
@@ -189,69 +185,50 @@ class main():
     def start(self):
         self.print_arguments()
 
-        print("Loading bulk MetaBrain data")
-        full_bulk_metabrain_df = self.load_file(self.discovery_path, header=0, index_col=None)
-        full_bulk_metabrain_df["ENSG"] = full_bulk_metabrain_df["Gene"].str.split(".", n=None, expand=True)[0]
-        snp_id_df = full_bulk_metabrain_df["SNP"].str.split(":", n=None, expand=True)
-        snp_id_df.columns = ["CHR", "Position", "RS_id", "alleles"]
-        alleles_df = snp_id_df["alleles"].str.split("_", n=None, expand=True)
-        alleles_df.columns = ["alleleA", "alleleB"]
-        alleles_df['allele1'] = np.minimum(alleles_df['alleleA'], alleles_df['alleleB'])
-        alleles_df['allele2'] = np.maximum(alleles_df['alleleA'], alleles_df['alleleB'])
-        alleles_df['alleles'] = alleles_df['allele1'] + alleles_df['allele2']
-        full_bulk_metabrain_df = pd.concat([full_bulk_metabrain_df, snp_id_df[["Position"]], alleles_df[["alleles"]]], axis=1)
-        full_bulk_metabrain_df.index = full_bulk_metabrain_df["ENSG"] + "_" + full_bulk_metabrain_df["Position"].astype(str) + "_" + full_bulk_metabrain_df["alleles"]
-        full_bulk_metabrain_df.drop(["alleles"], axis=1, inplace=True)
-        del snp_id_df, alleles_df
+        print("Loading data")
+        bryois_top_effects = self.load_file(os.path.join(self.bryois_folder, "BryoisTopEffects.txt.gz"), header=0, index_col=None)
 
-        print("Loading single-nucleus MetaBrain data")
         plot_data = {}
-        for bulk_cell_type, sn_cell_type in self.metabrain_ct_dict.items():
-            if sn_cell_type in self.exclude_ct:
-                continue
+        for bryois_ct, cell_type in self.bryois_ct_dict.items():
+            print("  Working on '{}'".format(cell_type))
 
-            print("  Working on '{}'".format(sn_cell_type))
+            # Load Bryois et al. 2022 data.
+            bryois_df = self.load_file(os.path.join(self.bryois_folder, "merged", "{}.txt.gz".format(cell_type)), header=0, index_col=0)
+            bryois_df.index = bryois_df["ENSG"] + "_" + bryois_df["SNP_id"]
 
-            ct_workdir = os.path.join(self.dataset_outdir, sn_cell_type)
-            if not os.path.exists(ct_workdir):
-                os.makedirs(ct_workdir)
+            top_effects_df = bryois_top_effects.loc[bryois_top_effects["cell_type"] == bryois_ct, :].copy()
+            top_effects_df.index = top_effects_df["ensembl"] + "_" + top_effects_df["SNP"]
 
-            sn_metabrain_df_path = os.path.join(ct_workdir, "scmetabrain.txt.gz")
-            merged_df_path = os.path.join(ct_workdir, "merged.txt.gz")
+            bryois_df = bryois_df.merge(top_effects_df[["adj_p"]], left_index=True, right_index=True, how="inner")
 
-            if os.path.exists(merged_df_path) and not self.force:
-                df = self.load_file(merged_df_path, header=0, index_col=0)
-            else:
-                # Subset bulk.
-                bulk_metabrain_df = full_bulk_metabrain_df.loc[:, ["Gene", "ENSG", "Gene symbol", "SNP", "Alleles", "Allele assessed", "N", "HW pval", "Minor allele", "MAF", "Overall z-score", "{} pvalue".format(bulk_cell_type), "{} beta".format(bulk_cell_type), "{} interaction beta".format(bulk_cell_type), "{} BH-FDR".format(bulk_cell_type)]].copy()
-                bulk_metabrain_df.columns = ["Gene", "ENSG", "Gene symbol", "SNP", "Alleles", "Allele assessed", "N", "HW pval", "Minor allele", "MAF", "Overall z-score", "Pvalue", "Beta", "Interaction beta", "BH-FDR"]
-                print(bulk_metabrain_df)
+            # Load the Mathys et al. 2019 data.
+            mathys_df = self.load_file(os.path.join(self.mbqtl_folder, "{}-TopEffects.txt".format(cell_type)), header=0, index_col=None)
 
-                if os.path.exists(sn_metabrain_df_path) and not self.force:
-                    sn_metabrain_df = self.load_file(sn_metabrain_df_path,
-                                                     header=0,
-                                                     index_col=0)
-                else:
-                    sn_metabrain_df = self.load_wg3_data(cell_type=sn_cell_type,
-                                                         outpath=sn_metabrain_df_path,
-                                                         top_effect=False,
-                                                         ensg_hits=set(bulk_metabrain_df["ENSG"].values),
-                                                         index_hits=set(bulk_metabrain_df.index.values))
-                    if sn_metabrain_df is None:
-                        print("  Warning, no overlapping eQTLs found.")
-                        return None
+            # merge.
+            df = bryois_df.merge(mathys_df, left_on="HGNC", right_on="Gene", how="inner")
 
-                print(sn_metabrain_df)
+            # flip.
+            df["flip"] = df["SNPEffectAllele"] != df["effect_allele"]
+            df["MetaBeta"] = df["MetaBeta"] * df["flip"].map({True: -1, False: 1})
 
-                df = self.merge_data(bulk_metabrain_df=bulk_metabrain_df,
-                                     sn_metabrain_df=sn_metabrain_df,
-                                     outpath=merged_df_path)
+            df["BH-FDR"] = np.nan
+            ieqtl_repl_mask = np.logical_and((df["adj_p"] <= 0.05).to_numpy(), (~df["MetaP"].isna()).to_numpy())
+            n_overlap = np.sum(ieqtl_repl_mask)
+            if n_overlap > 1:
+                df.loc[ieqtl_repl_mask, "BH-FDR"] = multitest.multipletests(df.loc[ieqtl_repl_mask, "MetaP"], method='fdr_bh')[1]
 
-
-            plot_data[sn_cell_type] = df
+            plot_data[cell_type] = df
 
         print("\nVisualizing comparison")
         replication_stats_df = self.visualise_data(plot_data=plot_data)
+
+        plot_repl_stats_df = replication_stats_df.loc[replication_stats_df["label"] == "discovery significant", :].pivot(index="variable", values="value", columns="cell type")
+        plot_repl_stats_df = plot_repl_stats_df.iloc[2:, :]
+        plot_repl_stats_df.index.name = None
+        plot_repl_stats_df.columns.name = None
+        plot_repl_stats_df.loc["concordance", :] = plot_repl_stats_df.loc["concordance", :] / 100
+        self.plot_heatmap(df=plot_repl_stats_df)
+        del plot_repl_stats_df
 
         print("\nReplication stats:")
         for label in replication_stats_df["label"].unique():
@@ -271,189 +248,6 @@ class main():
         self.save_file(df=replication_stats_df,
                        outpath=os.path.join(self.dataset_outdir,
                                             "replication_stats.txt.gz"))
-
-
-    def load_wg3_data(self, cell_type, outpath, remove_indels=True,
-                      top_effect=False, ensg_hits=None, index_hits=None):
-        print("  Loading scMetaBrain data")
-
-        results_file_prefix = "qtl_results_"
-
-        h5_files = glob.glob(os.path.join(self.wg3_folder, "output", self.annotation_level, cell_type, "qtl", "{}*.h5".format(results_file_prefix)))
-        h5_files = [(int(os.path.basename(h5_file).split("_")[2]), h5_file) for h5_file in h5_files]
-        h5_files.sort(key=lambda x: x[0])
-        if len(h5_files) == 0:
-            print("  Warning, no h5 files found for this cell type")
-            return None
-
-        dfs = []
-        prev_chr = None
-        for chr, h5_filepath in h5_files:
-            if prev_chr is None or chr != prev_chr:
-                print("   Loading chromosome {}".format(os.path.basename(h5_filepath).split("_")[2]))
-            prev_chr = chr
-
-            h5_df = self.load_h5_file(filepath=h5_filepath,
-                                      cell_type=cell_type,
-                                      results_file_prefix=results_file_prefix,
-                                      ensg_hits=ensg_hits,
-                                      index_hits=index_hits)
-            if h5_df is None:
-                continue
-
-            if remove_indels:
-                h5_df = h5_df.loc[h5_df["alleles"].str.len() == 2, :]
-
-            if top_effect:
-                h5_df = h5_df.loc[h5_df.groupby('feature_id')["empirical_feature_p_value"].idxmin(), :]
-
-            dfs.append(h5_df)
-            del h5_df
-
-        if len(dfs) == 0:
-            print("  Warning, no data loaded for this cell type")
-            return None
-
-        df = pd.concat(dfs, axis=0)
-
-        if df.shape[0] == 0:
-            print("  Warning, no data loaded for this cell type")
-            return None
-
-        print("  Saving file")
-        self.save_file(df=df, outpath=outpath)
-        # self.save_file(df=df, outpath=outpath.replace(".txt.gz", ".xlsx"))
-
-        return df
-
-    def load_h5_file(self, filepath, cell_type, results_file_prefix,
-                     ensg_hits=None, index_hits=None):
-        analysis_subset = os.path.basename(filepath).replace(results_file_prefix, "").replace(".h5", "")
-        snp_metadata_file = os.path.join(self.wg3_folder, "output", self.annotation_level, cell_type, "qtl", "snp_metadata_{}.txt".format(analysis_subset))
-        feature_metadata_file = os.path.join(self.wg3_folder, "output", self.annotation_level, cell_type, "qtl", "feature_metadata_{}.txt".format(analysis_subset))
-
-        if os.path.exists(feature_metadata_file):
-            ffea_df = self.load_file(feature_metadata_file, header=0, index_col=None)
-        elif os.path.exists(feature_metadata_file + ".gz"):
-            ffea_df = self.load_file(feature_metadata_file + ".gz", header=0, index_col=None)
-        else:
-            print("  Warning, skipping: '{}' missing feature metadata file.".format(analysis_subset))
-            return None
-
-        if os.path.exists(snp_metadata_file):
-            fsnp_df = self.load_file(snp_metadata_file, header=0, index_col=None)
-        elif os.path.exists(snp_metadata_file + ".gz"):
-            fsnp_df = self.load_file(snp_metadata_file + ".gz", header=0, index_col=None)
-        else:
-            print("  Warning, skipping: '{}' missing SNP metadata file.".format(analysis_subset))
-            return None
-
-        ffea_df = ffea_df.rename(index=str,
-                                 columns={"chromosome": "feature_chromosome",
-                                          "start": "feature_start",
-                                          "end": "feature_end"})
-        fsnp_df = fsnp_df.rename(index=str,
-                                 columns={"chromosome": "snp_chromosome",
-                                          "position": "snp_position"})
-
-        ########################################################################
-
-        snp_id_df = fsnp_df["snp_id"].str.split(":", n=None, expand=True)
-        snp_id_df.columns = ["snp_chromosome", "snp_position", "alleleA", "alleleB"]
-        snp_id_df.drop(["snp_chromosome", "snp_position"], axis=1, inplace=True)
-        fsnp_df = pd.concat([fsnp_df, snp_id_df], axis=1)
-        fsnp_df['allele1'] = np.minimum(fsnp_df['alleleA'], fsnp_df['alleleB'])
-        fsnp_df['allele2'] = np.maximum(fsnp_df['alleleA'], fsnp_df['alleleB'])
-        fsnp_df['alleles'] = fsnp_df['allele1'] + fsnp_df['allele2']
-        fsnp_df.drop(['alleleA', 'alleleB', 'allele1', 'allele2'], axis=1, inplace=True)
-
-        ########################################################################
-
-        frez = h5py.File(filepath, 'r')
-        frez_keys = [k.replace('_i_', '') for k in list(frez.keys())]
-
-        if ensg_hits is not None:
-            # Filter on Bryois ENSG hits.
-            hgnc_to_ensg_dict = dict(zip(ffea_df["feature_id"], ffea_df["ENSG"]))
-            frez_keys = [frez_key for frez_key in frez_keys if frez_key in hgnc_to_ensg_dict and hgnc_to_ensg_dict[frez_key] in ensg_hits]
-
-        if len(frez_keys) == 0:
-            print("  Warning, skipping: '{}', no overlap in genes.".format(analysis_subset))
-            return None
-
-        dfs = []
-        for frez_key in frez_keys:
-            frez_df = pd.DataFrame(np.array(frez[frez_key]))
-            frez_df['feature_id'] = frez_key
-            dfs.append(frez_df)
-        df = pd.concat(dfs, axis=0)
-        df['snp_id'] = df['snp_id'].astype(str)
-
-        if self.verbose:
-            print("\tLoaded h5 file: {} with shape: {}".format(os.path.basename(filepath), df.shape))
-
-        df = pd.merge(df, ffea_df, on='feature_id', how='left')
-
-        ########################################################################
-
-        if(len(glob.glob(os.path.join(self.wg3_folder, "output", self.annotation_level, cell_type, "qtl", "snp_qc_metrics_naContaining_feature_*.txt"))) > 0):
-            print("  Error, code not implemented yet")
-            exit()
-            # tmp_df = pd.DataFrame(columns=df.columns)
-            # for key in frez_keys:
-            #     qc_metrics_inpath = os.path.join(self.wg3_folder, "output", self.annotation_level, cell_type, "qtl", "snp_qc_metrics_naContaining_feature_{}.txt".format(key))
-            #     if os.path.isfile(qc_metrics_inpath):
-            #         fsnp_rel = self.load_file(qc_metrics_inpath, header=0, index_col=None)
-            #         tmp_t = df.loc[df["feature_id"] == key]
-            #         fsnp_t = fsnp_df.loc[:,["snp_id", "snp_chromosome", "snp_position", "assessed_allele"]]
-            #         fsnp_t = pd.merge(fsnp_t, fsnp_rel, on='snp_id', how='right')
-            #         tmp_t = pd.merge(tmp_t, fsnp_t, on='snp_id', how='left')
-            #         tmp_df = tmp_df.append(tmp_t, sort=False)
-            #     else:
-            #         tmp_t = df.loc[df["feature_id"] == key]
-            #         tmp_t = pd.merge(tmp_t, fsnp_df, on='snp_id', how='left')
-            #         tmp_df = tmp_df.append(tmp_t,sort=False)
-            #     data[key]=np.zeros(len(np.unique(list(frez_keys))),dtype='object')+np.nan
-            # df = tmp_df
-            # del tmp_df
-        else:
-            df = pd.merge(df, fsnp_df, on='snp_id', how='inner')
-
-        df.index = df["ENSG"] + "_" + df["snp_position"].astype(str) + "_" + df["alleles"]
-
-        if index_hits is not None:
-            df = df.loc[[index for index in df.index if index in index_hits], :]
-
-        df['empirical_feature_p_value'] = df['empirical_feature_p_value'].astype(float)
-        df['p_value'] = df['p_value'].astype(float)
-
-        del ffea_df, fsnp_df
-
-        return df
-
-    def merge_data(self, bulk_metabrain_df, sn_metabrain_df, outpath):
-        # Make columns unique.
-        bulk_metabrain_df.columns = ["bulk_{}".format(col) for col in bulk_metabrain_df.columns]
-        sn_metabrain_df.columns = ["sn_{}".format(col) for col in sn_metabrain_df.columns]
-
-        print("  Merging discovery and replication eQTLs")
-        df = bulk_metabrain_df.merge(sn_metabrain_df, left_index=True, right_index=True)
-        print("\t{} overlapping entries".format(df.shape[0]))
-
-        df["flip"] = df["bulk_Allele assessed"] != df["sn_assessed_allele"]
-        df["sn_beta"] = df["sn_beta"] * df["flip"].map({True: -1, False: 1})
-
-        df["sn_BH-FDR"] = np.nan
-        repl_mask = np.logical_and((df["bulk_BH-FDR"] <= 0.05).to_numpy(), (~df["sn_empirical_feature_p_value"].isna()).to_numpy())
-        n_overlap = np.sum(repl_mask)
-        if n_overlap > 1:
-            df.loc[repl_mask, "sn_BH-FDR"] = multitest.multipletests(df.loc[repl_mask, "sn_empirical_feature_p_value"], method='fdr_bh')[1]
-
-        print("\tSaving file")
-        self.save_file(df=df, outpath=outpath)
-        # self.save_file(df=df, outpath=outpath.replace(".txt.gz", ".xlsx"))
-
-        return df
 
     def load_file(self, inpath, header, index_col, sep="\t", low_memory=True,
                   nrows=None, skiprows=None):
@@ -486,6 +280,7 @@ class main():
             print("\tSaved dataframe: {} "
                   "with shape: {}".format(os.path.basename(outpath),
                                           df.shape))
+
     def visualise_data(self, plot_data):
         cell_types = list(plot_data.keys())
         cell_types.sort()
@@ -498,7 +293,7 @@ class main():
 
         replication_stats = []
 
-        sns.set(rc={'figure.figsize': (ncols * 8, nrows * 6)})
+        sns.set(rc={'figure.figsize': (ncols * 8, nrows * 5.3553)})
         sns.set_style("ticks")
         fig, axes = plt.subplots(nrows=nrows,
                                  ncols=ncols,
@@ -513,46 +308,46 @@ class main():
 
             # Select the required columns.
             df = plot_data[cell_type]
-            plot_df = df.loc[:, ["bulk_Gene symbol",
-                                 "bulk_N",
-                                 "bulk_MAF",
-                                 "bulk_Pvalue",
-                                 "bulk_BH-FDR",
-                                 "bulk_Interaction beta",
-                                 "sn_n_samples",
-                                 "sn_empirical_feature_p_value",
-                                 "sn_BH-FDR",
-                                 "sn_beta",
-                                 "sn_beta_se"
+            df["bryois_n_samples"] = self.bryois_n
+            plot_df = df.loc[:, ["HGNC",
+                                 "Nominal p-value",
+                                 "Beta",
+                                 "adj_p",
+                                 "bryois_n_samples",
+                                 "MetaP",
+                                 "MetaBeta",
+                                 "MetaSE",
+                                 "BH-FDR",
+                                 "SNPEffectAlleleFreq",
                                  ]].copy()
             plot_df.columns = ["Gene symbol",
-                               "bulkMetaBrain N",
-                               "bulkMetaBrain MAF",
-                               "bulkMetaBrain pvalue",
-                               "bulkMetaBrain FDR",
-                               "bulkMetaBrain beta",
-                               "snMetaBrain N",
-                               "snMetaBrain pvalue",
-                               "snMetaBrain FDR",
-                               "snMetaBrain beta",
-                               "snMetaBrain beta se"]
-            plot_df = plot_df.loc[(~plot_df["bulkMetaBrain pvalue"].isna()) & (~plot_df["snMetaBrain pvalue"].isna()), :]
-            plot_df.sort_values(by="bulkMetaBrain pvalue", inplace=True)
+                               "Bryois pvalue",
+                               "Bryois beta",
+                               "Bryois FDR",
+                               "Bryois N",
+                               "Mathys pvalue",
+                               "Mathys beta",
+                               "Mathys se",
+                               "Mathys FDR",
+                               "Mathys MAF"
+                               ]
+            plot_df = plot_df.loc[(~plot_df["Bryois pvalue"].isna()) & (~plot_df["Mathys pvalue"].isna()), :]
+            plot_df.sort_values(by="Bryois pvalue", inplace=True)
 
             # Calculate the replication standard error.
             self.pvalue_to_zscore(df=plot_df,
-                                  beta_col="bulkMetaBrain beta",
-                                  p_col="bulkMetaBrain pvalue",
-                                  prefix="bulkMetaBrain ")
+                                  beta_col="Bryois beta",
+                                  p_col="Bryois pvalue",
+                                  prefix="Bryois ")
             self.zscore_to_beta(df=plot_df,
-                                z_col="bulkMetaBrain z-score",
-                                maf_col="bulkMetaBrain MAF",
-                                n_col="bulkMetaBrain N",
-                                prefix="bulkMetaBrain zscore-to-")
+                                z_col="Bryois z-score",
+                                maf_col="Mathys MAF",
+                                n_col="Bryois N",
+                                prefix="Bryois zscore-to-")
 
             # Convert the interaction beta to log scale.
-            plot_df["bulkMetaBrain log beta"] = [np.log(abs(beta) + 1) * np.sign(beta) for beta in plot_df["bulkMetaBrain beta"]]
-            plot_df["snMetaBrain log beta"] = [np.log(abs(beta) + 1) * np.sign(beta) for beta in plot_df["snMetaBrain beta"]]
+            plot_df["Mathys log beta"] = [np.log(abs(beta) + 1) * np.sign(beta) for beta in plot_df["Mathys beta"]]
+            plot_df["Bryois log beta"] = [np.log(abs(beta) + 1) * np.sign(beta) for beta in plot_df["Bryois beta"]]
 
             include_ylabel = False
             if col_index == 0:
@@ -573,10 +368,10 @@ class main():
                 df=plot_df,
                 fig=fig,
                 ax=axes[0, col_index],
-                x="bulkMetaBrain log beta",
-                y="snMetaBrain log beta",
+                x="Bryois log beta",
+                y="Mathys log beta",
                 xlabel="",
-                ylabel="snMetaBrain log beta",
+                ylabel="Mathys log beta",
                 title=cell_type,
                 color=self.palette[cell_type],
                 include_ylabel=include_ylabel
@@ -585,31 +380,31 @@ class main():
 
             print("\tPlotting row 2.")
             xlim, ylim, stats2 = self.scatterplot(
-                df=plot_df.loc[plot_df["bulkMetaBrain FDR"] <= 0.05, :],
+                df=plot_df.loc[plot_df["Bryois FDR"] <= 0.05, :],
                 fig=fig,
                 ax=axes[1, col_index],
-                x="bulkMetaBrain log beta",
-                y="snMetaBrain log beta",
+                x="Bryois log beta",
+                y="Mathys log beta",
                 xlabel="",
-                ylabel="snMetaBrain log beta",
+                ylabel="Mathys log beta",
                 title="",
                 color=self.palette[cell_type],
                 include_ylabel=include_ylabel,
-                pi1_column="snMetaBrain pvalue",
-                rb_columns=[("bulkMetaBrain zscore-to-beta", "bulkMetaBrain zscore-to-se"), ("snMetaBrain beta", "snMetaBrain beta se")]
+                pi1_column="Mathys pvalue",
+                rb_columns=[("Bryois zscore-to-beta", "Bryois zscore-to-se"), ("Mathys beta", "Mathys se")]
             )
             self.update_limits(xlim, ylim, 1, col_index)
 
             print("\tPlotting row 3.")
             xlim, ylim, stats3 = self.scatterplot(
-                df=plot_df.loc[(plot_df["bulkMetaBrain FDR"] <= 0.05) & (plot_df["snMetaBrain FDR"] <= 0.05), :],
+                df=plot_df.loc[(plot_df["Bryois FDR"] <= 0.05) & (plot_df["Mathys FDR"] <= 0.05), :],
                 fig=fig,
                 ax=axes[2, col_index],
-                x="bulkMetaBrain log beta",
-                y="snMetaBrain log beta",
+                x="Bryois log beta",
+                y="Mathys log beta",
                 label="Gene symbol",
-                xlabel="bulkMetaBrain log beta",
-                ylabel="snMetaBrain log beta",
+                xlabel="Bryois log beta",
+                ylabel="Mathys log beta",
                 title="",
                 color=self.palette[cell_type],
                 include_ylabel=include_ylabel
@@ -634,7 +429,7 @@ class main():
             ax.set_ylim(ymin - ymargin, ymax + ymargin)
 
         # Add the main title.
-        fig.suptitle("de Klein 2023 replication in scMetaBrain",
+        fig.suptitle("Bryois et al. 2022 replication in Mathys et al. 2019",
                      fontsize=40,
                      color="#000000",
                      weight='bold')
@@ -648,6 +443,48 @@ class main():
         replication_stats_df.dropna(inplace=True)
 
         return replication_stats_df
+
+
+    def plot_heatmap(self, df, xlabel="", ylabel=""):
+        cmap = sns.diverging_palette(246, 24, as_cmap=True)
+
+        fig, axes = plt.subplots(nrows=2,
+                                 ncols=2,
+                                 figsize=(1 * df.shape[1] + 5, 1 * df.shape[0] + 5),
+                                 gridspec_kw={"width_ratios": [0.2, 0.8],
+                                              "height_ratios": [0.8, 0.2]})
+        sns.set(color_codes=True)
+
+        row_index = 0
+        col_index = 0
+        for _ in range(4):
+            ax = axes[row_index, col_index]
+            if row_index == 0 and col_index == 1:
+
+                sns.heatmap(df, cmap=cmap, vmin=-1, vmax=1, center=0,
+                            square=True, annot=df.round(2), fmt='',
+                            cbar=False, annot_kws={"size": 16, "color": "#000000"},
+                            ax=ax)
+
+                plt.setp(ax.set_yticklabels(ax.get_ymajorticklabels(), fontsize=20, rotation=0))
+                plt.setp(ax.set_xticklabels(ax.get_xmajorticklabels(), fontsize=20, rotation=90))
+
+                ax.set_xlabel(xlabel, fontsize=14)
+                ax.xaxis.set_label_position('top')
+
+                ax.set_ylabel(ylabel, fontsize=14)
+                ax.yaxis.set_label_position('right')
+            else:
+                ax.set_axis_off()
+
+            col_index += 1
+            if col_index > 1:
+                col_index = 0
+                row_index += 1
+
+        for extension in self.extensions:
+            fig.savefig(os.path.join(self.dataset_plot_outdir, "replication_stats.{}".format(extension)))
+        plt.close()
 
     @staticmethod
     def pvalue_to_zscore(df, beta_col, p_col, prefix=""):
@@ -825,6 +662,13 @@ class main():
             col_xlim = (col_xlim[0], xlim[1])
         self.shared_xlim[col] = col_xlim
 
+    # @staticmethod
+    # def qvalues(p):
+    #     qvalue = importr("qvalue")
+    #     pvals = robjects.FloatVector(p)
+    #     qobj = robjects.r['qvalue'](pvals)
+    #     return np.array(qobj.rx2('qvalues'))
+
     def calculate_p1(self, p):
         robjects.r("source('{}')".format(self.qvalues_script))
         p = robjects.FloatVector(p)
@@ -833,7 +677,7 @@ class main():
         return 1 - np.array(pi0)
 
     def calculate_rb(self, b1, se1, b2, se2, theta=0):
-        robjects.r("source('Rb.R')".format(self.rb_script))
+        robjects.r("source('{}')".format(self.rb_script))
         b1 = robjects.FloatVector(b1)
         se1 = robjects.FloatVector(se1)
         b2 = robjects.FloatVector(b2)
@@ -844,16 +688,13 @@ class main():
 
     def print_arguments(self):
         print("Arguments:")
-        print("  > Working directory:           {}".format(self.work_dir))
-        print("  > Dataset output directory:    {}".format(self.dataset_outdir))
-        print("  > Workgroup 3 folder:          {}".format(self.wg3_folder))
-        print("  > Annotation level:            {}".format(self.annotation_level))
-        print("  > Exclude cell type:           {}".format(", ".join(self.exclude_ct)))
-        print("  > Plot extensions:             {}".format(", ".join(self.extensions)))
-        print("  > Force:                       {}".format(self.force))
-        print("  > Verbose:                     {}".format(self.verbose))
-        print("  > Qvalues script:              {}".format(self.qvalues_script))
-        print("  > Rb script:                   {}".format(self.rb_script))
+        print("  > Working directory:        {}".format(self.work_dir))
+        print("  > MBeta-QTL data folder:    {}".format(self.dataset_outdir))
+        print("  > Bryois data folder:       {}".format(self.bryois_folder))
+        print("  > Plot extensions:          {}".format(", ".join(self.extensions)))
+        print("  > Verbose:                  {}".format(self.verbose))
+        print("  > Qvalues script:           {}".format(self.qvalues_script))
+        print("  > Rb script:                {}".format(self.rb_script))
         print("")
 
 

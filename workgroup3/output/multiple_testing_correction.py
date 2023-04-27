@@ -124,7 +124,8 @@ class main():
                 print(eqtl_df)
 
                 # Save the output.
-                # self.save_file(df=eqtl_df, outpath=eqtl_inpath.replace(".txt.gz", "_top{}_FDR_added.txt.gz".format(self.n)))
+                self.save_file(df=eqtl_df, outpath=eqtl_inpath.replace(".txt.gz", "_top{}_FDR_added.txt.gz".format(self.n)))
+                self.save_file(df=eqtl_df, outpath=eqtl_inpath.replace(".txt.gz", "_top{}_FDR_added.xlsx".format(self.n)))
 
                 print("\tAnnotation level: {}\tCell type: {}\tN-genes: {:,}\tN-eQTLs {:,}\tN-eQTLs (BH-FDR) {:,}".format(annotation_level, cell_type, eqtl_df.shape[0], np.sum(eqtl_df["Global_FDR"] < 0.05), np.sum(eqtl_df["BH-FDR"] < 0.05)))
 
@@ -146,12 +147,21 @@ class main():
         return np.array(qobj.rx2('qvalues'))
 
     @staticmethod
-    def save_file(df, outpath, header=True, index=False, sep="\t"):
-        compression = 'infer'
-        if outpath.endswith('.gz'):
-            compression = 'gzip'
+    def save_file(df, outpath, header=True, index=True, sep="\t", na_rep="NA",
+                  sheet_name="Sheet1"):
+        if outpath.endswith('xlsx'):
+            df.to_excel(outpath,
+                        sheet_name=sheet_name,
+                        na_rep=na_rep,
+                        header=header,
+                        index=index)
+        else:
+            compression = 'infer'
+            if outpath.endswith('.gz'):
+                compression = 'gzip'
 
-        df.to_csv(outpath, sep=sep, index=index, header=header, compression=compression)
+            df.to_csv(outpath, sep=sep, index=index, header=header,
+                      compression=compression)
 
         print("\tSaved dataframe: {} "
               "with shape: {}".format(os.path.basename(outpath),
