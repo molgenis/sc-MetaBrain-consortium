@@ -3,7 +3,7 @@
 """
 File:         run_cellbender.py
 Created:      2023/03/23
-Last Changed:
+Last Changed: 2023/07/07
 Author:       M.Vochteloo
 
 Copyright (C) 2022 M.Vochteloo
@@ -26,19 +26,10 @@ from __future__ import print_function
 import subprocess
 import argparse
 import glob
-import math
 import os
-import re
 
 # Third party imports.
-import numpy as np
 import pandas as pd
-import scipy.sparse as sp
-import h5py
-import seaborn as sns
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 
 # Local application imports.
 
@@ -73,22 +64,59 @@ Syntax:
     --dry_run
 
 ./run_cellbender.py \
-    --workdir /scratch/p301710/2023-03-28-scMetaBrainConsortium/output/2023-03-28-CellBender/2023-03-28-Mathys2019 \
+    --workdir /scratch/p301710/2023-03-28-scMetaBrainConsortium/output/2023-03-28-CellBender/2023-07-07-Mathys2019 \
     --inputdir /scratch/p301710/2023-03-28-scMetaBrainConsortium/input/processeddata/Mathys2019/ \
+    --preflights module load Anaconda3 , source activate CellBender \
     --cuda \
     --num_training_tries 3 \
     --partition gpu \
     --time 01:59:00 \
     --dry_run
-    
+
 ./run_cellbender.py \
     --workdir /scratch/p301710/2023-03-28-scMetaBrainConsortium/output/2023-03-28-CellBender/2023-03-28-Mathys2019 \
     --inputdir /scratch/p301710/2023-03-28-scMetaBrainConsortium/input/processeddata/Mathys2019/ \
+    --preflight module load Anaconda3 , source activate CellBender \
     --cuda \
     --num_training_tries 3 \
     --partition gpu \
     --time 01:59:00 \
     --rerun 10101327 11409232 11336574 20249897 11302830 \
+    --dry_run 
+
+./run_cellbender.py \
+    --workdir /scratch/p301710/2023-03-28-scMetaBrainConsortium/output/2023-03-28-CellBender/2023-07-07-Mathys2019 \
+    --inputdir /scratch/p301710/2023-03-28-scMetaBrainConsortium/input/processeddata/Mathys2019/ \
+    --preflights module load Anaconda3 , source activate CellBender \
+    --epochs 300 \
+    --cuda \
+    --learning_rate 1e-5 \
+    --partition gpu \
+    --time 01:59:00 \
+    --dry_run 
+
+## Zhou 2020 ###
+./run_cellbender.py \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-07-07-Zhou2020 \
+    --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Zhou2020/ \
+    --preflights module load Python/3.10.4-GCCcore-11.3.0-bare , module load CUDA/11.7.0 , source ~/cellbender/bin/activate , module load GCC\
+    --gres gpu:a40:1 \
+    --time 05:55:00 \
+    --epochs 300 \
+    --cuda \
+    --learning_rate 1e-5 \
+    --dry_run 
+    
+./run_cellbender.py \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-07-10-Zhou2020-CellRangerExpectedCells \
+    --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Zhou2020/ \
+    --preflights module load Python/3.10.4-GCCcore-11.3.0-bare , module load CUDA/11.7.0 , source ~/cellbender/bin/activate , module load GCC\
+    --gres gpu:a40:1 \
+    --time 05:55:00 \
+    --expected_cells -1 \
+    --epochs 300 \
+    --cuda \
+    --learning_rate 1e-5 \
     --dry_run 
 
 """
@@ -102,13 +130,25 @@ class main():
         self.inputdir = getattr(arguments, 'inputdir')
         self.partition = getattr(arguments, 'partition')
         self.gpus_per_node = getattr(arguments, 'gpus_per_node')
+        self.gres = getattr(arguments, 'gres')
         time = getattr(arguments, 'time')
         self.time = TIME_DICT[time] if time in TIME_DICT else time
         self.cpus_per_task = getattr(arguments, 'cpus_per_task')
         self.mem = getattr(arguments, 'mem')
+        preflights = getattr(arguments, 'preflights')
         self.dry_run = getattr(arguments, 'dry_run')
-        self.extensions = getattr(arguments, 'extension')
         self.rerun = getattr(arguments, 'rerun')
+
+        # Format preflights.
+        self.preflights = []
+        command = []
+        for word in preflights:
+            if word == ",":
+                self.preflights.append(" ".join(command))
+                command = []
+            else:
+                command.append(word)
+        self.preflights.append(" ".join(command))
 
         # Safe the CellBender arguments.
         self.expected_cells = getattr(arguments, 'expected_cells')
@@ -132,6 +172,9 @@ class main():
         self.posterior_batch_size = getattr(arguments, 'posterior_batch_size')
         self.cells_posterior_reg_calc = getattr(arguments, 'cells_posterior_reg_calc')
 
+        if self.partition == "gpu" and self.gpus_per_node is None:
+            self.gpus_per_node = "a100.20gb:1"
+
         # Set variables.
         self.jobdir = os.path.join(self.workdir, "jobs")
         self.jobs_outdir = os.path.join(self.jobdir, "output")
@@ -144,11 +187,12 @@ class main():
             ("inputdir", self.inputdir, "required"),
             ("partition", self.partition, "required"),
             ("gpus-per-node", self.gpus_per_node, "required"),
+            ("gres", self.gres, "required"),
             ("time", self.time, "required"),
             ("cpus-per-task", self.cpus_per_task, "required"),
+            ("preflights", self.preflights, "required"),
             ("mem", self.mem, "required"),
             ("dry_run", self.dry_run, "required"),
-            ("extensions", self.extensions, "required"),
             ("rerun", self.rerun, "required"),
             ("expected-cells", self.expected_cells, None),
             ("total-droplets-included", self.total_droplets_included, 25000),
@@ -159,7 +203,8 @@ class main():
             ("z-dim", self.z_dim, 100),
             ("z-layers", self.z_layers, [500]),
             ("training-fraction", self.training_fraction, 0.9),
-            ("empty-drop-training-fraction", self.empty_drop_training_fraction, 0.5),
+            ("empty-drop-training-fraction", self.empty_drop_training_fraction,
+             0.5),
             ("blacklist-genes", self.blacklist_genes, []),
             ("fpr", self.fpr, [0.01]),
             ("exclude-antibody-capture", self.exclude_antibody_capture, False),
@@ -201,16 +246,24 @@ class main():
         parser.add_argument("--partition",
                             type=str,
                             required=False,
-                            choices=["regular", "parallel", "gpu", "himem", "gelifes"],
+                            choices=["regular", "parallel", "gpu", "himem",
+                                     "gelifes", "gpu_a40"],
                             default=None,
                             help="The partition to submit to.")
         parser.add_argument("--gpus_per_node",
                             type=str,
                             required=False,
                             choices=["a100.20gb:1", "a100:1", "a100:2"],
-                            default="a100.20gb:1",
-                            help="Request a specific GPU type when using "
-                                 "--partition=gpu.")
+                            default=None,
+                            help="Request a specific GPU type on Habrok when"
+                                 " using --partition=gpu.")
+        parser.add_argument("--gres",
+                            type=str,
+                            required=False,
+                            choices=["gpu:a40:1"],
+                            default=None,
+                            help="Request a specific GPU type on Nibbler when "
+                                 "using --partition=gpu.")
         parser.add_argument("--time",
                             type=str,
                             required=False,
@@ -228,16 +281,14 @@ class main():
                             default=4,
                             help="Restricts CellBender to use specified amount "
                                  "of memory (in GB). (default: 4)")
+        parser.add_argument("--preflights",
+                            nargs="+",
+                            type=str,
+                            default=[],
+                            help="")
         parser.add_argument("--dry_run",
                             action='store_true',
                             help="Only create the job files, don't submit them.")
-        parser.add_argument("--extension",
-                            nargs="+",
-                            type=str,
-                            choices=["png", "pdf", "eps"],
-                            default=["png"],
-                            help="The figure file extension. "
-                                 "Default: 'png'.")
         parser.add_argument("--rerun",
                             nargs="+",
                             type=str,
@@ -412,17 +463,37 @@ class main():
     def start(self):
         self.print_arguments()
 
-        stats_data = []
-        training_data = []
-        test_data = []
-
         print("Starting job files.")
+        metrics_data = []
         arguments = self.filter_arguments()
         for path in glob.glob(os.path.join(self.inputdir, "*")):
             folder = os.path.basename(path)
+            print("\tProcessing '{}'".format(folder))
+
             input = self.find_input(folder)
             if input is None:
+                print("\t\tWarning, no input file found.")
                 continue
+
+            metrics_path = None
+            for root, dirs, files in os.walk(os.path.join(self.inputdir, folder)):
+                if "metrics_summary.csv" in files:
+                    metrics_path = os.path.join(root, "metrics_summary.csv")
+
+            if metrics_path is None:
+                print("\t\tWarning, no metrics file found.")
+                continue
+
+            print("\t\tLoading CellRanger metrics summary file.")
+            metrics_df = self.load_file(metrics_path, header=0, index_col=None)
+            metrics_df = metrics_df.replace(',', '', regex=True).replace('%', '', regex=True).astype(float)
+            metrics_df.index = [folder]
+            metrics_data.append(metrics_df)
+
+            if self.expected_cells == -1:
+                cellranger_expected_cells = int(metrics_df.loc[folder, "Estimated Number of Cells"])
+                print("\t\tUsing CellRanger expected number of cells: '{:,}'.".format(cellranger_expected_cells))
+                arguments["expected-cells"] = cellranger_expected_cells
 
             outpath = os.path.join(self.workdir, folder)
             if not os.path.exists(outpath):
@@ -445,55 +516,14 @@ class main():
                 self.run_command(command)
             elif os.path.exists(output):
                 print("\tSample '{}' already finished".format(folder))
-
-                resultfile = os.path.join(self.workdir, folder, "cellbender_remove_background_output.h5")
-                if not os.path.exists(resultfile):
-                    continue
-                stats_s, training_s, test_s = self.parse_results(resultfile, folder)
-
-                logfile = os.path.join(self.workdir, folder, "cellbender_remove_background_output.log")
-                if os.path.exists(logfile):
-                    stats_s = self.add_stats_from_log(stats_s, logfile)
-
-                stats_data.append(stats_s)
-                training_data.append(training_s)
-                test_data.append(test_s)
-
-                if folder in ['20254740', '20282398']:
-                    print(stats_s)
             else:
                 command = ['sbatch', jobfile_path]
                 self.run_command(command)
 
-        if len(stats_data) == 0:
-            exit()
-
-        print("Summarizing results.")
-        stats_df = pd.concat(stats_data, axis=1)
-        self.save_file(df=stats_df, outpath=os.path.join(self.workdir, "cellbender_remove_background_stats.txt.gz"))
-
-        training_df = pd.concat(training_data, axis=1)
-        self.save_file(df=training_df, outpath=os.path.join(self.workdir, "cellbender_remove_background_training_loss.txt.gz"))
-
-        test_df = pd.concat(test_data, axis=1)
-        self.save_file(df=test_df, outpath=os.path.join(self.workdir, "cellbender_remove_background_test_loss.txt.gz"))
-
-        print("Visualising results.")
-        self.visualise_stats(stats_df)
-
-        plot_df = self.build_plot_df(training_df, test_df)
-        validation_df = self.validate_training_procedure(training_df, plot_df)
-        self.save_file(df=validation_df, outpath=os.path.join(self.workdir, "cellbender_remove_background_training_validation.txt.gz"))
-
-        self.visualise_training_procedure(plot_df)
-
-    @staticmethod
-    def load_file(inpath, header=0, index_col=None, sep=","):
-        df = pd.read_csv(inpath, sep=sep, header=header, index_col=index_col)
-        print("\tLoaded dataframe: {} "
-              "with shape: {}".format(os.path.basename(inpath),
-                                      df.shape))
-        return df
+        print("Saving metrics file")
+        metrics_df = pd.concat(metrics_data, axis=0)
+        print(metrics_df)
+        self.save_file(df=metrics_df, outpath=os.path.join(self.workdir, "metrics_summary.txt.gz"))
 
     def filter_arguments(self):
         arguments = {}
@@ -503,8 +533,11 @@ class main():
         return arguments
 
     def find_input(self, folder):
-        # raw_feature_bc_matrix_path = os.path.join(self.inputdir, folder, "outs", "raw_feature_bc_matrix.h5")
         raw_feature_bc_matrix_path = os.path.join(self.inputdir, folder, "raw_feature_bc_matrix.h5")
+        if os.path.exists(raw_feature_bc_matrix_path):
+            return raw_feature_bc_matrix_path
+
+        raw_feature_bc_matrix_path = os.path.join(self.inputdir, folder, "outs", "raw_feature_bc_matrix.h5")
         if os.path.exists(raw_feature_bc_matrix_path):
             return raw_feature_bc_matrix_path
 
@@ -530,6 +563,14 @@ class main():
 
         return None
 
+    @staticmethod
+    def load_file(inpath, header=0, index_col=None, sep=","):
+        df = pd.read_csv(inpath, sep=sep, header=header, index_col=index_col)
+        print("\tLoaded dataframe: {} "
+              "with shape: {}".format(os.path.basename(inpath),
+                                      df.shape))
+        return df
+
     def create_job_file(self, sample, input, output, arguments):
         job_name = "cellbender_remove_background_{}".format(sample)
 
@@ -545,9 +586,6 @@ class main():
                  "#SBATCH --export=NONE",
                  "#SBATCH --get-user-env=L",
                  "",
-                 "module load Anaconda3",
-                 "source activate CellBender",
-                 "",
                  "cd {} || exit".format(self.workdir),
                  "",
                  "cellbender remove-background \\",
@@ -555,10 +593,20 @@ class main():
                  "  --output={} \\".format(output)
                  ]
 
+        insert_index = 5
         if self.partition is not None:
-            lines.insert(5, "#SBATCH --partition={}".format(self.partition))
-        if self.cuda is not None:
-            lines.insert(6, "#SBATCH --gpus-per-node={}".format(self.gpus_per_node))
+            lines.insert(insert_index, "#SBATCH --partition={}".format(self.partition))
+            insert_index += 1
+        if self.cuda is not None and self.gpus_per_node is not None:
+            lines.insert(insert_index, "#SBATCH --gpus-per-node={}".format(self.gpus_per_node))
+            insert_index += 1
+        if self.cuda is not None and self.gres is not None:
+            lines.insert(insert_index, "#SBATCH --gres={}".format(self.gres))
+            insert_index += 1
+
+        for command in self.preflights:
+            lines.insert(insert_index + 7, command)
+            insert_index += 1
 
         for name, value in arguments.items():
             if isinstance(value, bool):
@@ -569,7 +617,13 @@ class main():
         if lines[-1].endswith("\\"):
             lines[-1] = lines[-1].strip("\\")
 
-        lines.extend(["", "conda deactivate", "", "echo 'Job finished'"])
+        lines.extend(["", "echo 'Job finished'"])
+
+        for command in self.preflights:
+            if "conda" in command and "activate" in command:
+                lines.extend(["", "conda deactivate"])
+            elif "activate" in command:
+                lines.extend(["", "deactivate"])
 
         jobfile_path = os.path.join(self.jobdir, job_name + ".sh")
         with open(jobfile_path, "w") as f:
@@ -579,100 +633,12 @@ class main():
         print("\tSaved jobfile: {}".format(os.path.basename(jobfile_path)))
         return jobfile_path
 
-    @staticmethod
-    def parse_results(resultsfile, folder):
-        hf = h5py.File(resultsfile, 'r')
-
-        # stats
-        stats_data = {}
-        for key in hf.get('matrix').keys():
-            if key == "overdispersion_mean_and_scale":
-                overdispersion_mean_and_scale = np.array(hf.get('matrix/overdispersion_mean_and_scale'))
-                stats_data["overdispersion_mean"] = float(overdispersion_mean_and_scale[0])
-                stats_data["overdispersion_scale"] = float(overdispersion_mean_and_scale[1])
-            elif key == "contamination_fraction_params":
-                contamination_fraction_params = np.array(hf.get('matrix/contamination_fraction_params'))
-                stats_data["contamination_fraction_rho_alpha"] = float(contamination_fraction_params[0])
-                stats_data["contamination_fraction_rho_beta"] = float(contamination_fraction_params[1])
-            elif key == "lambda_multiplier":
-                stats_data["lambda_multiplier"] = float(np.array(hf.get('matrix/lambda_multiplier')))
-            elif key == "target_false_positive_rate":
-                stats_data["target_false_positive_rate"] = float(np.array(hf.get('matrix/target_false_positive_rate')))
-            elif key == "fraction_data_used_for_testing":
-                stats_data["fraction_data_used_for_testing"] = float(np.array(hf.get('matrix/fraction_data_used_for_testing')))
-            else:
-                pass
-        stats_s = pd.Series(stats_data)
-        stats_s.name= folder
-
-        # training loss
-        training_s = pd.Series(np.array(hf.get('matrix/training_elbo_per_epoch')) * -1)
-        training_s.index = np.arange(1, training_s.shape[0] + 1, 1)
-        training_s.name = folder
-
-        # test loss
-        test_s = pd.Series(np.array(hf.get('matrix/test_elbo')) * -1)
-        test_s.index = pd.Series(np.array(hf.get('matrix/test_epoch')))
-        test_s.name = folder
-
-        hf.close()
-
-        return stats_s, training_s, test_s
-
-    @staticmethod
-    def add_stats_from_log(stats_s, logfile):
-        with open(logfile, 'r') as f:
-            for line in f:
-                if re.search("Including ([0-9]+) genes that have nonzero counts.", line):
-                    stats_s["nonzero_genes"] = int(re.search("Including ([0-9]+) genes that have nonzero counts.", line).group(1))
-                elif re.search("Prior on counts in empty droplets is ([0-9]+)", line):
-                    stats_s["prior_counts_empty"] = int(re.search("Prior on counts in empty droplets is ([0-9]+)", line).group(1))
-                elif re.search("Prior on counts for cells is ([0-9]+)", line):
-                    stats_s["prior_counts_cell"] = int(re.search("Prior on counts for cells is ([0-9]+)", line).group(1))
-                elif re.search("Excluding barcodes with counts below ([0-9]+)", line):
-                    stats_s["barcodes_threshold"] = int(re.search("Excluding barcodes with counts below ([0-9]+)", line).group(1))
-                elif re.search("Using ([0-9]+) probable cell barcodes, plus an additional ([0-9]+) barcodes, and ([0-9]+) empty droplets.", line):
-                    match = re.search("Using ([0-9]+) probable cell barcodes, plus an additional ([0-9]+) barcodes, and ([0-9]+) empty droplets.", line)
-                    stats_s["probable_cell_barcodes"] = int(match.group(1))
-                    stats_s["additional_barcodes"] = int(match.group(2))
-                    stats_s["empty_droplets"] = int(match.group(3))
-                elif re.search("Largest surely-empty droplet has ([0-9]+) UMI counts.", line):
-                    stats_s["max_empty_droplet_count"] = int(re.search("Largest surely-empty droplet has ([0-9]+) UMI counts.", line).group(1))
-                # elif re.search("\[epoch ([0-9]+)]  average training loss: ([0-9]+.[0-9]+)", line):
-                #     match = re.search("\[epoch ([0-9]+)]  average training loss: ([0-9]+.[0-9]+)", line)
-                #     epoch = int(match.group(1))
-                #     training_loss = float(match.group(2))
-                #     training_data[epoch] = training_loss
-                # elif re.search("\[epoch ([0-9]+)] average test loss: ([0-9]+.[0-9]+)", line):
-                #     match = re.search("\[epoch ([0-9]+)] average test loss: ([0-9]+.[0-9]+)", line)
-                #     epoch = int(match.group(1))
-                #     test_loss = float(match.group(2))
-                #     test_data[epoch] = test_loss
-                elif re.search("Optimal posterior regularization factor = ([0-9]+.[0-9]+)", line):
-                    stats_s["optimal_regular_factor"] = float(re.search("Optimal posterior regularization factor = ([0-9]+.[0-9]+)", line).group(1))
-                elif "Learning failed.  Retrying with learning-rate " in line:
-                    stats_s.drop(labels=[label for label in ["nonzero_genes",
-                                                             "prior_counts_empty",
-                                                             "prior_counts_cell",
-                                                             "barcodes_threshold",
-                                                             "probable_cell_barcodes",
-                                                             "additional_barcodes",
-                                                             "empty_droplets",
-                                                             "max_empty_droplet_count",
-                                                             "optimal_regular_factor"
-                                                             ] if
-                                         label in stats_s.index], inplace=True)
-                else:
-                    pass
-        f.close()
-
-        return stats_s
-
     def run_command(self, command):
+        print("\t" + " ".join(command))
         if self.dry_run:
+            print("\t\tNot executed due to dry run")
             return
 
-        print("\t" + " ".join(command))
         subprocess.call(command)
 
     @staticmethod
@@ -686,302 +652,6 @@ class main():
         print("\tSaved dataframe: {} "
               "with shape: {}".format(os.path.basename(outpath),
                                       df.shape))
-
-    def visualise_stats(self, stats_df):
-        df = stats_df.copy()
-        df = df.transpose()
-        df["total_barcodes"] = df["probable_cell_barcodes"] + df["additional_barcodes"]
-
-        df.reset_index(drop=False, inplace=True)
-        df = df.melt(id_vars=["index"])
-        df.columns = ["sample", "variable", "value"]
-
-        df["variable"] = df["variable"].map({
-            "overdispersion_mean": "overdispersion (mean)",
-            "overdispersion_scale": "overdispersion (scale)",
-            "contamination_fraction_rho_alpha": "contamination fraction distribution rho alpha",
-            "contamination_fraction_rho_beta": "contamination fraction distribution rho beta",
-            "target_false_positive_rate": "target false positive rate",
-            "lambda_multiplier": "lambda multiplier",
-            "fraction_data_used_for_testing": "fraction data used for testing",
-            "nonzero_genes": "genes with nonzero counts",
-            "prior_counts_empty": "prior counts in empty droplets",
-            "prior_counts_cell": "prior counts for cells",
-            "barcodes_threshold": "excluding barcodes <N counts",
-            "probable_cell_barcodes": "N probable cell barcodes",
-            "additional_barcodes": "N additional barcodes",
-            "total_barcodes": "N barcodes",
-            "empty_droplets": "N empty droplets",
-            "max_empty_droplet_count": "largest surely-empty droplet UMI",
-            "optimal_regular_factor": "optimal posterior regularization factor"
-        })
-
-        self.barplot(
-            df=df,
-            panels=[panel for panel in ["overdispersion (mean)",
-                                        "overdispersion (scale)",
-                                        "contamination fraction distribution rho alpha",
-                                        "contamination fraction distribution rho beta",
-                                        "target false positive rate",
-                                        "lambda multiplier",
-                                        "fraction data used for testing",
-                                        "genes with nonzero counts",
-                                        "prior counts in empty droplets",
-                                        "prior counts for cells",
-                                        "excluding barcodes <N counts",
-                                        "N probable cell barcodes",
-                                        "N additional barcodes",
-                                        "N barcodes",
-                                        "N empty droplets",
-                                        "largest surely-empty droplet UMI",
-                                        "optimal posterior regularization factor"]
-                    if panel in df["variable"].unique()],
-            x="sample",
-            y="value",
-            panel="variable",
-            filename="cellbender_remove_background_stats"
-        )
-
-
-    def barplot(self, df, panels, x="x", y="y", panel=None, palette=None,
-                ylabel="", title="", filename="plot"):
-        nplots = len(panels)
-        ncols = math.ceil(np.sqrt(nplots))
-        nrows = math.ceil(nplots / ncols)
-
-        sns.set_style("ticks")
-        fig, axes = plt.subplots(nrows=nrows,
-                                 ncols=ncols,
-                                 sharex='all',
-                                 sharey='none',
-                                 figsize=(6 * ncols, 6 * nrows))
-        sns.set(color_codes=True)
-
-        row_index = 0
-        col_index = 0
-        for i in range(ncols * nrows):
-            if nrows == 1 and ncols == 1:
-                ax = axes
-            elif nrows == 1 and ncols > 1:
-                ax = axes[col_index]
-            elif nrows > 1 and ncols == 1:
-                ax = axes[row_index]
-            else:
-                ax = axes[row_index, col_index]
-
-            if i < nplots:
-                data = df.loc[df[panel] == panels[i], :]
-                if data.shape[0] == 0:
-                    continue
-
-                sns.barplot(
-                    data=data,
-                    x=x,
-                    y=y,
-                    color="black",
-                    palette=palette,
-                    ax=ax
-                )
-
-                ax.set_xticklabels(ax.get_xmajorticklabels(), rotation=90)
-                ax.set_ylim(int(data[y].min() - (data[y].max() * 0.05)), ax.get_ylim()[1])
-
-                ax.set_xlabel("",
-                              fontsize=10,
-                              fontweight='bold')
-                ax.set_ylabel("",
-                              fontsize=10,
-                              fontweight='bold')
-                ax.set_title(panels[i],
-                             fontsize=14,
-                             fontweight='bold')
-
-            else:
-                ax.set_xticklabels(ax.get_xmajorticklabels(), rotation=90)
-
-            col_index += 1
-            if col_index > (ncols - 1):
-                col_index = 0
-                row_index += 1
-
-        fig.suptitle(title,
-                     fontsize=40,
-                     fontweight='bold')
-
-        plt.tight_layout()
-        for extension in self.extensions:
-            outpath = os.path.join(self.workdir, "{}.{}".format(filename, extension))
-            fig.savefig(outpath)
-            print("\tSaved figure: {}".format(os.path.basename(outpath)))
-        plt.close()
-
-
-    @staticmethod
-    def build_plot_df(training_df, test_df):
-        training_df_dfm = training_df.copy()
-        training_df_dfm.reset_index(drop=False, inplace=True)
-        training_dfm = training_df_dfm.melt(id_vars=["index"])
-        training_dfm["hue"] = "Train"
-
-        test_dfm = test_df.copy()
-        test_dfm.reset_index(drop=False, inplace=True)
-        test_dfm = test_dfm.melt(id_vars=["index"])
-        test_dfm["hue"] = "Test"
-
-        dfm = pd.concat([training_dfm, test_dfm], axis=0)
-        dfm.columns = ["epoch", "sample", "loss", "group"]
-        dfm["sample"] = dfm["sample"].astype(str)
-
-        return dfm
-
-    def validate_training_procedure(self, training_df, plot_df):
-        train_pct_change_df = training_df.pct_change() * 100
-        train_pct_change_df[train_pct_change_df < 0] = np.nan
-        validation_df = train_pct_change_df.describe().transpose()
-        validation_df.sort_values(by=["mean", "std"], inplace=True)
-        print(validation_df)
-
-        samples = []
-        subtitles = []
-        for index, row in validation_df.iterrows():
-            samples.append(index)
-            subtitles.append(" [{:.2f}% ±{:.2f}]".format(row["mean"], row["std"]))
-
-        self.lineplot_per_sample(
-            df=plot_df,
-            samples=samples,
-            subtitles=subtitles,
-            x="epoch",
-            y="loss",
-            hue="group",
-            xlabel="Epoch",
-            ylabel="ELBO",
-            filename="cellbender_remove_background_training_procedure_per_sample"
-        )
-
-        return validation_df
-
-    def lineplot_per_sample(self, df, samples, subtitles=None, x="x", y="y",
-                            sample_column="sample", hue=None, palette=None,
-                            xlabel="", ylabel="", filename="plot"):
-
-        if subtitles is not None and len(subtitles) != len(samples):
-            print("Error, subtitles are not the same length as the samples")
-            return
-
-        nplots = len(samples)
-        ncols = math.ceil(np.sqrt(nplots))
-        nrows = math.ceil(nplots / ncols)
-
-        sns.set_style("ticks")
-        fig, axes = plt.subplots(nrows=nrows,
-                                 ncols=ncols,
-                                 sharex='none',
-                                 sharey='none',
-                                 figsize=(6 * ncols, 6 * nrows))
-        sns.set(color_codes=True)
-
-        row_index = 0
-        col_index = 0
-        for i in range(ncols * nrows):
-            if nrows == 1 and ncols == 1:
-                ax = axes
-            elif nrows == 1 and ncols > 1:
-                ax = axes[col_index]
-            elif nrows > 1 and ncols == 1:
-                ax = axes[row_index]
-            else:
-                ax = axes[row_index, col_index]
-
-            if i < nplots:
-                data = df.loc[df[sample_column] == samples[i], :]
-                if data.shape[0] == 0:
-                    continue
-
-                subtitle = None
-                if subtitles is not None:
-                    subtitle = subtitles[i]
-
-                self.lineplot(
-                    fig=fig,
-                    ax=ax,
-                    data=data,
-                    x=x,
-                    y=y,
-                    hue=hue,
-                    palette=palette,
-                    xlabel=xlabel,
-                    ylabel=ylabel,
-                    title="{}{}".format(samples[i], subtitle)
-                )
-
-            else:
-                ax.set_axis_off()
-
-            col_index += 1
-            if col_index > (ncols - 1):
-                col_index = 0
-                row_index += 1
-
-        plt.tight_layout()
-        for extension in self.extensions:
-            outpath = os.path.join(self.workdir, "{}.{}".format(filename, extension))
-            fig.savefig(outpath)
-            print("\tSaved figure: {}".format(os.path.basename(outpath)))
-        plt.close()
-
-    def lineplot(self, fig, ax, data, x, y, hue, palette=None,
-                 xlabel="", ylabel="", title=""):
-
-        sns.despine(fig=fig, ax=ax)
-
-        sns.lineplot(data=data,
-                     x=x,
-                     y=y,
-                     hue=hue,
-                     style=hue,
-                     markers=True,
-                     palette=palette,
-                     ax=ax)
-
-        ax.set_xlabel(xlabel,
-                       fontsize=10,
-                       fontweight='bold')
-        ax.set_ylabel(ylabel,
-                       fontsize=10,
-                       fontweight='bold')
-        ax.set_title(title,
-                      fontsize=14,
-                      fontweight='bold')
-
-        ax.invert_yaxis()
-        xaxis_labels = np.arange(min(data[x]), max(data[x]), 20)
-        ax.xaxis.set_ticks(xaxis_labels)
-        ax.xaxis.set_ticklabels(xaxis_labels - 1, rotation=0)
-
-    def visualise_training_procedure(self, plot_df):
-        sns.set()
-        sns.set_style("ticks")
-        fig, ax = plt.subplots(figsize=(6, 6))
-
-        self.lineplot(
-            fig=fig,
-            ax=ax,
-            data=plot_df,
-            x="epoch",
-            y="loss",
-            hue="group",
-            xlabel="Epoch",
-            ylabel="ELBO",
-            title="Progress of the training procedure"
-        )
-
-        plt.tight_layout()
-        for extension in self.extensions:
-            outpath = os.path.join(self.workdir, "cellbender_remove_background_training_procedure.{}".format(extension))
-            fig.savefig(outpath)
-            print("\tSaved figure: {}".format(os.path.basename(outpath)))
-        plt.close()
 
     def print_arguments(self):
         print("Arguments:")
