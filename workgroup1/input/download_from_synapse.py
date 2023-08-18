@@ -68,7 +68,7 @@ Syntax:
 ./download_from_synapse.py \
     --synapse_ids syn21682218 syn21126450 \
     --folders metadata fastq \
-    --outdir /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Zhou2020
+    --outdir /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Zhou2020
     
 ### Fujita 2022 ### 
 ./download_from_synapse.py \
