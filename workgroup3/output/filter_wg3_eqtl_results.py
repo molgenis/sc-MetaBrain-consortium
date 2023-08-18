@@ -38,31 +38,15 @@ import h5py
 Syntax:
 ./filter_wg3_eqtl_results.py \
     --input_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/2023-04-12-Mathys2019/output/L1/AST \
-    --snp_gene /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-mbQTLBryoisRepl/combos/ASTcombos.txt
+    --snp_gene /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-mbQTLBryoisRepl/combos/ASTcombos.txt \
+    --suffix BryoiseQTLs
+    
+############
     
 ./filter_wg3_eqtl_results.py \
     --input_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/2023-04-12-Mathys2019/output/L1/EX \
-    --snp_gene /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-mbQTLBryoisRepl/combos/EXcombos.txt
-
-./filter_wg3_eqtl_results.py \
-    --input_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/2023-04-12-Mathys2019/output/L1/IN \
-    --snp_gene /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-mbQTLBryoisRepl/combos/INcombos.txt
-
-./filter_wg3_eqtl_results.py \
-    --input_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/2023-04-12-Mathys2019/output/L1/MIC \
-    --snp_gene /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-mbQTLBryoisRepl/combos/MICcombos.txt
-    
-./filter_wg3_eqtl_results.py \
-    --input_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/2023-04-12-Mathys2019/output/L1/OLI \
-    --snp_gene /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-mbQTLBryoisRepl/combos/OLIcombos.txt
-    
-./filter_wg3_eqtl_results.py \
-    --input_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/2023-04-12-Mathys2019/output/L1/OPC \
-    --snp_gene /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-mbQTLBryoisRepl/combos/OPCcombos.txt
-    
-./filter_wg3_eqtl_results.py \
-    --input_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/2023-04-12-Mathys2019/output/L1/PER \
-    --snp_gene /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-mbQTLBryoisRepl/combos/PERcombos.txt
+    --snp_gene /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-ReplicateIndeKlein/combos.txt \
+    --suffix deKleineQTLs
 """
 
 # Metadata
@@ -86,6 +70,7 @@ class main():
         arguments = self.create_argument_parser()
         self.input_dir = getattr(arguments, 'input_dir')
         self.snp_gene = getattr(arguments, 'snp_gene')
+        self.suffix = getattr(arguments, 'suffix')
         self.verbose = getattr(arguments, 'verbose')
 
         self.results_file_prefix = "qtl_results_"
@@ -109,7 +94,11 @@ class main():
         parser.add_argument("--snp_gene",
                             type=str,
                             required=True,
-                            help=".")
+                            help="")
+        parser.add_argument("--suffix",
+                            type=str,
+                            required=True,
+                            help="")
         parser.add_argument("--verbose",
                             action='store_true',
                             help="Print all info.")
@@ -173,7 +162,7 @@ class main():
         print("")
 
         print("Saving file")
-        self.save_file(df=df, outpath=os.path.join(self.input_dir, "{}BryoiseQTLs.txt.gz".format(self.results_file_prefix)))
+        self.save_file(df=df, outpath=os.path.join(self.input_dir, "{}{}.txt.gz".format(self.results_file_prefix, self.suffix)))
         print("")
 
     def load_h5_file(self, filepath, snps, feature_ids, feature_to_snp_dict):
@@ -303,6 +292,7 @@ class main():
         print("Arguments:")
         print("  > Input directory:    {}".format(self.input_dir))
         print("  > SNP-gene file:      {}".format(self.snp_gene))
+        print("  > Suffix:             {}".format(self.suffix))
         print("  > Verbose:            {}".format(self.verbose))
         print("")
 
