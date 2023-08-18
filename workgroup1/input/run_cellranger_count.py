@@ -3,7 +3,7 @@
 """
 File:         run_cellranger_count.py
 Created:      2022/09/22
-Last Changed: 2023/03/20
+Last Changed: 2023/07/04
 Author:       M.Vochteloo
 
 Copyright (C) 2022 M.Vochteloo
@@ -57,6 +57,7 @@ Syntax:
 
 ### Mathys2019 ###
 ./run_cellranger_count.py \
+    --env $HOME/sc_env/bin/activate \
     --workdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019 \
     --sample_id_table /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Mathys2019/metadata/snRNAseqPFC_BA10_biospecimen_metadata.csv \
     --sample_col specimenID \
@@ -68,6 +69,7 @@ Syntax:
 	--localmem 16
 	
 ./run_cellranger_count.py \
+    --env $HOME/sc_env/bin/activate \
     --workdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019_OldSoftware \
     --sample_id_table /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Mathys2019/metadata/snRNAseqPFC_BA10_biospecimen_metadata.csv \
     --sample_col specimenID \
@@ -78,6 +80,66 @@ Syntax:
     --transcriptome /groups/umcg-biogen/tmp01/input/processeddata/single-cell/refdata-cellranger-GRCh38-1.2.0 \
 	--localcores 4 \
 	--localmem 16
+	
+### Zhou2022 ###
+./run_cellranger_count.py \
+    --env /groups/umcg-biogen/tmp02/users/umcg-mvochteloo/env/bin/activate \
+    --workdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Zhou2020 \
+    --sample_id_table /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Zhou2020/link_table.csv \
+    --sample_col fastqID \
+    --id_col individualID \
+    --cellranger /groups/umcg-biogen/tmp02/input/processeddata/single-cell/cellranger-7.0.1 \
+	--fastqs /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Zhou2020/fastq \
+    --transcriptome /groups/umcg-biogen/tmp02/input/processeddata/single-cell/refdata-gex-GRCh38-2020-A \
+    --time long \
+	--localcores 4 \
+	--localmem 32 \
+	--dry_run
+	
+### RocheColumbia2022 ###
+./run_cellranger_count.py \
+    --env /groups/umcg-biogen/tmp02/users/umcg-mvochteloo/env/bin/activate \
+    --workdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheColumbia2022 \
+    --sample_id_table /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheColumbia2022/link_table.csv \
+    --sample_col fastqID \
+    --id_col individualID \
+    --cellranger /groups/umcg-biogen/tmp02/input/processeddata/single-cell/cellranger-7.0.1 \
+	--fastqs /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Roche/Bryois_Columbia_EGAD00001009168 \
+    --transcriptome /groups/umcg-biogen/tmp02/input/processeddata/single-cell/refdata-gex-GRCh38-2020-A \
+    --time 05:55:00 \
+	--localcores 4 \
+	--localmem 20 \
+	--dry_run
+	
+### RocheAD2022 ###
+./run_cellranger_count.py \
+    --env /groups/umcg-biogen/tmp02/users/umcg-mvochteloo/env/bin/activate \
+    --workdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheAD2022 \
+    --sample_id_table /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheAD2022/link_table.csv \
+    --sample_col fastqID \
+    --id_col individualID \
+    --cellranger /groups/umcg-biogen/tmp02/input/processeddata/single-cell/cellranger-7.0.1 \
+	--fastqs /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Roche/Bryois_RocheAD_EGAD00001009166 \
+    --transcriptome /groups/umcg-biogen/tmp02/input/processeddata/single-cell/refdata-gex-GRCh38-2020-A \
+    --time 23:55:00 \
+	--localcores 4 \
+	--localmem 20 \
+	--dry_run
+	
+### RocheMS2022 ###
+./run_cellranger_count.py \
+    --env /groups/umcg-biogen/tmp02/users/umcg-mvochteloo/env/bin/activate \
+    --workdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheMS2022 \
+    --sample_id_table /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheMS2022/link_table.csv \
+    --sample_col fastqID \
+    --id_col individualID \
+    --cellranger /groups/umcg-biogen/tmp02/input/processeddata/single-cell/cellranger-7.0.1 \
+	--fastqs /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Roche/Bryois_RocheMS_EGAD00001009169 \
+    --transcriptome /groups/umcg-biogen/tmp02/input/processeddata/single-cell/refdata-gex-GRCh38-2020-A \
+    --time 01-23:55:00 \
+	--localcores 4 \
+	--localmem 20 \
+	--dry_run
 """
 
 
@@ -85,12 +147,17 @@ class main():
     def __init__(self):
         # Get the command line arguments.
         arguments = self.create_argument_parser()
+        self.env = getattr(arguments, 'env')
         self.workdir = getattr(arguments, 'workdir')
         self.sample_id_table = getattr(arguments, 'sample_id_table')
         self.sample_col = getattr(arguments, 'sample_col')
         self.id_col = getattr(arguments, 'id_col')
         self.cellranger = getattr(arguments, 'cellranger')
-        self.time = TIME_DICT[getattr(arguments, 'time')]
+        time = getattr(arguments, 'time')
+        if time in TIME_DICT:
+            time = TIME_DICT[time]
+        self.time = time
+        self.break_lock = getattr(arguments, 'break_lock')
         self.dry_run = getattr(arguments, 'dry_run')
 
         # Safe the Cell Ranger arguments.
@@ -122,6 +189,7 @@ class main():
                 os.makedirs(dir)
 
         self.defaults = [
+            ("env", self.env, "required"),
             ("workdir", self.workdir, "required"),
             ("sample_id_table", self.sample_id_table, "required"),
             ("sample_col", self.sample_col, "required"),
@@ -129,6 +197,7 @@ class main():
             ("cellranger", self.cellranger, "required"),
             ("time", self.time, "required"),
             ("fastqs", self.fastqs, "required"),
+            ("break_lock", self.dry_run, "required"),
             ("dry_run", self.dry_run, "required"),
             ("libraries", self.libraries, None),
             ("transcriptome", self.transcriptome, "required"),
@@ -162,6 +231,10 @@ class main():
                             version="{} {}".format(__program__,
                                                    __version__),
                             help="show program's version number and exit")
+        parser.add_argument("--env",
+                            type=str,
+                            required=True,
+                            help="The python environment.")
         parser.add_argument("--workdir",
                             type=str,
                             required=True,
@@ -185,7 +258,6 @@ class main():
         parser.add_argument("--time",
                             type=str,
                             required=False,
-                            choices=["short", "medium", "long"],
                             default="short",
                             help="The time for each job.")
         parser.add_argument("--fastqs",
@@ -193,6 +265,9 @@ class main():
                             required=True,
                             help="Path of the fastq_path folder generated by "
                                  "cellranger mkfastq.")
+        parser.add_argument("--break_lock",
+                            action='store_true',
+                            help="Remove locks from locked directories.")
         parser.add_argument("--dry_run",
                             action='store_true',
                             help="Only create the job files, don't submit them.")
@@ -363,33 +438,59 @@ class main():
 
         print("Creating job files.")
         arguments = self.filter_arguments()
-        jobfile_paths = []
-        ids = []
+        info = []
         for _, row in sid_df.iterrows():
-            sample = row[self.sample_col].split("_")[0]
+            sample = row[self.sample_col]
             id_value = row[self.id_col]
 
-            jobfile_path = self.create_job_file(sample=sample,
-                                                id_value=id_value,
-                                                arguments=arguments)
-            jobfile_paths.append(jobfile_path)
-            ids.append(id_value)
+            jobfile_path, logfile_path = self.create_job_file(sample=sample,
+                                                              id_value=id_value,
+                                                              arguments=arguments)
+            info.append((jobfile_path, logfile_path, id_value))
 
         print("Create aggregation CSV")
         aggregation_data = []
-        for id_value, jobfile_path in zip(ids, jobfile_paths):
+        for jobfile_path, _, id_value in info:
             aggregation_data.append([id_value, os.path.join(self.workdir, str(id_value), "outs", "molecule_info.h5")])
         aggregation_df = pd.DataFrame(aggregation_data, columns=["sample_id", "molecule_h5"])
         self.save_file(df=aggregation_df,
                        outpath=os.path.join(self.workdir, "aggregation.csv"))
 
         print("Starting job files.")
-        for id_value, jobfile_path in zip(ids, jobfile_paths):
-            if os.path.exists(os.path.join(self.workdir, str(id_value), "{}.mri.tgz".format(id_value))):
-                print("\tSkipping sample '{}'".format(id_value))
+        for jobfile_path, logfile_path, id_value in info:
+            success = False
+            log_exists = os.path.exists(logfile_path)
+            error_reason = "UNKNOWN"
+            if log_exists:
+                with open(logfile_path, 'r') as f:
+                    for line in f:
+                        if 'Pipestance completed successfully!' in line:
+                            success = True
+                        if 'Pipestance failed' in line:
+                            error_reason = "Pipestance error: UNKNOWN"
+                        if 'slurmstepd: error:' in line:
+                            if "TIME LIMIT" in line:
+                                error_reason = "SLURM error: TIME LIMIT"
+                            elif "MEMORY LIMIT" in line:
+                                error_reason = "SLURM error: MEMORY LIMIT"
+                f.close()
+
+            if success:
+                print("\tSample '{}' already completed successfully!".format(id_value))
             else:
-                command = ['sbatch', jobfile_path]
-                self.run_command(command)
+                if log_exists:
+                    print("\tSample '{}' failed due to {}".format(id_value, error_reason))
+
+                lock_file = os.path.join(self.workdir, id_value, "_lock")
+                if os.path.exists(lock_file):
+                    if self.break_lock:
+                        print("\tWarning, folder is locked. Breaking lock and continue sbatch.")
+                        os.remove(lock_file)
+                        self.run_command(command=['sbatch', jobfile_path])
+                    else:
+                        print("\tWarning, folder is locked. Sbatch not possible.")
+                else:
+                    self.run_command(command=['sbatch', jobfile_path])
 
 
     @staticmethod
@@ -409,11 +510,12 @@ class main():
 
     def create_job_file(self, sample, id_value, arguments):
         job_name = "cellranger_count_{}".format(sample)
+        logfile_path = os.path.join(self.jobs_outdir, job_name + ".out")
 
         lines = ["#!/bin/bash",
                  "#SBATCH --job-name={}".format(job_name),
-                 "#SBATCH --output={}".format(os.path.join(self.jobs_outdir, job_name + ".out")),
-                 "#SBATCH --error={}".format(os.path.join(self.jobs_outdir, job_name + ".out")),
+                 "#SBATCH --output={}".format(logfile_path),
+                 "#SBATCH --error={}".format(logfile_path),
                  "#SBATCH --time={}".format(self.time),
                  "#SBATCH --cpus-per-task={}".format(1 if self.localcores is None else self.localcores),
                  "#SBATCH --mem={}gb".format(8 if self.localmem is None else self.localmem),
@@ -423,7 +525,7 @@ class main():
                  "#SBATCH --get-user-env=L",
                  "",
                  "export PATH={}:$PATH".format(self.cellranger),
-                 "source $HOME/sc_env/bin/activate",
+                 "source {}".format(self.env),
                  "",
                  "cd {} || exit".format(self.workdir),
                  "",
@@ -450,13 +552,14 @@ class main():
                 f.write(line + "\n")
         f.close()
         print("\tSaved jobfile: {}".format(os.path.basename(jobfile_path)))
-        return jobfile_path
+        return jobfile_path, logfile_path
 
     def run_command(self, command):
+        print("\t" + " ".join(command))
         if self.dry_run:
+            print("\t\tNot executed due to dry run")
             return
 
-        print("\t" + " ".join(command))
         subprocess.call(command)
 
     @staticmethod
