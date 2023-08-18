@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 """
-File:         compare_wg3_to_mbqtl.py
-Created:      2023/04/27
+File:         replicate_bryois_top_effects_in_mathys.py
+Created:      2023/04/25
 Last Changed:
 Author:       M.Vochteloo
 
@@ -47,18 +47,18 @@ from adjustText import adjust_text
 
 """
 Syntax:
-./compare_wg3_to_mbqtl.py \
+./replicate_bryois_top_effects_in_mathys.py \
     --work_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-mbQTLBryoisRepl \
-    --dataset_outdir 2023-04-27-Mathys2019WG3_vs_mbQTL \
+    --dataset_outdir 2023-04-25-Mathys2019 \
     --mbqtl_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-mbQTLBryoisRepl/2023-04-25-BryoisRepl \
-    --wg3_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/2023-04-12-Mathys2019 \
-    --qvalues /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-20-ReplicateInBryois/qvalue_truncp.R \
-    --rb /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-20-ReplicateInBryois/Rb.R
+    --bryois_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-20-ReplicateInBryois/Bryois2022 \
+    --qvalues /groups/umcg-biogen/tmp02/users/umcg-mvochteloo/utils/qvalue_truncp.R \
+    --rb /groups/umcg-biogen/tmp02/users/umcg-mvochteloo/utils/Rb.R
     
 """
 
 # Metadata
-__program__ = "Compare Workgroup 3 to mbQTL"
+__program__ = "Replicate Bryois et al. 2022 in Mathys et al. 2019"
 __author__ = "Martijn Vochteloo"
 __maintainer__ = "Martijn Vochteloo"
 __email__ = "m.vochteloo@rug.nl"
@@ -78,9 +78,9 @@ class main():
         arguments = self.create_argument_parser()
         self.work_dir = getattr(arguments, 'work_dir')
         dataset_outdir = getattr(arguments, 'dataset_outdir')
-        self.wg3_folder = getattr(arguments, 'wg3_folder')
-        self.annotation_level = getattr(arguments, 'annotation_level')
         self.mbqtl_folder = getattr(arguments, 'mbqtl_folder')
+        self.bryois_folder = getattr(arguments, 'bryois_folder')
+        self.bryois_n = 196
         self.extensions = getattr(arguments, 'extensions')
         self.verbose = getattr(arguments, 'verbose')
         self.qvalues_script = getattr(arguments, 'qvalues')
@@ -100,7 +100,15 @@ class main():
 
         ########################################################################
 
-        self.cell_types = ["AST", "EX", "IN", "MIC", "OLI", "OPC", "PER"]
+        self.bryois_ct_dict = {
+            "Astrocytes": "AST",
+            "Excitatory neurons": "EX",
+            "Inhibitory neurons": "IN",
+            "Microglia": "MIC",
+            "Oligodendrocytes": "OLI",
+            "OPCs / COPs": "OPC",
+            "Pericytes": "PER"
+        }
 
         self.palette = {
             "AST": "#D55E00",
@@ -138,21 +146,15 @@ class main():
                             required=True,
                             help="The name of the output directory where you "
                                  "would like all outputs/results saved.")
-        parser.add_argument("--wg3_folder",
-                            type=str,
-                            default=None,
-                            help="The path to the outputs from WG3")
-        parser.add_argument("--annotation_level",
-                            type=str,
-                            choices=["L1", "L2"],
-                            default="L1",
-                            help="The annotation level to use. "
-                                 "Default: 'L1'.")
         parser.add_argument("--mbqtl_folder",
                             type=str,
                             required=True,
                             help="The path to the outputs from Meta-Beta-QTL "
                                  "output")
+        parser.add_argument("--bryois_folder",
+                            type=str,
+                            required=True,
+                            help="The path to the Bryois et al. 2022 data")
         parser.add_argument("-e",
                             "--extensions",
                             nargs="+",
@@ -183,39 +185,69 @@ class main():
     def start(self):
         self.print_arguments()
 
+        print("Loading data")
+        bryois_top_effects = self.load_file(os.path.join(self.bryois_folder, "BryoisTopEffects.txt.gz"), header=0, index_col=None)
+
         plot_data = {}
-        for cell_type in self.cell_types:
+        for bryois_ct, cell_type in self.bryois_ct_dict.items():
             print("  Working on '{}'".format(cell_type))
 
-            # Load workgroup 3 data.
-            wg3_file = os.path.join(self.wg3_folder, "output", self.annotation_level, cell_type, "qtl_results_BryoiseQTLs.txt.gz")
-            if not os.path.exists(wg3_file):
-                continue
-            wg3_df = self.load_file(wg3_file, header=0, index_col=None)
+            # Load Bryois et al. 2022 data.
+            bryois_df = self.load_file(os.path.join(self.bryois_folder, "merged", "{}.txt.gz".format(cell_type)), header=0, index_col=0)
+            bryois_df.index = bryois_df["ENSG"] + "_" + bryois_df["SNP_id"]
 
-            # Load the mbQTL data.
-            mbqtl_file = os.path.join(self.mbqtl_folder, "{}-TopEffects.txt".format(cell_type))
-            if not os.path.exists(mbqtl_file):
-                continue
-            mbqtl_df = self.load_file(mbqtl_file, header=0, index_col=None)
+            top_effects_df = bryois_top_effects.loc[bryois_top_effects["cell_type"] == bryois_ct, :].copy()
+            top_effects_df.index = top_effects_df["ensembl"] + "_" + top_effects_df["SNP"]
+
+            bryois_df = bryois_df.merge(top_effects_df[["adj_p"]], left_index=True, right_index=True, how="inner")
+
+            # Load the Mathys et al. 2019 data.
+            mathys_df = self.load_file(os.path.join(self.mbqtl_folder, "{}-TopEffects.txt".format(cell_type)), header=0, index_col=None)
 
             # merge.
-            df = wg3_df.merge(mbqtl_df, left_on="feature_id", right_on="Gene", how="inner")
+            df = bryois_df.merge(mathys_df, left_on="HGNC", right_on="Gene", how="inner")
 
             # flip.
-            df["flip"] = df["SNPEffectAllele"] != df["assessed_allele"]
+            df["flip"] = df["SNPEffectAllele"] != df["effect_allele"]
             df["MetaBeta"] = df["MetaBeta"] * df["flip"].map({True: -1, False: 1})
 
-            # save.
-            # self.save_file(df=df, outpath=os.path.join(self.dataset_outdir, "{}.txt.gz".format(cell_type)), header=True, index=False)
+            df["BH-FDR"] = np.nan
+            ieqtl_repl_mask = np.logical_and((df["adj_p"] <= 0.05).to_numpy(), (~df["MetaP"].isna()).to_numpy())
+            n_overlap = np.sum(ieqtl_repl_mask)
+            if n_overlap > 1:
+                df.loc[ieqtl_repl_mask, "BH-FDR"] = multitest.multipletests(df.loc[ieqtl_repl_mask, "MetaP"], method='fdr_bh')[1]
 
             plot_data[cell_type] = df
 
         print("\nVisualizing comparison")
-        _ = self.visualise_data(plot_data=plot_data, interest=" log beta")
-        _ = self.visualise_data(plot_data=plot_data, interest=" log se")
-        _ = self.visualise_data(plot_data=plot_data, interest=" log10 pvalue")
+        replication_stats_df = self.visualise_data(plot_data=plot_data)
 
+        plot_repl_stats_df = replication_stats_df.loc[replication_stats_df["label"] == "discovery significant", :].pivot(index="variable", values="value", columns="cell type")
+        plot_repl_stats_df = plot_repl_stats_df.iloc[2:, :]
+        plot_repl_stats_df.index.name = None
+        plot_repl_stats_df.columns.name = None
+        plot_repl_stats_df.loc["concordance", :] = plot_repl_stats_df.loc["concordance", :] / 100
+        self.plot_heatmap(df=plot_repl_stats_df)
+        del plot_repl_stats_df
+
+        print("\nReplication stats:")
+        for label in replication_stats_df["label"].unique():
+            print("\t{}".format(label))
+            stats_df = replication_stats_df.loc[replication_stats_df["label"] == label, :]
+            stats_df_mean = stats_df[["variable", "value"]].groupby("variable").mean()
+            for index, row in stats_df_mean.iterrows():
+                print("\t  {}: {:.2f}".format(index, row["value"]))
+
+            stats_df_sum = stats_df[["variable", "value"]].groupby("variable").sum()
+            print("\t  Overall concordance: {:,}/{:,} [{:.2f}%]".format(
+                stats_df_sum.loc["N concordant", "value"],
+                stats_df_sum.loc["N", "value"],
+                (100 / stats_df_sum.loc["N", "value"]) * stats_df_sum.loc["N concordant", "value"]))
+            print("")
+
+        self.save_file(df=replication_stats_df,
+                       outpath=os.path.join(self.dataset_outdir,
+                                            "replication_stats.txt.gz"))
 
     def load_file(self, inpath, header, index_col, sep="\t", low_memory=True,
                   nrows=None, skiprows=None):
@@ -249,28 +281,15 @@ class main():
                   "with shape: {}".format(os.path.basename(outpath),
                                           df.shape))
 
-    def save_file(self, df, outpath, header=True, index=False, sep="\t"):
-        compression = 'infer'
-        if outpath.endswith('.gz'):
-            compression = 'gzip'
-
-        df.to_csv(outpath, sep=sep, index=index, header=header,
-                  compression=compression)
-
-        if self.verbose:
-            print("\tSaved dataframe: {} "
-                  "with shape: {}".format(os.path.basename(outpath),
-                                          df.shape))
-
-    def visualise_data(self, plot_data, interest):
+    def visualise_data(self, plot_data):
         cell_types = list(plot_data.keys())
         cell_types.sort()
 
-        nrows = 4
+        nrows = 3
         ncols = len(cell_types)
 
-        self.shared_ylim = {i: (0, 0.5) for i in range(nrows)}
-        self.shared_xlim = {i: (0, 0.5) for i in range(ncols)}
+        self.shared_ylim = {i: (0, 1) for i in range(nrows)}
+        self.shared_xlim = {i: (0, 1) for i in range(ncols)}
 
         replication_stats = []
 
@@ -289,43 +308,53 @@ class main():
 
             # Select the required columns.
             df = plot_data[cell_type]
-            plot_df = df.loc[:, ["feature_id",
-                                 "beta",
-                                 "beta_se",
-                                 "p_value",
-                                 "empirical_feature_p_value",
+            df["bryois_n_samples"] = self.bryois_n
+            plot_df = df.loc[:, ["HGNC",
+                                 "Nominal p-value",
+                                 "Beta",
+                                 "adj_p",
+                                 "bryois_n_samples",
+                                 "MetaP",
                                  "MetaBeta",
                                  "MetaSE",
-                                 "MetaP",
+                                 "BH-FDR",
+                                 "SNPEffectAlleleFreq",
                                  ]].copy()
             plot_df.columns = ["Gene symbol",
-                               "WG3 beta",
-                               "WG3 se",
-                               "WG3 pvalue",
-                               "WG3 perm pvalue",
-                               "mbQTL beta",
-                               "mbQTL se",
-                               "mbQTL pvalue",
+                               "Bryois pvalue",
+                               "Bryois beta",
+                               "Bryois FDR",
+                               "Bryois N",
+                               "Mathys pvalue",
+                               "Mathys beta",
+                               "Mathys se",
+                               "Mathys FDR",
+                               "Mathys MAF"
                                ]
-            plot_df = plot_df.loc[(~plot_df["WG3 pvalue"].isna()) & (~plot_df["mbQTL pvalue"].isna()), :]
-            plot_df.sort_values(by="WG3 pvalue", inplace=True)
+            plot_df = plot_df.loc[(~plot_df["Bryois pvalue"].isna()) & (~plot_df["Mathys pvalue"].isna()), :]
+            plot_df.sort_values(by="Bryois pvalue", inplace=True)
+
+            # Calculate the replication standard error.
+            self.pvalue_to_zscore(df=plot_df,
+                                  beta_col="Bryois beta",
+                                  p_col="Bryois pvalue",
+                                  prefix="Bryois ")
+            self.zscore_to_beta(df=plot_df,
+                                z_col="Bryois z-score",
+                                maf_col="Mathys MAF",
+                                n_col="Bryois N",
+                                prefix="Bryois zscore-to-")
 
             # Convert the interaction beta to log scale.
-            plot_df["WG3 log beta"] = [np.log(abs(beta) + 1) * np.sign(beta) for beta in plot_df["WG3 beta"]]
-            plot_df["mbQTL log beta"] = [np.log(abs(beta) + 1) * np.sign(beta) for beta in plot_df["mbQTL beta"]]
-
-            plot_df["WG3 log se"] = [np.log(abs(beta) + 1) * np.sign(beta) for beta in plot_df["WG3 se"]]
-            plot_df["mbQTL log se"] = [np.log(abs(beta) + 1) * np.sign(beta) for beta in plot_df["mbQTL se"]]
-
-            plot_df["WG3 log10 pvalue"] = -np.log10(plot_df["WG3 pvalue"])
-            plot_df["mbQTL log10 pvalue"] = -np.log10(plot_df["mbQTL pvalue"])
+            plot_df["Mathys log beta"] = [np.log(abs(beta) + 1) * np.sign(beta) for beta in plot_df["Mathys beta"]]
+            plot_df["Bryois log beta"] = [np.log(abs(beta) + 1) * np.sign(beta) for beta in plot_df["Bryois beta"]]
 
             include_ylabel = False
             if col_index == 0:
                 include_ylabel = True
 
             if col_index == 0:
-                for row_index, panel in enumerate(["A", "B", "C", "D"]):
+                for row_index, panel in enumerate(["A", "B", "C"]):
                     axes[row_index, col_index].annotate(
                         panel,
                         xy=(-0.3, 0.9),
@@ -339,10 +368,10 @@ class main():
                 df=plot_df,
                 fig=fig,
                 ax=axes[0, col_index],
-                x="WG3{}".format(interest),
-                y="mbQTL{}".format(interest),
+                x="Bryois log beta",
+                y="Mathys log beta",
                 xlabel="",
-                ylabel="mbQTL{}".format(interest),
+                ylabel="Mathys log beta",
                 title=cell_type,
                 color=self.palette[cell_type],
                 include_ylabel=include_ylabel
@@ -351,53 +380,36 @@ class main():
 
             print("\tPlotting row 2.")
             xlim, ylim, stats2 = self.scatterplot(
-                df=plot_df.loc[plot_df["WG3 pvalue"] <= 0.05, :],
+                df=plot_df.loc[plot_df["Bryois FDR"] <= 0.05, :],
                 fig=fig,
                 ax=axes[1, col_index],
-                x="WG3{}".format(interest),
-                y="mbQTL{}".format(interest),
+                x="Bryois log beta",
+                y="Mathys log beta",
                 xlabel="",
-                ylabel="mbQTL{}\nWG3 pvalue <= 0.05".format(interest),
+                ylabel="Mathys log beta",
                 title="",
                 color=self.palette[cell_type],
                 include_ylabel=include_ylabel,
-                pi1_column="mbQTL pvalue",
-                rb_columns=[("mbQTL beta", "mbQTL se"), ("WG3 beta", "WG3 se")]
+                pi1_column="Mathys pvalue",
+                rb_columns=[("Bryois zscore-to-beta", "Bryois zscore-to-se"), ("Mathys beta", "Mathys se")]
             )
             self.update_limits(xlim, ylim, 1, col_index)
 
             print("\tPlotting row 3.")
-            xlim, ylim, stats2 = self.scatterplot(
-                df=plot_df.loc[plot_df["mbQTL pvalue"] <= 0.05, :],
+            xlim, ylim, stats3 = self.scatterplot(
+                df=plot_df.loc[(plot_df["Bryois FDR"] <= 0.05) & (plot_df["Mathys FDR"] <= 0.05), :],
                 fig=fig,
                 ax=axes[2, col_index],
-                x="WG3{}".format(interest),
-                y="mbQTL{}".format(interest),
-                xlabel="",
-                ylabel="mbQTL{}\nmbQTL pvalue <= 0.05".format(interest),
-                title="",
-                color=self.palette[cell_type],
-                include_ylabel=include_ylabel,
-                pi1_column="WG3 pvalue",
-                rb_columns=[("WG3 beta", "WG3 se"), ("mbQTL beta", "mbQTL se")]
-            )
-            self.update_limits(xlim, ylim, 2, col_index)
-
-            print("\tPlotting row 4.")
-            xlim, ylim, stats3 = self.scatterplot(
-                df=plot_df.loc[(plot_df["WG3 pvalue"] <= 0.05) & (plot_df["mbQTL pvalue"] <= 0.05), :],
-                fig=fig,
-                ax=axes[3, col_index],
-                x="WG3{}".format(interest),
-                y="mbQTL{}".format(interest),
+                x="Bryois log beta",
+                y="Mathys log beta",
                 label="Gene symbol",
-                xlabel="WG3{}".format(interest),
-                ylabel="mbQTL{}".format(interest),
+                xlabel="Bryois log beta",
+                ylabel="Mathys log beta",
                 title="",
                 color=self.palette[cell_type],
                 include_ylabel=include_ylabel
             )
-            self.update_limits(xlim, ylim, 3, col_index)
+            self.update_limits(xlim, ylim, 2, col_index)
             print("")
 
             for stats, label in zip([stats1, stats2, stats3], ["all", "discovery significant", "both significant"]):
@@ -413,17 +425,17 @@ class main():
             xmargin = (xmax - xmin) * 0.05
             ymargin = (ymax - ymin) * 0.05
 
-            ax.set_xlim(xmin - xmargin - 0.2, xmax + xmargin)
+            ax.set_xlim(xmin - xmargin - 1, xmax + xmargin)
             ax.set_ylim(ymin - ymargin, ymax + ymargin)
 
         # Add the main title.
-        fig.suptitle("Workgroup 3 replication with mbQTL",
+        fig.suptitle("Bryois et al. 2022 replication in Mathys et al. 2019",
                      fontsize=40,
                      color="#000000",
                      weight='bold')
 
         for extension in self.extensions:
-            fig.savefig(os.path.join(self.dataset_plot_outdir, "replication_plot_{}.{}".format(interest.replace(" ", ""), extension)))
+            fig.savefig(os.path.join(self.dataset_plot_outdir, "replication_plot.{}".format(extension)))
         plt.close()
 
         # Construct the replication stats data frame.
@@ -531,7 +543,7 @@ class main():
                         b2=df[rb_columns[1][0]],
                         se2=df[rb_columns[1][1]],
                         )
-                    rb = rb_est[0]
+                    rb = min(rb_est[0], 1)
 
             sns.regplot(x=x, y=y, data=df, ci=ci,
                         scatter_kws={'facecolors': facecolors,
@@ -676,14 +688,13 @@ class main():
 
     def print_arguments(self):
         print("Arguments:")
-        print("  > Working directory:     {}".format(self.work_dir))
-        print("  > Workgroup 3 folder:    {}".format(self.wg3_folder))
-        print("  > Annotation level:      {}".format(self.annotation_level))
-        print("  > mbQTL data folder:     {}".format(self.dataset_outdir))
-        print("  > Plot extensions:       {}".format(", ".join(self.extensions)))
-        print("  > Verbose:               {}".format(self.verbose))
-        print("  > Qvalues script:        {}".format(self.qvalues_script))
-        print("  > Rb script:             {}".format(self.rb_script))
+        print("  > Working directory:        {}".format(self.work_dir))
+        print("  > MBeta-QTL data folder:    {}".format(self.dataset_outdir))
+        print("  > Bryois data folder:       {}".format(self.bryois_folder))
+        print("  > Plot extensions:          {}".format(", ".join(self.extensions)))
+        print("  > Verbose:                  {}".format(self.verbose))
+        print("  > Qvalues script:           {}".format(self.qvalues_script))
+        print("  > Rb script:                {}".format(self.rb_script))
         print("")
 
 
