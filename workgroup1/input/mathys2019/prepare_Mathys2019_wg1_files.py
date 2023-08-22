@@ -6,7 +6,7 @@ Created:      2022/10/14
 Last Changed: 2022/10/19
 Author:       M.Vochteloo
 
-Copyright (C) 2022 M.Vochteloo
+Copyright (C) 2022 University Medical Center Groningen.
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or

@@ -6,7 +6,7 @@ Created:      2022/09/22
 Last Changed: 2023/07/04
 Author:       M.Vochteloo
 
-Copyright (C) 2022 M.Vochteloo
+Copyright (C) 2022 University Medical Center Groningen.
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
@@ -458,22 +458,7 @@ class main():
 
         print("Starting job files.")
         for jobfile_path, logfile_path, id_value in info:
-            success = False
-            log_exists = os.path.exists(logfile_path)
-            error_reason = "UNKNOWN"
-            if log_exists:
-                with open(logfile_path, 'r') as f:
-                    for line in f:
-                        if 'Pipestance completed successfully!' in line:
-                            success = True
-                        if 'Pipestance failed' in line:
-                            error_reason = "Pipestance error: UNKNOWN"
-                        if 'slurmstepd: error:' in line:
-                            if "TIME LIMIT" in line:
-                                error_reason = "SLURM error: TIME LIMIT"
-                            elif "MEMORY LIMIT" in line:
-                                error_reason = "SLURM error: MEMORY LIMIT"
-                f.close()
+            success, log_exists, error_reason = self.parse_logfile(logfile_path)
 
             if success:
                 print("\tSample '{}' already completed successfully!".format(id_value))
@@ -553,6 +538,27 @@ class main():
         f.close()
         print("\tSaved jobfile: {}".format(os.path.basename(jobfile_path)))
         return jobfile_path, logfile_path
+
+    @staticmethod
+    def parse_logfile(logfile_path):
+        success = False
+        log_exists = os.path.exists(logfile_path)
+        error_reason = "UNKNOWN"
+        if log_exists:
+            with open(logfile_path, 'r') as f:
+                for line in f:
+                    if 'Pipestance completed successfully!' in line:
+                        success = True
+                    if 'Pipestance failed' in line:
+                        error_reason = "Pipestance error: UNKNOWN"
+                    if 'slurmstepd: error:' in line:
+                        if "TIME LIMIT" in line:
+                            error_reason = "SLURM error: TIME LIMIT"
+                        elif "MEMORY LIMIT" in line:
+                            error_reason = "SLURM error: MEMORY LIMIT"
+            f.close()
+
+        return success, log_exists, error_reason
 
     def run_command(self, command):
         print("\t" + " ".join(command))

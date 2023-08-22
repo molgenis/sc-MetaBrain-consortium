@@ -6,7 +6,7 @@ Created:      2023/03/23
 Last Changed: 2023/07/07
 Author:       M.Vochteloo
 
-Copyright (C) 2022 M.Vochteloo
+Copyright (C) 2022 University Medical Center Groningen.
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
@@ -119,6 +119,44 @@ Syntax:
     --learning_rate 1e-5 \
     --dry_run 
 
+## Roche Columbia 2022 ###
+./run_cellbender.py \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-08-21-RocheColumbia2022 \
+    --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheColumbia2022/ \
+    --preflights module load Python/3.10.4-GCCcore-11.3.0-bare , module load CUDA/11.7.0 , source ~/cellbender/bin/activate , module load GCC\
+    --gres gpu:a40:1 \
+    --time 05:55:00 \
+    --mem 8 \
+    --epochs 300 \
+    --cuda \
+    --learning_rate 1e-5 \
+    --dry_run 
+
+## Roche AD 2022 ###
+./run_cellbender.py \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-08-21-RocheAD2022 \
+    --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheAD2022/ \
+    --preflights module load Python/3.10.4-GCCcore-11.3.0-bare , module load CUDA/11.7.0 , source ~/cellbender/bin/activate , module load GCC\
+    --gres gpu:a40:1 \
+    --time 05:55:00 \
+    --mem 8 \
+    --epochs 300 \
+    --cuda \
+    --learning_rate 1e-5 \
+    --dry_run 
+    
+## Roche MS 2022 ###
+./run_cellbender.py \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-08-21-RocheMS2022 \
+    --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheMS2022/ \
+    --preflights module load Python/3.10.4-GCCcore-11.3.0-bare , module load CUDA/11.7.0 , source ~/cellbender/bin/activate , module load GCC\
+    --gres gpu:a40:1 \
+    --time 05:55:00 \
+    --mem 8 \
+    --epochs 300 \
+    --cuda \
+    --learning_rate 1e-5 \
+    --dry_run 
 """
 
 
@@ -463,67 +501,75 @@ class main():
     def start(self):
         self.print_arguments()
 
-        print("Starting job files.")
+        print("Creating job files.")
         metrics_data = []
         arguments = self.filter_arguments()
+        info = []
         for path in glob.glob(os.path.join(self.inputdir, "*")):
             folder = os.path.basename(path)
-            print("\tProcessing '{}'".format(folder))
+            if not os.path.isdir(path):
+                continue
 
             input = self.find_input(folder)
             if input is None:
-                print("\t\tWarning, no input file found.")
+                print("\t\tWarning, no input file found for '{}'.".format(folder))
                 continue
 
-            metrics_path = None
-            for root, dirs, files in os.walk(os.path.join(self.inputdir, folder)):
-                if "metrics_summary.csv" in files:
-                    metrics_path = os.path.join(root, "metrics_summary.csv")
-
+            metrics_path = self.find_metrics(folder)
             if metrics_path is None:
-                print("\t\tWarning, no metrics file found.")
+                print("\t\tWarning, no metrics file found for '{}'.".format(folder))
                 continue
 
-            print("\t\tLoading CellRanger metrics summary file.")
+            # Loading CellRanger metrics summary file.
             metrics_df = self.load_file(metrics_path, header=0, index_col=None)
             metrics_df = metrics_df.replace(',', '', regex=True).replace('%', '', regex=True).astype(float)
             metrics_df.index = [folder]
             metrics_data.append(metrics_df)
 
             if self.expected_cells == -1:
+                # Using CellRanger expected number of cells.
                 cellranger_expected_cells = int(metrics_df.loc[folder, "Estimated Number of Cells"])
-                print("\t\tUsing CellRanger expected number of cells: '{:,}'.".format(cellranger_expected_cells))
                 arguments["expected-cells"] = cellranger_expected_cells
 
+            # Create output.
             outpath = os.path.join(self.workdir, folder)
             if not os.path.exists(outpath):
                 os.makedirs(outpath)
             output = os.path.join(self.workdir, folder, "cellbender_remove_background_output.h5")
 
+            # Check if sample is being rerun.
             sample_rerun = False
             if os.path.exists(output) and ((self.rerun is not None) and (folder in self.rerun)):
                 sample_rerun = True
                 arguments["learning-rate"] = self.learning_rate * self.learning_rate_retry_mult
 
-            jobfile_path = self.create_job_file(sample=folder,
-                                                input=input,
-                                                output=output,
-                                                arguments=arguments)
+            # Create job files.
+            jobfile_path, logfile_path = self.create_job_file(sample=folder,
+                                                              input=input,
+                                                              output=output,
+                                                              arguments=arguments)
+            info.append((jobfile_path, logfile_path, folder, sample_rerun))
 
-            if sample_rerun:
-                print("\tRerunning sample '{}'".format(folder))
-                command = ['sbatch', jobfile_path]
-                self.run_command(command)
-            elif os.path.exists(output):
-                print("\tSample '{}' already finished".format(folder))
-            else:
-                command = ['sbatch', jobfile_path]
-                self.run_command(command)
-
-        print("Saving metrics file")
+        print("Saving aggregated metrics file")
         metrics_df = pd.concat(metrics_data, axis=0)
         print(metrics_df)
         self.save_file(df=metrics_df, outpath=os.path.join(self.workdir, "metrics_summary.txt.gz"))
+
+        print("Starting job files.")
+        for jobfile_path, logfile_path, folder, sample_rerun in info:
+            if os.path.exists(logfile_path):
+                success = self.parse_logfile(logfile_path)
+                if success:
+                    if sample_rerun:
+                        print("\tRerunning sample '{}' with adjusted learning rate".format(folder))
+                    else:
+                        print("\tSample '{}' already completed successfully!".format(folder))
+                        continue
+                else:
+                    print("\tSample '{}' failed. Rerunning sample.".format(folder))
+
+            command = ['sbatch', jobfile_path]
+            self.run_command(command)
 
     def filter_arguments(self):
         arguments = {}
@@ -563,6 +609,13 @@ class main():
 
         return None
 
+    def find_metrics(self, folder):
+        metrics_outs_path = os.path.join(self.inputdir, folder, "outs", "metrics_summary.csv")
+        if os.path.exists(metrics_outs_path):
+            return metrics_outs_path
+
+        return None
+
     @staticmethod
     def load_file(inpath, header=0, index_col=None, sep=","):
         df = pd.read_csv(inpath, sep=sep, header=header, index_col=index_col)
@@ -573,11 +626,12 @@ class main():
 
     def create_job_file(self, sample, input, output, arguments):
         job_name = "cellbender_remove_background_{}".format(sample)
+        logfile_path = os.path.join(self.jobs_outdir, job_name + ".out")
 
         lines = ["#!/bin/bash",
                  "#SBATCH --job-name={}".format(job_name),
-                 "#SBATCH --output={}".format(os.path.join(self.jobs_outdir, job_name + ".out")),
-                 "#SBATCH --error={}".format(os.path.join(self.jobs_outdir, job_name + ".out")),
+                 "#SBATCH --output={}".format(logfile_path),
+                 "#SBATCH --error={}".format(logfile_path),
                  "#SBATCH --time={}".format(self.time),
                  "#SBATCH --cpus-per-task={}".format(self.cpus_per_task),
                  "#SBATCH --mem={}gb".format(self.mem),
@@ -631,7 +685,24 @@ class main():
                 f.write(line + "\n")
         f.close()
         print("\tSaved jobfile: {}".format(os.path.basename(jobfile_path)))
-        return jobfile_path
+        return jobfile_path, logfile_path
+
+    @staticmethod
+    def parse_logfile(logfile_path):
+        inference_completed = False
+        training_success = False
+        completed = False
+        with open(logfile_path, 'r') as f:
+            for line in f:
+                if 'Inference procedure complete.' in line:
+                       inference_completed = True
+                if 'Training succeeded' in line:
+                       training_success = True
+                if 'Completed remove-background.' in line:
+                       completed = True
+        f.close()
+
+        return inference_completed and training_success and completed
 
     def run_command(self, command):
         print("\t" + " ".join(command))
