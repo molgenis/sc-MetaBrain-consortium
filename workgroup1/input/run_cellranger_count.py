@@ -57,31 +57,33 @@ Syntax:
 
 ### Mathys2019 ###
 ./run_cellranger_count.py \
-    --env $HOME/sc_env/bin/activate \
-    --workdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019 \
-    --sample_id_table /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Mathys2019/metadata/snRNAseqPFC_BA10_biospecimen_metadata.csv \
+    --env /groups/umcg-biogen/tmp02/users/umcg-mvochteloo/env/bin/activate \
+    --workdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Mathys2019 \
+    --sample_id_table /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Mathys2019/link_table.csv \
     --sample_col specimenID \
     --id_col projid \
-    --cellranger /groups/umcg-biogen/tmp01/input/processeddata/single-cell/cellranger-7.0.1 \
-	--fastqs /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Mathys2019/fastq \
-    --transcriptome /groups/umcg-biogen/tmp01/input/processeddata/single-cell/refdata-gex-GRCh38-2020-A \
+    --cellranger /groups/umcg-biogen/tmp02/input/processeddata/single-cell/cellranger-7.0.1 \
+	--fastqs /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Mathys2019/fastq \
+    --transcriptome /groups/umcg-biogen/tmp02/input/processeddata/single-cell/refdata-gex-GRCh38-2020-A \
 	--localcores 2 \
-	--localmem 16
+	--localmem 16 \
+	--dry_run
 	
+### Cain2023 ###
 ./run_cellranger_count.py \
-    --env $HOME/sc_env/bin/activate \
-    --workdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019_OldSoftware \
-    --sample_id_table /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Mathys2019/metadata/snRNAseqPFC_BA10_biospecimen_metadata.csv \
+    --env /groups/umcg-biogen/tmp02/users/umcg-mvochteloo/env/bin/activate \
+    --workdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Cain2023 \
+    --sample_id_table /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Cain2023/link_table.csv \
     --sample_col specimenID \
-    --id_col projid \
-    --cellranger /groups/umcg-biogen/tmp01/input/processeddata/single-cell/cellranger-2.0.2 \
-    --time medium \
-	--fastqs /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Mathys2019/fastq \
-    --transcriptome /groups/umcg-biogen/tmp01/input/processeddata/single-cell/refdata-cellranger-GRCh38-1.2.0 \
-	--localcores 4 \
-	--localmem 16
-	
-### Zhou2022 ###
+    --id_col individualID \
+    --cellranger /groups/umcg-biogen/tmp02/input/processeddata/single-cell/cellranger-7.0.1 \
+	--fastqs /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Cain2023/fastq \
+    --transcriptome /groups/umcg-biogen/tmp02/input/processeddata/single-cell/refdata-gex-GRCh38-2020-A \
+	--localcores 2 \
+	--localmem 16 \
+	--dry_run
+
+### Zhou2020 ###
 ./run_cellranger_count.py \
     --env /groups/umcg-biogen/tmp02/users/umcg-mvochteloo/env/bin/activate \
     --workdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Zhou2020 \
@@ -466,7 +468,7 @@ class main():
                 if log_exists:
                     print("\tSample '{}' failed due to {}".format(id_value, error_reason))
 
-                lock_file = os.path.join(self.workdir, id_value, "_lock")
+                lock_file = os.path.join(self.workdir, str(id_value), "_lock")
                 if os.path.exists(lock_file):
                     if self.break_lock:
                         print("\tWarning, folder is locked. Breaking lock and continue sbatch.")

@@ -78,6 +78,17 @@ Syntax:
 ./visualise_cellbender_results.py \
     --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-07-10-Zhou2020-CellRangerExpectedCells
 
+## Roche Columbia 2022 ###
+./visualise_cellbender_results.py \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-08-21-RocheAD2022
+
+## Roche AD 2022 ###
+./visualise_cellbender_results.py \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-08-22-RocheColumbia2022
+    
+## Roche MS 2022 ###
+./visualise_cellbender_results.py \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-08-23-RocheMS2022
 """
 
 

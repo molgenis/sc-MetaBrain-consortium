@@ -56,13 +56,13 @@ Syntax:
 ./download_from_synapse.py \
     --synapse_ids syn18681734 syn18638475 syn18642926 \
     --folders processed fastq metadata \
-    --outdir /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Mathys2019
+    --outdir /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Mathys2019
     
-### Cain 2020 ###
+### Cain 2023 ###
 ./download_from_synapse.py \
     --synapse_ids syn21589957 syn17055069 \
     --folders processed fastq \
-    --outdir /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Cain2020
+    --outdir /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Cain2023
 
 ### Zhou 2020 ### 
 ./download_from_synapse.py \

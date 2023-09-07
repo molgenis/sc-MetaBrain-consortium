@@ -55,108 +55,35 @@ TIME_DICT = {
 
 """
 Syntax: 
-
-### Mathys2019 ###
+### Zhou 2020 ###
 ./run_cellbender.py \
-    --workdir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-03-23-CellBender/2023-03-23-Mathys2019 \
-    --inputdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019 \
-    --time medium \
-    --dry_run
-
-./run_cellbender.py \
-    --workdir /scratch/p301710/2023-03-28-scMetaBrainConsortium/output/2023-03-28-CellBender/2023-07-07-Mathys2019 \
-    --inputdir /scratch/p301710/2023-03-28-scMetaBrainConsortium/input/processeddata/Mathys2019/ \
-    --preflights module load Anaconda3 , source activate CellBender \
-    --cuda \
-    --num_training_tries 3 \
-    --partition gpu \
-    --time 01:59:00 \
-    --dry_run
-
-./run_cellbender.py \
-    --workdir /scratch/p301710/2023-03-28-scMetaBrainConsortium/output/2023-03-28-CellBender/2023-03-28-Mathys2019 \
-    --inputdir /scratch/p301710/2023-03-28-scMetaBrainConsortium/input/processeddata/Mathys2019/ \
-    --preflight module load Anaconda3 , source activate CellBender \
-    --cuda \
-    --num_training_tries 3 \
-    --partition gpu \
-    --time 01:59:00 \
-    --rerun 10101327 11409232 11336574 20249897 11302830 \
-    --dry_run 
-
-./run_cellbender.py \
-    --workdir /scratch/p301710/2023-03-28-scMetaBrainConsortium/output/2023-03-28-CellBender/2023-07-07-Mathys2019 \
-    --inputdir /scratch/p301710/2023-03-28-scMetaBrainConsortium/input/processeddata/Mathys2019/ \
-    --preflights module load Anaconda3 , source activate CellBender \
-    --epochs 300 \
-    --cuda \
-    --learning_rate 1e-5 \
-    --partition gpu \
-    --time 01:59:00 \
-    --dry_run 
-
-## Zhou 2020 ###
-./run_cellbender.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-07-07-Zhou2020 \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-Default \
     --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Zhou2020/ \
-    --preflights module load Python/3.10.4-GCCcore-11.3.0-bare , module load CUDA/11.7.0 , source ~/cellbender/bin/activate , module load GCC\
+    --gres gpu:a40:1 \
+    --time 05:55:00 \
+    --cuda \
+    --dry_run
+    
+./run_cellbender.py \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-ExtendedEpochLowLearn \
+    --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Zhou2020/ \
     --gres gpu:a40:1 \
     --time 05:55:00 \
     --epochs 300 \
     --cuda \
     --learning_rate 1e-5 \
-    --dry_run 
-    
+    --dry_run
+
 ./run_cellbender.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-07-10-Zhou2020-CellRangerExpectedCells \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-ExtendedEpochLowLearn-CellRangerExpectedCells \
     --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Zhou2020/ \
-    --preflights module load Python/3.10.4-GCCcore-11.3.0-bare , module load CUDA/11.7.0 , source ~/cellbender/bin/activate , module load GCC\
     --gres gpu:a40:1 \
     --time 05:55:00 \
     --expected_cells -1 \
     --epochs 300 \
     --cuda \
     --learning_rate 1e-5 \
-    --dry_run 
-
-## Roche Columbia 2022 ###
-./run_cellbender.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-08-21-RocheColumbia2022 \
-    --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheColumbia2022/ \
-    --preflights module load Python/3.10.4-GCCcore-11.3.0-bare , module load CUDA/11.7.0 , source ~/cellbender/bin/activate , module load GCC\
-    --gres gpu:a40:1 \
-    --time 05:55:00 \
-    --mem 8 \
-    --epochs 300 \
-    --cuda \
-    --learning_rate 1e-5 \
-    --dry_run 
-
-## Roche AD 2022 ###
-./run_cellbender.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-08-21-RocheAD2022 \
-    --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheAD2022/ \
-    --preflights module load Python/3.10.4-GCCcore-11.3.0-bare , module load CUDA/11.7.0 , source ~/cellbender/bin/activate , module load GCC\
-    --gres gpu:a40:1 \
-    --time 05:55:00 \
-    --mem 8 \
-    --epochs 300 \
-    --cuda \
-    --learning_rate 1e-5 \
-    --dry_run 
-    
-## Roche MS 2022 ###
-./run_cellbender.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-08-21-RocheMS2022 \
-    --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheMS2022/ \
-    --preflights module load Python/3.10.4-GCCcore-11.3.0-bare , module load CUDA/11.7.0 , source ~/cellbender/bin/activate , module load GCC\
-    --gres gpu:a40:1 \
-    --time 05:55:00 \
-    --mem 8 \
-    --epochs 300 \
-    --cuda \
-    --learning_rate 1e-5 \
-    --dry_run 
+    --dry_run
 """
 
 
@@ -179,36 +106,47 @@ class main():
 
         # Format preflights.
         self.preflights = []
-        command = []
-        for word in preflights:
-            if word == ",":
-                self.preflights.append(" ".join(command))
-                command = []
-            else:
-                command.append(word)
-        self.preflights.append(" ".join(command))
+        if preflights:
+            command = []
+            for word in preflights:
+                if word == ",":
+                    self.preflights.append(" ".join(command))
+                    command = []
+                else:
+                    command.append(word)
+            self.preflights.append(" ".join(command))
 
         # Safe the CellBender arguments.
+        self.cuda = getattr(arguments, 'cuda')
         self.expected_cells = getattr(arguments, 'expected_cells')
         self.total_droplets_included = getattr(arguments, 'total_droplets_included')
+        self.force_cell_umi_prior = getattr(arguments, 'force_cell_umi_prior')
+        self.force_empty_umi_prior = getattr(arguments, 'force_empty_umi_prior')
         self.model = getattr(arguments, 'model')
         self.epochs = getattr(arguments, 'epochs')
-        self.cuda = getattr(arguments, 'cuda')
         self.low_count_threshold = getattr(arguments, 'low_count_threshold')
         self.z_dim = getattr(arguments, 'z_dim')
         self.z_layers = getattr(arguments, 'z_layers')
         self.training_fraction = getattr(arguments, 'training_fraction')
         self.empty_drop_training_fraction = getattr(arguments, 'empty_drop_training_fraction')
-        self.blacklist_genes = getattr(arguments, 'blacklist_genes')
+        self.ignore_features = getattr(arguments, 'ignore_features')
         self.fpr = getattr(arguments, 'fpr')
-        self.exclude_antibody_capture = getattr(arguments, 'exclude_antibody_capture')
+        self.exclude_feature_types = getattr(arguments, 'exclude_feature_types')
+        self.projected_ambient_count_threshold = getattr(arguments, 'projected_ambient_count_threshold')
         self.learning_rate = getattr(arguments, 'learning_rate')
+        self.checkpoint_mins = getattr(arguments, 'checkpoint_mins')
         self.final_elbo_fail_fraction = getattr(arguments, 'final_elbo_fail_fraction')
         self.epoch_elbo_fail_fraction = getattr(arguments, 'epoch_elbo_fail_fraction')
         self.num_training_tries = getattr(arguments, 'num_training_tries')
         self.learning_rate_retry_mult = getattr(arguments, 'learning_rate_retry_mult')
         self.posterior_batch_size = getattr(arguments, 'posterior_batch_size')
-        self.cells_posterior_reg_calc = getattr(arguments, 'cells_posterior_reg_calc')
+        self.posterior_regularization = getattr(arguments, 'posterior_regularization')
+        self.alpha = getattr(arguments, 'alpha')
+        self.q = getattr(arguments, 'q')
+        self.estimator = getattr(arguments, "estimator")
+        self.estimator_multiple_cpu = getattr(arguments, 'estimator_multiple_cpu')
+        self.constant_learning_rate = getattr(arguments, "constant_learning_rate")
+        self.cpu_threads = getattr(arguments, 'cpu_threads')
 
         if self.partition == "gpu" and self.gpus_per_node is None:
             self.gpus_per_node = "a100.20gb:1"
@@ -232,27 +170,36 @@ class main():
             ("mem", self.mem, "required"),
             ("dry_run", self.dry_run, "required"),
             ("rerun", self.rerun, "required"),
+            ("cuda", self.cuda, False),
             ("expected-cells", self.expected_cells, None),
-            ("total-droplets-included", self.total_droplets_included, 25000),
+            ("total-droplets-included", self.total_droplets_included, None),
+            ("force-cell-umi-prior", self.force_cell_umi_prior, None),
+            ("force-empty-umi-prior", self.force_empty_umi_prior, None),
             ("model", self.model, "full"),
             ("epochs", self.epochs, 150),
-            ("cuda", self.cuda, False),
-            ("low-count-threshold", self.low_count_threshold, 15),
-            ("z-dim", self.z_dim, 100),
-            ("z-layers", self.z_layers, [500]),
+            ("low-count-threshold", self.low_count_threshold, 5),
+            ("z-dim", self.z_dim, 64),
+            ("z-layers", self.z_layers, [512]),
             ("training-fraction", self.training_fraction, 0.9),
-            ("empty-drop-training-fraction", self.empty_drop_training_fraction,
-             0.5),
-            ("blacklist-genes", self.blacklist_genes, []),
+            ("empty-drop-training-fraction", self.empty_drop_training_fraction, 0.2),
+            ("ignore-features", self.ignore_features, []),
             ("fpr", self.fpr, [0.01]),
-            ("exclude-antibody-capture", self.exclude_antibody_capture, False),
+            ("exclude-feature-types", self.exclude_feature_types, []),
+            ("projected-ambient-count-threshold", self.projected_ambient_count_threshold, 0.1),
             ("learning-rate", self.learning_rate, 1e-4),
+            ("checkpoint-mins", self.checkpoint_mins, 7),
             ("final-elbo-fail-fraction", self.final_elbo_fail_fraction, None),
             ("epoch-elbo-fail-fraction", self.epoch_elbo_fail_fraction, None),
             ("num-training-tries", self.num_training_tries, 1),
-            ("learning-rate-retry-mult", self.learning_rate_retry_mult, 0.5),
-            ("posterior-batch-size", self.posterior_batch_size, 20),
-            ("cells-posterior-reg-calc", self.cells_posterior_reg_calc, 100)
+            ("learning-rate-retry-mult", self.learning_rate_retry_mult, 0.2),
+            ("posterior-batch-size", self.posterior_batch_size, 128),
+            ("posterior-regularization", self.posterior_regularization, None),
+            ("alpha", self.alpha, None),
+            ("q", self.q, None),
+            ("estimator", self.estimator, "mckp"),
+            ("estimator-multiple-cpu", self.estimator_multiple_cpu, False),
+            ("constant-learning-rate", self.constant_learning_rate, False),
+            ("cpu-threads", self.cpu_threads, None)
         ]
 
     @staticmethod
@@ -281,6 +228,18 @@ class main():
                                  "matrix.mtx, barcodes.tsv, and genes.tsv "
                                  "files. Supported for outputs of CellRanger "
                                  "v2 and v3.")
+        parser.add_argument("--bind_paths",
+                            nargs="*",
+                            type=str,
+                            default=["/groups/umcg-biogen/tmp02/",
+                                     "/groups/umcg-biogen/tmp02/users/umcg-mvochteloo/simulated_home:/home/umcg-mvochteloo"],
+                            help="List of paths to bind to Singularity. "
+                                 "Default: ['/groups/umcg-biogen/tmp01/']")
+        parser.add_argument("--singularity",
+                            type=str,
+                            required=False,
+                            default="/groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/cellbender-v0.3.0.simg",
+                            help="")
         parser.add_argument("--partition",
                             type=str,
                             required=False,
@@ -316,9 +275,9 @@ class main():
         parser.add_argument("--mem",
                             type=int,
                             required=False,
-                            default=4,
+                            default=8,
                             help="Restricts CellBender to use specified amount "
-                                 "of memory (in GB). (default: 4)")
+                                 "of memory (in GB). (default: 8)")
         parser.add_argument("--preflights",
                             nargs="+",
                             type=str,
@@ -334,167 +293,241 @@ class main():
                             default=None,
                             help="The name of sample to run again.")
 
-        parser.add_argument("--expected_cells",
-                            type=int,
-                            required=False,
-                            default=None,
-                            help="Number of cells expected in the dataset "
-                                 "(a rough estimate within a factor of 2 is "
-                                 "sufficient).")
-        parser.add_argument("--total_droplets_included",
-                            type=int,
-                            required=False,
-                            default=25000,
-                            help="The number of droplets from the rank-ordered "
-                                 "UMI plot that will be analyzed. The largest "
-                                 "'total_droplets' droplets will have their "
-                                 "cell probabilities inferred as an output. "
-                                 "(default: 25000).")
-        parser.add_argument("--model",
-                            type=str,
-                            required=False,
-                            choices=["simple", "ambient", "swapping", "full"],
-                            default="full",
-                            help="Which model is being used for count data. "
-                                 "'simple' does not model either ambient RNA "
-                                 "or random barcode swapping (for debugging "
-                                 "purposes -- not recommended). 'ambient' "
-                                 "assumes background RNA is incorporated "
-                                 "into droplets. 'swapping' assumes "
-                                 "background RNA comes from random barcode "
-                                 "swapping. 'full' uses a combined ambient "
-                                 "and swapping model. (default: full).")
-        parser.add_argument("--epochs",
-                            type=int,
-                            required=False,
-                            default=150,
-                            help="Number of epochs to train. (default: 150).")
         parser.add_argument("--cuda",
-                            action='store_true',
+                            action="store_true",
                             help="Including the flag --cuda will run the "
                                  "inference on a GPU.")
-        parser.add_argument("--low_count_threshold",
+        parser.add_argument("--checkpoint", # new in v0.3.0
+                            type=str,
+                            default='ckpt.tar.gz',
+                            help="Checkpoint tarball produced by the same version "
+                                 "of CellBender remove-background.  If present, "
+                                 "and the workflow hashes match, training will "
+                                 "restart from this checkpoint.")
+        parser.add_argument("--expected_cells",
                             type=int,
-                            default=15,
-                            help="Droplets with UMI counts below this number "
-                                 "are completely excluded from the analysis. "
-                                 "This can help identify the correct prior "
-                                 "for empty droplet counts in the rare case "
-                                 "where empty counts are extremely high "
-                                 "(over 200). (default: 15)")
-        parser.add_argument("--z_dim",
+                            default=None,
+                            help="Number of cells expected in the dataset "
+                                 "(a rough estimate within a factor of 2 "
+                                 "is sufficient).")
+        parser.add_argument("--total_droplets_included", # no default 25k in v0.3.0
                             type=int,
-                            required=False,
-                            default=100,
-                            help="Dimension of latent variable z. (default: "
-                                 "100)")
-        parser.add_argument("--z_layers",
+                            default=None,
+                            help="The number of droplets from the "
+                                 "rank-ordered UMI plot that will have their "
+                                 "cell probabilities inferred as an output. "
+                                 "Include the droplets which might contain "
+                                 "cells. Droplets beyond TOTAL_DROPLETS_INCLUDED "
+                                 "should be 'surely empty' droplets.")
+        parser.add_argument("--force_cell_umi_prior", # new in v0.3.0
+                            type=float,
+                            default=None,
+                            help="Ignore CellBender's heuristic prior estimation, "
+                                 "and use this prior for UMI counts in cells.")
+        parser.add_argument("--force_empty_umi_prior", # new in v0.3.0
+                            type=float,
+                            default=None,
+                            help="Ignore CellBender's heuristic prior estimation, "
+                                 "and use this prior for UMI counts in empty droplets.")
+        parser.add_argument("--model", # naive added in v0.3.0
+                            type=str,
+                            default="full",
+                            choices=["naive", "simple", "ambient", "swapping", "full"],
+                            help="Which model is being used for count data. "
+                                 "'naive' subtracts the estimated ambient profile."
+                                 " 'simple' does not model either ambient "
+                                 "RNA or random barcode swapping (for "
+                                 "debugging purposes -- not recommended).  "
+                                 "'ambient' assumes background RNA is "
+                                 "incorporated into droplets.  'swapping' "
+                                 "assumes background RNA comes from random "
+                                 "barcode swapping (via PCR chimeras).  'full' "
+                                 "uses a combined ambient and swapping model.")
+        parser.add_argument("--epochs",
+                            type=int,
+                            default=150,
+                            help="Number of epochs to train.")
+        parser.add_argument("--low_count_threshold", # default decreased from 15 to 5 in v0.3.0
+                            type=int,
+                            default=5,
+                            help="Droplets with UMI counts below this "
+                                 "number are completely excluded from the "
+                                 "analysis.  This can help identify the "
+                                 "correct prior for empty droplet counts "
+                                 "in the rare case where empty counts "
+                                 "are extremely high (over 200)."
+                                 "(default: 5)")
+        parser.add_argument("--z_dim", # default decreased from 100 to 64 in v0.3.0
+                            type=int,
+                            default=64,
+                            help="Dimension of latent variable z.")
+        parser.add_argument("--z_layers", # default increased from 500 to 512 in v0.3.0
                             nargs="+",
                             type=int,
-                            required=False,
-                            default=[500],
-                            help="Dimension of hidden layers in the encoder "
-                                 "for z. (default: [500])")
+                            default=[512],
+                            help="Dimension of hidden layers in the encoder for z.")
         parser.add_argument("--training_fraction",
                             type=float,
-                            required=False,
                             default=0.9,
-                            help="Training detail: the fraction of the data "
-                                 "used for training. The rest is never seen "
-                                 "by the inference algorithm. Speeds up "
+                            help="Training detail: the fraction of the "
+                                 "data used for training. The rest is never "
+                                 "seen by the inference algorithm. Speeds up "
                                  "learning. (default: 0.9)")
         parser.add_argument("--empty_drop_training_fraction",
                             type=float,
-                            required=False,
-                            default=0.5,
+                            default=0.2,
                             help="Training detail: the fraction of the "
-                                 "training data each epoch that is drawn "
-                                 "(randomly sampled) from surely empty "
-                                 "droplets. (default: 0.5)")
-        parser.add_argument("--blacklist_genes",
+                                 "training data each epoch "
+                                 "that is drawn (randomly sampled) from "
+                                 "surely empty droplets. (default: 0.2)")
+        parser.add_argument("--ignore_features", # renamed from blaklist-genes in v0.3.0
                             nargs="+",
                             type=int,
-                            required=False,
                             default=[],
-                            help="Integer indices of genes to ignore entirely. "
-                                 "In the output count matrix, the counts for "
-                                 "these genes will be set to zero.")
+                            help="Integer indices of features to ignore "
+                                 "entirely.  In the output count matrix, the "
+                                 "counts for these features will be unchanged.")
         parser.add_argument("--fpr",
                             nargs="+",
-                            type=float,
-                            required=False,
                             default=[0.01],
-                            help="Target false positive rate in (0, 1). A "
-                                 "false positive is a true signal count that "
-                                 "is erroneously removed. More background "
-                                 "removal is accompanied by more signal "
-                                 "removal at high values of FPR. You can "
-                                 "specify multiple values, which will create "
-                                 "multiple output files. (default: [0.01])")
-        parser.add_argument("--exclude_antibody_capture",
-                            action='store_true',
-                            help="Including the flag "
-                                 "--exclude-antibody-capture will cause "
-                                 "remove-background to operate on gene "
-                                 "counts only, ignoring other features.")
+                            help="Target 'delta' false positive rate in [0, 1). "
+                                 "Use 0 for a cohort of samples which will be "
+                                 "jointly analyzed for differential expression. "
+                                 "A false positive is a true signal count that is "
+                                 "erroneously removed.  More background removal "
+                                 "is accompanied by more signal removal "
+                                 "at high values of FPR.  You can specify "
+                                 "multiple values, which will create multiple "
+                                 "output files.")
+        parser.add_argument("--exclude_feature_types",
+                            type=str,
+                            nargs="+",
+                            default=[],
+                            help="Feature types to ignore during the analysis.  "
+                                 "These features will be left unchanged in the "
+                                 "output file.")
+        parser.add_argument("--projected_ambient_count_threshold", # new in v0.3.0
+                            type=float,
+                            default=0.1,
+                            help="Controls how many features are included in the "
+                                 "analysis, which can lead to a large speedup. "
+                                 "If a feature is expected to have less than "
+                                 "PROJECTED_AMBIENT_COUNT_THRESHOLD counts total "
+                                 "in all cells (summed), then that gene is "
+                                 "excluded, and it will be unchanged in the "
+                                 "output count matrix.  For example, "
+                                 "PROJECTED_AMBIENT_COUNT_THRESHOLD = 0 will "
+                                 "include all features which have even a single "
+                                 "count in any empty droplet.")
         parser.add_argument("--learning_rate",
                             type=float,
-                            required=False,
                             default=1e-4,
                             help="Training detail: lower learning rate for "
                                  "inference. A OneCycle learning rate schedule "
-                                 "is used, where the upper learning rate is "
-                                 "ten times this value. (For this value, "
-                                 "probably do not exceed 1e-3). (default: "
-                                 "0.0001)")
+                                 "is used, where the upper learning rate is ten "
+                                 "times this value. (For this value, probably "
+                                 "do not exceed 1e-3).")
+        parser.add_argument("--checkpoint_mins", # new in v0.3.0
+                            type=float,
+                            default=7.,
+                            help="Checkpoint file will be saved periodically, "
+                                 "with this many minutes between each checkpoint.")
         parser.add_argument("--final_elbo_fail_fraction",
                             type=float,
-                            required=False,
-                            default=None,
                             help="Training is considered to have failed if "
-                                 "(best_test_ELBO - final_test_ELBO)/"
-                                 "(best_test_DLBO - initial_train_ELBO) > "
-                                 "FINAL_ELBO_FAIL_FRACTION.(default: do not "
-                                 "fail training based on final_training_ELBO)")
+                                 "(best_test_ELBO - final_test_ELBO)/(best_test_ELBO "
+                                 "- initial_test_ELBO) > FINAL_ELBO_FAIL_FRACTION.  Training will "
+                                 "automatically re-run if --num-training-tries > "
+                                 "1.  By default, will not fail training based "
+                                 "on final_training_ELBO.")
         parser.add_argument("--epoch_elbo_fail_fraction",
                             type=float,
-                            required=False,
-                            default=None,
                             help="Training is considered to have failed if "
-                                 "(previous_epoch_test_ELBO - "
-                                 "current_epoch_test_ELBO)/"
-                                 "(previous_epoch_test_ELBO - "
-                                 "initial_train_ELBO) > "
-                                 "EPOCH_ELBO_FAIL_FRACTION.(default: do not "
-                                 "fail training based on epoch_training_ELBO)")
+                                 "(previous_epoch_test_ELBO - current_epoch_test_ELBO)"
+                                 "/(previous_epoch_test_ELBO - initial_train_ELBO) "
+                                 "> EPOCH_ELBO_FAIL_FRACTION.  Training will "
+                                 "automatically re-run if --num-training-tries > "
+                                 "1.  By default, will not fail training based "
+                                 "on epoch_training_ELBO.")
         parser.add_argument("--num_training_tries",
                             type=int,
-                            required=False,
                             default=1,
-                            help=" Number of times to attempt to train the "
-                                 "model. Each subsequent attempt the learning "
-                                 "rate is multiplied by "
-                                 "LEARNING_RATE_RETRY_MULT. (default: 1)")
-        parser.add_argument("--learning_rate_retry_mult",
+                            help="Number of times to attempt to train the model.  "
+                                 "At each subsequent attempt, the learning rate is "
+                                 "multiplied by LEARNING_RATE_RETRY_MULT.")
+        parser.add_argument("--learning_rate_retry_mult", # default decreased from 0.5 to 0.2 in v0.3.0
                             type=float,
-                            required=False,
-                            default=0.5,
-                            help="Learning rate is multiplied by this amount "
-                                 "each time (default: 0.5)")
-        parser.add_argument("--posterior_batch_size",
+                            default=0.2,
+                            help="Learning rate is multiplied by this amount each "
+                                 "time a new training attempt is made.  (This "
+                                 "parameter is only used if training fails based "
+                                 "on EPOCH_ELBO_FAIL_FRACTION or "
+                                 "FINAL_ELBO_FAIL_FRACTION and NUM_TRAINING_TRIES"
+                                 " is > 1.)")
+        parser.add_argument("--posterior_batch_size", # default increased from 20 to 128
                             type=int,
-                            required=False,
-                            default=20,
-                            help="Size of batches when creating the posterior. "
-                                 "Reduce this to avoid running out of GPU "
-                                 "memory creating the posterior (will be "
-                                 "slower). (default: 20)")
-        parser.add_argument("--cells_posterior_reg_calc",
+                            default=128,
+                            help="Training detail: size of batches when creating "
+                                 "the posterior.  Reduce this to avoid running "
+                                 "out of GPU memory creating the posterior "
+                                 "(will be slower).")
+        parser.add_argument("--posterior_regularization", # new in v0.3.0
+                            type=str,
+                            default=None,
+                            choices=["PRq", "PRmu", "PRmu_gene"],
+                            help="Posterior regularization method. (For experts: "
+                                 "not required for normal usage, see "
+                                 "documentation). PRq is approximate quantile-"
+                                 "targeting. PRmu is approximate mean-targeting "
+                                 "aggregated over genes (behavior of v0.2.0). "
+                                 "PRmu_gene is approximate mean-targeting per "
+                                 "gene.")
+        parser.add_argument("--alpha", # new in v0.3.0
+                            type=float,
+                            default=None,
+                            help="Tunable parameter alpha for the PRq posterior "
+                                 "regularization method (not normally used: see "
+                                 "documentation).")
+        parser.add_argument("--q", # new in v0.3.0
+                            type=float,
+                            default=None,
+                            help="Tunable parameter q for the CDF threshold "
+                                 "estimation method (not normally used: see "
+                                 "documentation).")
+        parser.add_argument("--estimator", # new in v0.3.0
+                            type=str,
+                            default="mckp",
+                            choices=["map", "mean", "cdf", "sample", "mckp"],
+                            help="Output denoised count estimation method. (For "
+                                 "experts: not required for normal usage, see "
+                                 "documentation).")
+        parser.add_argument("--estimator_multiple_cpu", # new in v0.3.0
+                            action="store_true",
+                            default=False,
+                            help="Including the flag --estimator-multiple-cpu will "
+                                 "use more than one CPU to compute the MCKP "
+                                 "output count estimator in parallel (does "
+                                 "nothing for other estimators).")
+        parser.add_argument("--constant_learning_rate", # new in v0.3.0
+                            action="store_true",
+                            default=False,
+                            help="Including the flag --constant-learning-rate will "
+                                 "use the ClippedAdam optimizer instead of the "
+                                 "OneCycleLR learning rate schedule, which is "
+                                 "the default.  Learning is faster with the "
+                                 "OneCycleLR schedule.  However, training can "
+                                 "easily be continued from a checkpoint for more "
+                                 "epochs than the initial command specified when "
+                                 "using ClippedAdam.  On the other hand, if using "
+                                 "the OneCycleLR schedule with 150 epochs "
+                                 "specified, it is not possible to pick up from "
+                                 "that final checkpoint and continue training "
+                                 "until 250 epochs.")
+        parser.add_argument("--cpu_threads", # new in v0.3.0
                             type=int,
-                            required=False,
-                            default=100,
-                            help="Number of cells used to estimate posterior "
-                                 "regularization lambda. (default: 100)")
+                            default=None,
+                            help="Number of threads to use when pytorch is run "
+                                 "on CPU. Defaults to the number of logical cores.")
 
         return parser.parse_args()
 
@@ -505,6 +538,7 @@ class main():
         metrics_data = []
         arguments = self.filter_arguments()
         info = []
+        aggregation_data = []
         for path in glob.glob(os.path.join(self.inputdir, "*")):
             folder = os.path.basename(path)
             if not os.path.isdir(path):
@@ -536,6 +570,7 @@ class main():
             if not os.path.exists(outpath):
                 os.makedirs(outpath)
             output = os.path.join(self.workdir, folder, "cellbender_remove_background_output.h5")
+            aggregation_data.append([folder, output])
 
             # Check if sample is being rerun.
             sample_rerun = False
@@ -550,7 +585,14 @@ class main():
                                                               arguments=arguments)
             info.append((jobfile_path, logfile_path, folder, sample_rerun))
 
-        print("Saving aggregated metrics file")
+        print("Saving aggregated files")
+        aggregation_df = pd.DataFrame(aggregation_data, columns=["sample_id", "molecule_h5"])
+        print(aggregation_df)
+        self.save_file(df=aggregation_df,
+                       outpath=os.path.join(self.workdir, "aggregation.csv"),
+                       sep=",",
+                       index=False)
+
         metrics_df = pd.concat(metrics_data, axis=0)
         print(metrics_df)
         self.save_file(df=metrics_df, outpath=os.path.join(self.workdir, "metrics_summary.txt.gz"))
@@ -558,7 +600,7 @@ class main():
         print("Starting job files.")
         for jobfile_path, logfile_path, folder, sample_rerun in info:
             if os.path.exists(logfile_path):
-                success = self.parse_logfile(logfile_path)
+                success, expected_cells_error = self.parse_logfile(logfile_path)
                 if success:
                     if sample_rerun:
                         print("\tRerunning sample '{}' with adjusted learning rate".format(folder))
@@ -566,7 +608,11 @@ class main():
                         print("\tSample '{}' already completed successfully!".format(folder))
                         continue
                 else:
-                    print("\tSample '{}' failed. Rerunning sample.".format(folder))
+                    if expected_cells_error:
+                        print("\tSample '{}' failed due to total droplets included being heigher than the number of cells.".format(folder))
+                        continue
+                    else:
+                        print("\tSample '{}' failed. Rerunning sample.".format(folder))
 
             command = ['sbatch', jobfile_path]
             self.run_command(command)
@@ -640,11 +686,15 @@ class main():
                  "#SBATCH --export=NONE",
                  "#SBATCH --get-user-env=L",
                  "",
-                 "cd {} || exit".format(self.workdir),
+                 "cd {} || exit".format(os.path.join(self.workdir, sample)),
                  "",
-                 "cellbender remove-background \\",
-                 "  --input={} \\".format(input),
-                 "  --output={} \\".format(output)
+                 "singularity exec \\",
+                 "  --nv \\",
+                 "  --bind /groups/umcg-biogen/tmp02/,/groups/umcg-biogen/tmp02/users/umcg-mvochteloo/simulated_home:/home/umcg-mvochteloo \\",
+                 "  /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/cellbender-v0.3.0.simg \\",
+                 "  cellbender remove-background \\",
+                 "    --input={} \\".format(input),
+                 "    --output={} \\".format(output)
                  ]
 
         insert_index = 5
@@ -664,9 +714,9 @@ class main():
 
         for name, value in arguments.items():
             if isinstance(value, bool):
-                lines.append("  --{} \\".format(name))
+                lines.append("    --{} \\".format(name))
             else:
-                lines.append("  --{}={} \\".format(name, value))
+                lines.append("    --{}={} \\".format(name, value))
 
         if lines[-1].endswith("\\"):
             lines[-1] = lines[-1].strip("\\")
@@ -692,17 +742,25 @@ class main():
         inference_completed = False
         training_success = False
         completed = False
+        expected_cells_error = False
         with open(logfile_path, 'r') as f:
             for line in f:
+                if 'Running remove-background' in line:
+                    inference_completed = False
+                    training_success = False
+                    completed = False
+                    expected_cells_error = False
                 if 'Inference procedure complete.' in line:
                        inference_completed = True
                 if 'Training succeeded' in line:
                        training_success = True
                 if 'Completed remove-background.' in line:
                        completed = True
+                if 'AssertionError: The number of cells is' in line:
+                    expected_cells_error = True
         f.close()
 
-        return inference_completed and training_success and completed
+        return inference_completed and training_success and completed, expected_cells_error
 
     def run_command(self, command):
         print("\t" + " ".join(command))

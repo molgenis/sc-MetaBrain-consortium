@@ -82,6 +82,15 @@ Syntax:
     --scRNAseq_dir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019 \
     --snp_genotypes_filepath /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation/vcf_all_merged/Mathys/Mathys_imputed_hg38_R2_0.3_MAF0.05.vcf \
     --individual_list_dir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019/individual_list_dir
+    
+### Roche ###
+./initialize_wg1_files.py \
+    --step 1 \
+    --work_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-21-WorkGroup1QC \
+    --ref_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-21-WorkGroup1QC/hg38 \
+    --dataset_outdir 2023-08-23-Roche \
+    --imputation_subdir 2023-08-21-Imputation \
+    --plink_dir 
 """
 
 
