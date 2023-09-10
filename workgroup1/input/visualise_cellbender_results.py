@@ -3,7 +3,7 @@
 """
 File:         visualise_cellbender_results.py
 Created:      2023/07/07
-Last Changed: 2023/07/11
+Last Changed: 2023/09?10
 Author:       M.Vochteloo
 
 Copyright (C) 2022 University Medical Center Groningen.
@@ -34,7 +34,7 @@ import re
 import numpy as np
 import pandas as pd
 import h5py
-from sklearn.decomposition import PCA
+import torch
 import seaborn as sns
 import matplotlib
 matplotlib.use('Agg')
@@ -60,35 +60,10 @@ __description__ = "{} is a program developed and maintained by {}. " \
 """
 Syntax: 
 
-### Mathys2019 ###
-./visualise_cellbender_results.py \
-    --workdir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-03-23-CellBender/2023-03-23-Mathys2019
-    
-./visualise_cellbender_results.py \
-    --workdir /scratch/p301710/2023-03-28-scMetaBrainConsortium/output/2023-03-28-CellBender/2023-03-28-Mathys2019
-    
-./visualise_cellbender_results.py \
-    --workdir /scratch/p301710/2023-03-28-scMetaBrainConsortium/output/2023-03-28-CellBender/2023-07-07-Mathys2019
-
-
 ## Zhou 2020 ###
 ./visualise_cellbender_results.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-07-07-Zhou2020
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-Default
 
-./visualise_cellbender_results.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-07-10-Zhou2020-CellRangerExpectedCells
-
-## Roche Columbia 2022 ###
-./visualise_cellbender_results.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-08-21-RocheAD2022
-
-## Roche AD 2022 ###
-./visualise_cellbender_results.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-08-22-RocheColumbia2022
-    
-## Roche MS 2022 ###
-./visualise_cellbender_results.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-08-23-RocheMS2022
 """
 
 
@@ -136,12 +111,15 @@ class main():
         stats_data = []
         training_data = []
         test_data = []
+        cell_size_data = []
         cell_prob_data = []
         latent_gene_encoding_data = []
 
         print("Loading results.")
         for path in glob.glob(os.path.join(self.workdir, "*")):
             folder = os.path.basename(path)
+            # if folder not in  ["R1375133", "R2008064"]:
+            #     continue
             output = os.path.join(self.workdir, folder, "cellbender_remove_background_output.h5")
             if not os.path.exists(output):
                 continue
@@ -150,17 +128,27 @@ class main():
             resultfile = os.path.join(self.workdir, folder, "cellbender_remove_background_output.h5")
             if not os.path.exists(resultfile):
                 continue
-            stats_s, training_s, test_s, cell_prob_s, latent_gene_encoding_df = self.parse_results(resultfile, folder)
-            stats_s = pd.Series({"passed": True})
-            stats_s.name = folder
+            stats_s, training_s, test_s = self.parse_results(resultfile, folder)
+
+            posteriorfile = os.path.join(self.workdir, folder, "cellbender_remove_background_output_posterior.h5")
+            if not os.path.exists(posteriorfile):
+                continue
+            cell_size_s, cell_prob_s, latent_gene_encoding_df = self.parse_posterior(posteriorfile, folder)
+
+            # hf = h5py.File(posteriorfile, 'r')
+            # for key1 in hf.keys():
+            #     for key2 in hf.get(key1).keys():
+            #         print(key1, key2, hf.get('{}/{}'.format(key1, key2)))
+            # hf.close()
+            # exit()
+
+            metricsfile = os.path.join(self.workdir, folder, "cellbender_remove_background_output_metrics.csv")
+            if os.path.exists(metricsfile):
+                stats_s = self.add_stats_from_metrics(stats_s, metricsfile)
 
             logfile = os.path.join(self.workdir, folder, "cellbender_remove_background_output.log")
             if os.path.exists(logfile):
                 stats_s = self.add_stats_from_log(stats_s, logfile)
-
-            barcodesfile = os.path.join(self.workdir, folder, "cellbender_remove_background_output_cell_barcodes.csv")
-            if os.path.exists(barcodesfile):
-                stats_s["barcodes"] = self.count_barcodes(barcodesfile)
 
             if not stats_s["passed"]:
                 print("\t  Error in log file! Please rerun.")
@@ -169,6 +157,7 @@ class main():
             stats_data.append(stats_s)
             training_data.append(training_s)
             test_data.append(test_s)
+            cell_size_data.append(cell_size_s)
             cell_prob_data.append(cell_prob_s)
             latent_gene_encoding_data.append(latent_gene_encoding_df)
 
@@ -185,18 +174,21 @@ class main():
         test_df = pd.concat(test_data, axis=1)
         self.save_file(df=test_df, outpath=os.path.join(self.workdir, "cellbender_remove_background_test_loss.txt.gz"))
 
+        cell_size_df = pd.concat(cell_size_data, axis=1)
+        self.save_file(df=cell_size_df, outpath=os.path.join(self.workdir, "cellbender_remove_background_latent_cell_size.txt.gz"))
+
         cell_prob_df = pd.concat(cell_prob_data, axis=1)
         self.save_file(df=cell_prob_df, outpath=os.path.join(self.workdir, "cellbender_remove_background_latent_cell_probability.txt.gz"))
 
         latent_gene_encoding_df = pd.concat(latent_gene_encoding_data, axis=0)
-        self.save_file(df=latent_gene_encoding_df, outpath=os.path.join(self.workdir, "cellbender_remove_background_latent_gene_encoding.txt.gz"))
+        # self.save_file(df=latent_gene_encoding_df, outpath=os.path.join(self.workdir, "cellbender_remove_background_latent_gene_encoding.txt.gz"))
 
         print("Visualising results.")
         validation_df, sample_order = self.visualise_training_procedure(training_df, test_df)
         self.save_file(df=validation_df, outpath=os.path.join(self.workdir, "cellbender_remove_background_training_validation.txt.gz"))
 
         self.visualise_stats(stats_df, sample_order=sample_order)
-        self.visualise_cell_determination(cell_prob_df=cell_prob_df, sample_order=sample_order)
+        self.visualise_cell_determination(cell_size_df=cell_size_df, cell_prob_df=cell_prob_df, sample_order=sample_order)
         self.visualise_latent_gene_encoding(latent_gene_encoding_df=latent_gene_encoding_df, sample_order=sample_order)
 
     @staticmethod
@@ -205,51 +197,67 @@ class main():
 
         # stats
         stats_s = pd.Series({"passed": False,
-                             "overdispersion_mean": float(np.array(hf.get('matrix/overdispersion_mean_and_scale'))[0]),
-                             "overdispersion_scale": float(np.array(hf.get('matrix/overdispersion_mean_and_scale'))[1]),
-                             "contamination_fraction_rho_alpha": float(np.array(hf.get('matrix/contamination_fraction_params'))[0]),
-                             "contamination_fraction_rho_beta": float(np.array(hf.get('matrix/contamination_fraction_params'))[1]),
-                             "lambda_multiplier": float(np.array(hf.get('matrix/lambda_multiplier'))),
-                             "target_false_positive_rate": float(np.array(hf.get('matrix/target_false_positive_rate'))),
-                             "fraction_data_used_for_testing": float(np.array(hf.get('matrix/fraction_data_used_for_testing')))
+                             "estimator": np.array(hf.get('metadata/estimator'))[0].decode(),
+                             "fraction_data_used_for_testing": float(np.array(hf.get('metadata/fraction_data_used_for_testing'))[0]),
+                              "target_false_positive_rate": float(np.array(hf.get('metadata/target_false_positive_rate'))[0])
                              })
         stats_s.name= folder
 
         # training loss
-        training_s = pd.Series(np.array(hf.get('matrix/training_elbo_per_epoch')))
-        training_s.index = np.arange(0, training_s.shape[0], 1)
+        training_s = pd.Series(np.array(hf.get('metadata/learning_curve_train_elbo')))
+        training_s.index = pd.Series(np.array(hf.get('metadata/learning_curve_train_epoch')))
         training_s.name = folder
 
         # test loss
-        test_s = pd.Series(np.array(hf.get('matrix/test_elbo')))
-        test_s.index = pd.Series(np.array(hf.get('matrix/test_epoch')))
+        test_s = pd.Series(np.array(hf.get('metadata/learning_curve_test_elbo')))
+        test_s.index = pd.Series(np.array(hf.get('metadata/learning_curve_test_epoch')))
         test_s.name = folder
 
+        hf.close()
+
+        return stats_s, training_s, test_s
+
+    @staticmethod
+    def parse_posterior(posteriorfile, folder):
+        hf = h5py.File(posteriorfile, 'r')
+
+        # cel size.
+        cell_size_s = pd.Series(np.array(hf.get('droplet_latents_map/d')))
+        cell_size_s.name = folder
+
         # cel probabilities.
-        p = np.array(hf.get('matrix/latent_cell_probability'))
+        p = np.array(hf.get('droplet_latents_map/p'))
         cell_prob_s = pd.Series(p)
         cell_prob_s.name = folder
 
         # latent encoding.
-        z = np.array(hf.get('matrix/latent_gene_encoding'))
-        d = np.array(hf.get('matrix/latent_scale'))
-        pca = PCA(n_components=2)
-        if p is None:
-            p = np.ones_like(d)
-        z_pca = pca.fit_transform(z[p >= 0.5])
-        latent_gene_encoding_df = pd.DataFrame(z_pca[:, :2], columns=["PC0", "PC1"])
+        z = np.array(hf.get('droplet_latents_map/z'))
+        A = torch.as_tensor(z[p >= 0.5]).float()
+        U, S, V = torch.pca_lowrank(A)
+        z_pca = torch.matmul(A, V[:, :2])
+        latent_gene_encoding_df = pd.DataFrame(z_pca.numpy(), columns=["PC0", "PC1"])
         latent_gene_encoding_df["sample"] = folder
 
         hf.close()
 
-        return stats_s, training_s, test_s, cell_prob_s, latent_gene_encoding_df
+        return cell_size_s, cell_prob_s, latent_gene_encoding_df
 
+    @staticmethod
+    def add_stats_from_metrics(stats_s, metricsfile):
+        with open(metricsfile, 'r') as f:
+            for line in f:
+                label, value = line.split(",")
+                stats_s[label] = float(value)
+        f.close()
+
+        return stats_s
 
     @staticmethod
     def add_stats_from_log(stats_s, logfile):
         input_keys = stats_s.keys()
         start_datetime = None
         end_datetime = None
+        completed = False
         with open(logfile, 'r') as f:
             for line in f:
                 if line.startswith("cellbender remove-background"):
@@ -257,25 +265,31 @@ class main():
                         if "=" in part:
                             key, value = part.split("=")
                             try:
-                                stats_s["parameter:" + key] = float(value)
+                                stats_s["parameter:" + key] = float(value.strip("\n"))
                             except ValueError:
                                 pass
                         else:
                             stats_s[part] = 1
-                elif "Training succeeded" in line:
+                elif "Completed remove-background." in line:
                     stats_s["passed"] = True
                 elif re.search("(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})", line):
                     tmp_datetime = datetime.strptime(re.search("(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})", line).group(0), "%Y-%m-%d %H:%M:%S")
                     if start_datetime is None:
                         start_datetime = tmp_datetime
-                    else:
+                    elif completed:
                         end_datetime = tmp_datetime
-                elif re.search("Including ([0-9]+) genes that have nonzero counts.", line):
-                    stats_s["nonzero_genes"] = int(re.search("Including ([0-9]+) genes that have nonzero counts.", line).group(1))
-                elif re.search("Prior on counts in empty droplets is ([0-9]+)", line):
-                    stats_s["prior_counts_empty"] = int(re.search("Prior on counts in empty droplets is ([0-9]+)", line).group(1))
+                elif re.search("Features in dataset: ([0-9]+) Gene Expression", line):
+                    stats_s["features"] = int(re.search("Features in dataset: ([0-9]+) Gene Expression", line).group(1))
+                elif re.search("([0-9]+) features have nonzero counts.", line):
+                    stats_s["nonzero_genes"] = int(re.search("([0-9]+) features have nonzero counts.", line).group(1))
                 elif re.search("Prior on counts for cells is ([0-9]+)", line):
-                    stats_s["prior_counts_cell"] = int(re.search("Prior on counts for cells is ([0-9]+)", line).group(1))
+                    stats_s["prior_counts_empty"] = int(re.search("Prior on counts for cells is ([0-9]+)", line).group(1))
+                elif re.search("Prior on counts for empty droplets is ([0-9]+)", line):
+                    stats_s["prior_counts_cell"] = int(re.search("Prior on counts for empty droplets is ([0-9]+)", line).group(1))
+                elif re.search("Excluding ([0-9]+) features that are estimated to have <= 0.1 background counts in cells.", line):
+                    stats_s["excluded_features"] = int(re.search("Excluding ([0-9]+) features that are estimated to have <= 0.1 background counts in cells.", line).group(1))
+                elif re.search("Including ([0-9]+) features in the analysis.", line):
+                    stats_s["included_features"] = int(re.search("Including ([0-9]+) features in the analysis.", line).group(1))
                 elif re.search("Excluding barcodes with counts below ([0-9]+)", line):
                     stats_s["barcodes_threshold"] = int(re.search("Excluding barcodes with counts below ([0-9]+)", line).group(1))
                 elif re.search("Using ([0-9]+) probable cell barcodes, plus an additional ([0-9]+) barcodes, and ([0-9]+) empty droplets.", line):
@@ -285,22 +299,12 @@ class main():
                     stats_s["empty_droplets"] = int(match.group(3))
                 elif re.search("Largest surely-empty droplet has ([0-9]+) UMI counts.", line):
                     stats_s["max_empty_droplet_count"] = int(re.search("Largest surely-empty droplet has ([0-9]+) UMI counts.", line).group(1))
-                # elif re.search("\[epoch ([0-9]+)]  average training loss: ([0-9]+.[0-9]+)", line):
-                #     match = re.search("\[epoch ([0-9]+)]  average training loss: ([0-9]+.[0-9]+)", line)
-                #     epoch = int(match.group(1))
-                #     training_loss = float(match.group(2))
-                #     training_data[epoch] = training_loss
-                # elif re.search("\[epoch ([0-9]+)] average test loss: ([0-9]+.[0-9]+)", line):
-                #     match = re.search("\[epoch ([0-9]+)] average test loss: ([0-9]+.[0-9]+)", line)
-                #     epoch = int(match.group(1))
-                #     test_loss = float(match.group(2))
-                #     test_data[epoch] = test_loss
-                elif re.search("Optimal posterior regularization factor = ([0-9]+.[0-9]+)", line):
-                    stats_s["optimal_regular_factor"] = float(re.search("Optimal posterior regularization factor = ([0-9]+.[0-9]+)", line).group(1))
                 elif "Learning failed.  Retrying with learning-rate " in line:
                     stats_s.drop(labels=[label for label in stats_s.index if label not in input_keys], inplace=True)
                     start_datetime = end_datetime
                     end_datetime = None
+                elif "Completed remove-background." in line:
+                    completed = True
                 else:
                     pass
         f.close()
@@ -388,50 +392,9 @@ class main():
         df = df.melt(id_vars=["index"])
         df.columns = ["sample", "variable", "value"]
 
-        df["variable"] = df["variable"].map({
-            "overdispersion_mean": "overdispersion (mean)",
-            "overdispersion_scale": "overdispersion (scale)",
-            "contamination_fraction_rho_alpha": "contamination fraction distribution rho alpha",
-            "contamination_fraction_rho_beta": "contamination fraction distribution rho beta",
-            "target_false_positive_rate": "target false positive rate",
-            "lambda_multiplier": "lambda multiplier",
-            "fraction_data_used_for_testing": "fraction data used for testing",
-            "nonzero_genes": "genes with nonzero counts",
-            "prior_counts_empty": "prior counts in empty droplets",
-            "prior_counts_cell": "prior counts for cells",
-            "barcodes_threshold": "excluding barcodes <N counts",
-            "probable_cell_barcodes": "N probable cell barcodes",
-            "additional_barcodes": "N additional barcodes",
-            "total_barcodes": "N total barcodes",
-            "empty_droplets": "N empty droplets",
-            "max_empty_droplet_count": "largest surely-empty droplet UMI",
-            "optimal_regular_factor": "optimal posterior regularization factor",
-            "time": "time (minutes)",
-            "barcodes": "N barcodes"
-        })
-
         self.barplot(
             df=df,
-            panels=[panel for panel in ["overdispersion (mean)",
-                                        "overdispersion (scale)",
-                                        "contamination fraction distribution rho alpha",
-                                        "contamination fraction distribution rho beta",
-                                        "target false positive rate",
-                                        "lambda multiplier",
-                                        "fraction data used for testing",
-                                        "genes with nonzero counts",
-                                        "prior counts in empty droplets",
-                                        "prior counts for cells",
-                                        "excluding barcodes <N counts",
-                                        "N probable cell barcodes",
-                                        "N additional barcodes",
-                                        "N total barcodes",
-                                        "N empty droplets",
-                                        "largest surely-empty droplet UMI",
-                                        "optimal posterior regularization factor",
-                                        "time (minutes)",
-                                        "N barcodes"]
-                    if panel in df["variable"].unique()],
+            panels=[panel for panel in df["variable"].unique() if panel not in ["estimator"]],
             x="sample",
             y="value",
             panel="variable",
@@ -512,22 +475,32 @@ class main():
             print("\tSaved figure: {}".format(os.path.basename(outpath)))
         plt.close()
 
-    def visualise_cell_determination(self, cell_prob_df, sample_order):
-        plot_df = cell_prob_df.copy()
-        plot_df.reset_index(drop=False, inplace=True)
-        plot_df = plot_df.melt(id_vars=["index"])
-        plot_df.columns = ["index", "sample", "value"]
+    def visualise_cell_determination(self, cell_size_df, cell_prob_df, sample_order):
+        cell_size_melt_df = cell_size_df.copy()
+        cell_size_melt_df.reset_index(drop=False, inplace=True)
+        cell_size_melt_df = cell_size_melt_df.melt(id_vars=["index"])
+        cell_size_melt_df.columns = ["index", "sample", "d"]
+
+        cell_prob_melt_df = cell_prob_df.copy()
+        cell_prob_melt_df.reset_index(drop=False, inplace=True)
+        cell_prob_melt_df = cell_prob_melt_df.melt(id_vars=["index"])
+        cell_prob_melt_df.columns = ["index", "sample", "p"]
+
+        plot_df = cell_size_melt_df.merge(cell_prob_melt_df, on=["index", "sample"])
+        plot_df.dropna(inplace=True)
 
         self.plot_per_sample(
             df=plot_df,
             samples=sample_order,
-            plottype="scatter",
+            plottype="multi",
             x="index",
-            y="value",
+            y="d",
+            y2="p",
             color="red",
             alpha=0.3,
             xlabel="Barcode index",
-            ylabel="Cell probability",
+            ylabel="UMI counts",
+            ylabel2="Cell probability",
             title="Determination of which barcodes contain cells",
             filename="cellbender_remove_background_latent_cell_probability"
         )
@@ -547,9 +520,9 @@ class main():
         )
 
 
-    def plot_per_sample(self, df, samples, plottype, subtitles=None, x="x", y="y", alpha=1.0,
-                            sample_column="sample", hue=None, color="black", palette=None,
-                            xlabel="", ylabel="", title="", filename="plot"):
+    def plot_per_sample(self, df, samples, plottype, subtitles=None, x="x", y="y", y2=None,
+                        alpha=1.0, sample_column="sample", hue=None, color="black", palette=None,
+                        xlabel="", ylabel="", ylabel2="", title="", filename="plot"):
         if subtitles is not None and len(subtitles) != len(samples):
             print("Error, subtitles are not the same length as the samples")
             return
@@ -608,8 +581,35 @@ class main():
                                     hue=hue,
                                     color=color,
                                     alpha=alpha,
+                                    s=10,
                                     palette=palette,
                                     ax=ax)
+                elif plottype == "multi":
+                    g = sns.lineplot(data=data,
+                                     x=x,
+                                     y=y,
+                                     hue=hue,
+                                     color="black",
+                                     alpha=1,
+                                     palette=palette,
+                                     ax=ax)
+                    ax.set(yscale="log")
+                    ax2 = ax.twinx()
+
+                    sns.scatterplot(data=data,
+                                    x=x,
+                                    y=y2,
+                                    hue=hue,
+                                    color=color,
+                                    alpha=alpha,
+                                    s=10,
+                                    palette=palette,
+                                    ax=ax2)
+
+                    ax2.set_ylabel(ylabel2,
+                                   color=color,
+                                   fontsize=10,
+                                   fontweight='bold')
 
                 ax.set_xlabel(xlabel,
                               fontsize=10,

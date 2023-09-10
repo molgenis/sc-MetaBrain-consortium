@@ -60,15 +60,13 @@ Syntax:
     --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-Default \
     --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Zhou2020/ \
     --gres gpu:a40:1 \
-    --time 05:55:00 \
     --cuda \
     --dry_run
     
 ./run_cellbender.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-ExtendedEpochLowLearn \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-Zhou2020-ExtendedEpochLowLearn \
     --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Zhou2020/ \
     --gres gpu:a40:1 \
-    --time 05:55:00 \
     --epochs 300 \
     --cuda \
     --learning_rate 1e-5 \
@@ -78,7 +76,6 @@ Syntax:
     --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-ExtendedEpochLowLearn-CellRangerExpectedCells \
     --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Zhou2020/ \
     --gres gpu:a40:1 \
-    --time 05:55:00 \
     --expected_cells -1 \
     --epochs 300 \
     --cuda \
@@ -275,9 +272,9 @@ class main():
         parser.add_argument("--mem",
                             type=int,
                             required=False,
-                            default=8,
+                            default=16,
                             help="Restricts CellBender to use specified amount "
-                                 "of memory (in GB). (default: 8)")
+                                 "of memory (in GB). (default: 16)")
         parser.add_argument("--preflights",
                             nargs="+",
                             type=str,
@@ -600,7 +597,7 @@ class main():
         print("Starting job files.")
         for jobfile_path, logfile_path, folder, sample_rerun in info:
             if os.path.exists(logfile_path):
-                success, expected_cells_error = self.parse_logfile(logfile_path)
+                success, missing = self.parse_logfile(logfile_path)
                 if success:
                     if sample_rerun:
                         print("\tRerunning sample '{}' with adjusted learning rate".format(folder))
@@ -608,8 +605,8 @@ class main():
                         print("\tSample '{}' already completed successfully!".format(folder))
                         continue
                 else:
-                    if expected_cells_error:
-                        print("\tSample '{}' failed due to total droplets included being heigher than the number of cells.".format(folder))
+                    if len(missing) != 0:
+                        print("\tSample '{}' failed due to missing '{}'.".format(folder, ", ".join(missing)))
                         continue
                     else:
                         print("\tSample '{}' failed. Rerunning sample.".format(folder))
@@ -740,27 +737,51 @@ class main():
     @staticmethod
     def parse_logfile(logfile_path):
         inference_completed = False
-        training_success = False
+        posterior_added = False
+        saved_summary_plots = False
+        saved_barcodes = False
+        saved_output = 0
+        saved_metrics = False
+        saved_report = False
         completed = False
-        expected_cells_error = False
         with open(logfile_path, 'r') as f:
             for line in f:
                 if 'Running remove-background' in line:
                     inference_completed = False
-                    training_success = False
+                    posterior_added = False
+                    saved_summary_plots = False
+                    saved_barcodes = False
+                    saved_output = 0
+                    saved_metrics = False
+                    saved_report = False
                     completed = False
-                    expected_cells_error = False
                 if 'Inference procedure complete.' in line:
-                       inference_completed = True
-                if 'Training succeeded' in line:
-                       training_success = True
+                    inference_completed = True
+                if 'Added posterior object to checkpoint file.' in line:
+                    posterior_added = True
+                if 'Saved summary plots as' in line:
+                    saved_summary_plots = True
+                if 'Saved cell barcodes in' in line:
+                    saved_barcodes = True
+                if 'Succeeded in writing CellRanger format output to file' in line:
+                    saved_output += 1
+                if 'Saved output metrics as' in line:
+                    saved_metrics = True
+                if 'Succeeded in writing report to' in line:
+                    saved_report = True
                 if 'Completed remove-background.' in line:
-                       completed = True
-                if 'AssertionError: The number of cells is' in line:
-                    expected_cells_error = True
+                    completed = True
         f.close()
 
-        return inference_completed and training_success and completed, expected_cells_error
+        missing = [label for variable, label in [(inference_completed, "inference"),
+                                                 (posterior_added, "posterior"),
+                                                 (saved_summary_plots, "summary"),
+                                                 (saved_barcodes, "barcodes"),
+                                                 (saved_output == 2, "output"),
+                                                 (saved_metrics, "metrics"),
+                                                 (saved_report, "report")] if not variable]
+
+        return inference_completed and posterior_added and saved_summary_plots and saved_barcodes and saved_output == 2 and saved_metrics and saved_report and completed, missing
 
     def run_command(self, command):
         print("\t" + " ".join(command))
