@@ -476,6 +476,9 @@ class main():
         plt.close()
 
     def visualise_cell_determination(self, cell_size_df, cell_prob_df, sample_order):
+        # TODO: reorder based on cell size. I tried this but then the cell procentage scatterplot does not match the
+        #  CellBender output figure. If I don't reorder, then the UMI line does not match.
+
         cell_size_melt_df = cell_size_df.copy()
         cell_size_melt_df.reset_index(drop=False, inplace=True)
         cell_size_melt_df = cell_size_melt_df.melt(id_vars=["index"])

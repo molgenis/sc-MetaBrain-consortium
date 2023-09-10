@@ -26,6 +26,7 @@ from __future__ import print_function
 import subprocess
 import argparse
 import glob
+import math
 import os
 
 # Third party imports.
@@ -57,7 +58,7 @@ TIME_DICT = {
 Syntax: 
 ### Zhou 2020 ###
 ./run_cellbender.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-Default \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-Zhou2020-test \
     --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Zhou2020/ \
     --gres gpu:a40:1 \
     --cuda \
@@ -73,7 +74,7 @@ Syntax:
     --dry_run
 
 ./run_cellbender.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-ExtendedEpochLowLearn-CellRangerExpectedCells \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-Zhou2020-ExtendedEpochLowLearn-CellRangerExpectedCells \
     --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Zhou2020/ \
     --gres gpu:a40:1 \
     --expected_cells -1 \
@@ -272,9 +273,9 @@ class main():
         parser.add_argument("--mem",
                             type=int,
                             required=False,
-                            default=16,
+                            default=-1,
                             help="Restricts CellBender to use specified amount "
-                                 "of memory (in GB). (default: 16)")
+                                 "of memory (in GB). (default: -1)")
         parser.add_argument("--preflights",
                             nargs="+",
                             type=str,
@@ -557,6 +558,12 @@ class main():
             metrics_df.index = [folder]
             metrics_data.append(metrics_df)
 
+            mem = self.mem
+            if self.mem == -1:
+                # Using a predicted memory usage based on the CellRanger number of cells.
+                cellranger_expected_cells = int(metrics_df.loc[folder, "Estimated Number of Cells"])
+                mem = int(math.ceil(3.5 + cellranger_expected_cells * 0.0015))
+
             if self.expected_cells == -1:
                 # Using CellRanger expected number of cells.
                 cellranger_expected_cells = int(metrics_df.loc[folder, "Estimated Number of Cells"])
@@ -577,6 +584,7 @@ class main():
 
             # Create job files.
             jobfile_path, logfile_path = self.create_job_file(sample=folder,
+                                                              mem=mem,
                                                               input=input,
                                                               output=output,
                                                               arguments=arguments)
@@ -667,7 +675,7 @@ class main():
                                       df.shape))
         return df
 
-    def create_job_file(self, sample, input, output, arguments):
+    def create_job_file(self, sample, mem, input, output, arguments):
         job_name = "cellbender_remove_background_{}".format(sample)
         logfile_path = os.path.join(self.jobs_outdir, job_name + ".out")
 
@@ -677,7 +685,7 @@ class main():
                  "#SBATCH --error={}".format(logfile_path),
                  "#SBATCH --time={}".format(self.time),
                  "#SBATCH --cpus-per-task={}".format(self.cpus_per_task),
-                 "#SBATCH --mem={}gb".format(self.mem),
+                 "#SBATCH --mem={}gb".format(mem),
                  "#SBATCH --nodes=1",
                  "#SBATCH --open-mode=append",
                  "#SBATCH --export=NONE",
