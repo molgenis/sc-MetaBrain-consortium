@@ -55,10 +55,10 @@ TIME_DICT = {
 }
 
 """
-Syntax: 
+Syntax:
 ### Zhou 2020 ###
 ./run_cellbender.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-Zhou2020-test \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-Default \
     --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Zhou2020/ \
     --gres gpu:a40:1 \
     --cuda \
@@ -81,6 +81,46 @@ Syntax:
     --epochs 300 \
     --cuda \
     --learning_rate 1e-5 \
+    --dry_run
+
+### Mathys2019 ###
+./run_cellbender.py \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-Mathys2019-Default \
+    --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Mathys2019/ \
+    --gres gpu:a40:1 \
+    --cuda \
+    --dry_run
+    
+### Cain 2023 ###
+./run_cellbender.py \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-Cain2023-Default \
+    --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Cain2023/ \
+    --gres gpu:a40:1 \
+    --cuda \
+    --dry_run
+
+### Roche Columbia 2022 ###
+./run_cellbender.py \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-RocheColumbia2022-Default \
+    --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheColumbia2022/ \
+    --gres gpu:a40:1 \
+    --cuda \
+    --dry_run
+
+### Roche AD 2022 ###
+./run_cellbender.py \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-RocheAD2022-Default \
+    --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheAD2022/ \
+    --gres gpu:a40:1 \
+    --cuda \
+    --dry_run
+
+### Roche MS 2022 ###
+./run_cellbender.py \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-RocheMS2022-Default \
+    --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheMS2022/ \
+    --gres gpu:a40:1 \
+    --cuda \
     --dry_run
 """
 
@@ -614,7 +654,7 @@ class main():
                         continue
                 else:
                     if len(missing) != 0:
-                        print("\tSample '{}' failed due to missing '{}'.".format(folder, ", ".join(missing)))
+                        print("\tSample '{}' uncompleted, missing: '{}'.".format(folder, ", ".join(missing)))
                         continue
                     else:
                         print("\tSample '{}' failed. Rerunning sample.".format(folder))
