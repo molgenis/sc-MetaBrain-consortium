@@ -58,7 +58,7 @@ TIME_DICT = {
 Syntax:
 ### Zhou 2020 ###
 ./run_cellbender.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-Default \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-test \
     --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Zhou2020/ \
     --gres gpu:a40:1 \
     --cuda \
@@ -131,6 +131,8 @@ class main():
         arguments = self.create_argument_parser()
         self.workdir = getattr(arguments, 'workdir')
         self.inputdir = getattr(arguments, 'inputdir')
+        self.bind_paths = getattr(arguments, 'bind_paths')
+        self.singularity = getattr(arguments, 'singularity')
         self.partition = getattr(arguments, 'partition')
         self.gpus_per_node = getattr(arguments, 'gpus_per_node')
         self.gres = getattr(arguments, 'gres')
@@ -735,8 +737,8 @@ class main():
                  "",
                  "singularity exec \\",
                  "  --nv \\",
-                 "  --bind /groups/umcg-biogen/tmp02/,/groups/umcg-biogen/tmp02/users/umcg-mvochteloo/simulated_home:/home/umcg-mvochteloo \\",
-                 "  /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/cellbender-v0.3.0.simg \\",
+                 "  --bind {} \\".format(self.bind_paths),
+                 "  {} \\".format(self.singularity),
                  "  cellbender remove-background \\",
                  "    --input={} \\".format(input),
                  "    --output={} \\".format(output)
