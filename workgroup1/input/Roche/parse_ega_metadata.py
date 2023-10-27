@@ -52,17 +52,17 @@ Syntax:
 
 ### Columbia2022 ###
 ./parse_ega_metadata.py \
-    -i /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Roche/Bryois_Columbia_EGAD00001009168/metadata \
+    -i /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Roche/Bryois_Columbia_EGAD00001009168 \
     -o /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Columbia2022/
 
 ### RocheAD2022 ###
 ./parse_ega_metadata.py \
-    -i /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Roche/Bryois_RocheAD_EGAD00001009166/metadata \
+    -i /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Roche/Bryois_RocheAD_EGAD00001009166 \
     -o /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheAD2022/
 
 ### RocheMS2022 ###
 ./parse_ega_metadata.py \
-    -i /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Roche/Bryois_RocheMS_EGAD00001009169/metadata \
+    -i /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Roche/Bryois_RocheMS_EGAD00001009169 \
     -o /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheMS2022/
 """
 
@@ -101,7 +101,8 @@ class main():
     def start(self):
         self.print_arguments()
 
-        sample_file_path = os.path.join(self.input_dir, "delimited_maps", "Sample_File.map")
+        sample_file_path = os.path.join(self.input_dir, "metadata", "delimited_maps", "Sample_File.map")
+        ms_samples = []
         if os.path.exists(sample_file_path):
             sample_file_df = self.load_file(sample_file_path)
             sample_file_df.columns = ["Ind_Sample", "individualID", "fastqPath", "sampleID"]
@@ -114,9 +115,71 @@ class main():
                 exit()
             sample_file_df.sort_values(by="individualID", inplace=True)
             print(sample_file_df)
-            # for index, row in sample_file_df.iterrows():
-            #     print("{},{}".format(row[0], row[1]))
-            self.save_file(df=sample_file_df, outpath=os.path.join(self.output_dir, "link_table.csv"))
+            ms_samples = [x.split("-")[0] for x in sample_file_df["fastqID"]]
+        #     # for index, row in sample_file_df.iterrows():
+        #     #     print("{},{}".format(row[0], row[1]))
+        #     self.save_file(df=sample_file_df, outpath=os.path.join(self.output_dir, "link_table.csv"))
+
+        sample_meta_info_path = os.path.join(self.input_dir, "metadata", "delimited_maps", "Analysis_Sample_meta_info.map")
+        vcf_path = os.path.join(self.input_dir, "genotypes", "RES0103_GSAv3+_anon.vcf.gz")
+        if os.path.exists(sample_meta_info_path) and os.path.exists(vcf_path):
+            sample_meta_info_df = self.load_file(sample_meta_info_path)
+            info_df = self.split_info(sample_meta_info_df[2])
+            del sample_meta_info_df
+
+            info_df = info_df.groupby(info_df["subject_id"]).first()
+            info_df.reset_index(drop=False, inplace=True)
+            print(info_df)
+
+            vcf_df = self.load_file(vcf_path, header=0, skiprows=31, nrows=2)
+            vcf_sampels = [col for col in vcf_df.columns if col not in ["#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT"]]
+
+            info_df = info_df[["subject_id", "gender", "region"]].copy()
+            info_df.columns = ["IID", "SEX", "Provided_Ancestry"]
+            info_df.insert(0, "#FID", info_df["IID"])
+            info_df.insert(2, "PAT", 0)
+            info_df.insert(3, "MAT", 0)
+            info_df["SEX"] = info_df["SEX"].map({"male": "1", "female": "2"})
+            info_df["Provided_Ancestry"] = info_df["Provided_Ancestry"].map({"Europe": "EUR"})
+            info_df["genotyping_platform"] = "GSAv3 Illumina ChIP"
+            info_df["array_available"] = "Y"
+            info_df["wgs_available"] = "N"
+            info_df["wes_available"] = "N"
+            info_df["age"] = "NA"
+            info_df["age_range"] = "NA"
+            info_df["Study"] = "RocheAD2022"
+            info_df.loc[info_df["IID"].isin(ms_samples), "Study"] = "RocheMS2022"
+            info_df["smoking_status"] = "NA"
+            info_df["hormonal_contraception_use_currently"] = "NA"
+            info_df["menopause"] = "NA"
+            info_df["pregnancy_status"] = "NA"
+
+            info_df.index = info_df["IID"]
+            info_df = info_df.loc[vcf_sampels, :]
+
+            print(info_df)
+            self.save_file(df=info_df, outpath=os.path.join(self.output_dir, "Roche.psam"), sep="\t")
+
+    @staticmethod
+    def split_info(s):
+        data = []
+        for _, value in s.items():
+            fields = value.split(";")
+
+            row_data = {}
+            for field in fields:
+                splitted_fields = field.split("=")
+                if len(splitted_fields) == 2:
+                    try:
+                        row_data[splitted_fields[0]] = float(splitted_fields[1])
+                    except ValueError:
+                        row_data[splitted_fields[0]] = splitted_fields[1]
+                else:
+                    row_data[splitted_fields[0]] = ""
+
+            data.append(pd.Series(row_data))
+
+        return pd.DataFrame(data)
 
     @staticmethod
     def load_file(inpath, header=None, index_col=None, sep="\t", skiprows=None,
