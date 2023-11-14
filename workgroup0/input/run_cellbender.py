@@ -58,7 +58,7 @@ TIME_DICT = {
 Syntax:
 ### Zhou 2020 ###
 ./run_cellbender.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-test \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-Default \
     --inputdir /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Zhou2020/ \
     --gres gpu:a40:1 \
     --cuda \
@@ -158,6 +158,7 @@ class main():
 
         # Safe the CellBender arguments.
         self.cuda = getattr(arguments, 'cuda')
+        self.checkpoint = getattr(arguments, 'checkpoint')
         self.expected_cells = getattr(arguments, 'expected_cells')
         self.total_droplets_included = getattr(arguments, 'total_droplets_included')
         self.force_cell_umi_prior = getattr(arguments, 'force_cell_umi_prior')
@@ -211,6 +212,7 @@ class main():
             ("dry_run", self.dry_run, "required"),
             ("rerun", self.rerun, "required"),
             ("cuda", self.cuda, False),
+            ("checkpoint", self.checkpoint, False),
             ("expected-cells", self.expected_cells, None),
             ("total-droplets-included", self.total_droplets_included, None),
             ("force-cell-umi-prior", self.force_cell_umi_prior, None),
@@ -604,7 +606,7 @@ class main():
             if self.mem == -1:
                 # Using a predicted memory usage based on the CellRanger number of cells.
                 cellranger_expected_cells = int(metrics_df.loc[folder, "Estimated Number of Cells"])
-                mem = int(math.ceil(3.5 + cellranger_expected_cells * 0.0015))
+                mem = int(math.ceil(1.5 + cellranger_expected_cells * 0.0015))
 
             if self.expected_cells == -1:
                 # Using CellRanger expected number of cells.
@@ -737,7 +739,7 @@ class main():
                  "",
                  "singularity exec \\",
                  "  --nv \\",
-                 "  --bind {} \\".format(self.bind_paths),
+                 "  --bind {} \\".format(",".join(self.bind_paths)),
                  "  {} \\".format(self.singularity),
                  "  cellbender remove-background \\",
                  "    --input={} \\".format(input),

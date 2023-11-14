@@ -3,7 +3,7 @@
 """
 File:         visualise_cellbender_results.py
 Created:      2023/07/07
-Last Changed: 2023/09?10
+Last Changed: 2023/09/13
 Author:       M.Vochteloo
 
 Copyright (C) 2022 University Medical Center Groningen.
@@ -64,6 +64,11 @@ Syntax:
 ./visualise_cellbender_results.py \
     --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-Default
 
+./visualise_cellbender_results.py \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-Zhou2020-ExtendedEpochLowLearn
+    
+./visualise_cellbender_results.py \
+    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-Zhou2020-CellRangerExpectedCells
 """
 
 
@@ -118,8 +123,8 @@ class main():
         print("Loading results.")
         for path in glob.glob(os.path.join(self.workdir, "*")):
             folder = os.path.basename(path)
-            # if folder not in  ["R1375133", "R2008064"]:
-            #     continue
+            if folder not in  ["R1375133", "R2008064"]:
+                continue
             output = os.path.join(self.workdir, folder, "cellbender_remove_background_output.h5")
             if not os.path.exists(output):
                 continue
@@ -128,19 +133,19 @@ class main():
             resultfile = os.path.join(self.workdir, folder, "cellbender_remove_background_output.h5")
             if not os.path.exists(resultfile):
                 continue
-            stats_s, training_s, test_s = self.parse_results(resultfile, folder)
+            stats_s, training_s, test_s, cell_size_s, cell_prob_s = self.parse_results(resultfile, folder)
 
             posteriorfile = os.path.join(self.workdir, folder, "cellbender_remove_background_output_posterior.h5")
             if not os.path.exists(posteriorfile):
                 continue
-            cell_size_s, cell_prob_s, latent_gene_encoding_df = self.parse_posterior(posteriorfile, folder)
+            latent_gene_encoding_df = self.parse_posterior(posteriorfile, folder)
 
-            # hf = h5py.File(posteriorfile, 'r')
-            # for key1 in hf.keys():
-            #     for key2 in hf.get(key1).keys():
-            #         print(key1, key2, hf.get('{}/{}'.format(key1, key2)))
-            # hf.close()
-            # exit()
+            hf = h5py.File(posteriorfile, 'r')
+            for key1 in hf.keys():
+                for key2 in hf.get(key1).keys():
+                    print(key1, key2, hf.get('{}/{}'.format(key1, key2)))
+            hf.close()
+            exit()
 
             metricsfile = os.path.join(self.workdir, folder, "cellbender_remove_background_output_metrics.csv")
             if os.path.exists(metricsfile):
@@ -213,22 +218,35 @@ class main():
         test_s.index = pd.Series(np.array(hf.get('metadata/learning_curve_test_epoch')))
         test_s.name = folder
 
+        # cel size.
+        d = np.array(hf.get('droplet_latents/cell_size'))
+        order = np.argsort(d)[::-1]
+        cell_size_s = pd.Series(d[order])
+        cell_size_s.name = folder
+
+        # cel probabilities.
+        cell_prob_s = pd.Series(np.array(hf.get('droplet_latents/cell_probability')))
+        cell_prob_s.name = folder
+
         hf.close()
 
-        return stats_s, training_s, test_s
+        return stats_s, training_s, test_s, cell_size_s, cell_prob_s
 
     @staticmethod
     def parse_posterior(posteriorfile, folder):
         hf = h5py.File(posteriorfile, 'r')
 
-        # cel size.
-        cell_size_s = pd.Series(np.array(hf.get('droplet_latents_map/d')))
-        cell_size_s.name = folder
+        # # cel size.
+        # d = np.array(hf.get('droplet_latents_map/d'))
+        # order = np.argsort(d)[::-1]
+        #
+        # cell_size_s = pd.Series(d[order])
+        # cell_size_s.name = folder
 
         # cel probabilities.
         p = np.array(hf.get('droplet_latents_map/p'))
-        cell_prob_s = pd.Series(p)
-        cell_prob_s.name = folder
+        # cell_prob_s = pd.Series(p)
+        # cell_prob_s.name = folder
 
         # latent encoding.
         z = np.array(hf.get('droplet_latents_map/z'))
@@ -240,7 +258,7 @@ class main():
 
         hf.close()
 
-        return cell_size_s, cell_prob_s, latent_gene_encoding_df
+        return latent_gene_encoding_df
 
     @staticmethod
     def add_stats_from_metrics(stats_s, metricsfile):
@@ -477,7 +495,8 @@ class main():
 
     def visualise_cell_determination(self, cell_size_df, cell_prob_df, sample_order):
         # TODO: reorder based on cell size. I tried this but then the cell procentage scatterplot does not match the
-        #  CellBender output figure. If I don't reorder, then the UMI line does not match.
+        #  CellBender output figure. If I don't reorder, then the UMI line does not match. I think I need to
+        #  order the UMI line but not the counts but that feels wrong.
 
         cell_size_melt_df = cell_size_df.copy()
         cell_size_melt_df.reset_index(drop=False, inplace=True)

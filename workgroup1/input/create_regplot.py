@@ -146,6 +146,42 @@ Syntax:
     -yl delta_barcodes \
     -o Zhou2020-CellRangerFractionReadsInCell-vs-DeltaBarcodes \
     -e png
+    
+./create_regplot.py \
+    -xd /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-03-28-CellBender/2023-07-07-Zhou2020/jobs/output/slurm_stats.txt.gz \
+    -x_transpose \
+    -xi MaxVMSize \
+    -xl MaxVMSize_v0.2.2 \
+    -yd /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-Default/jobs/output/slurm_stats.txt.gz \
+    -y_transpose \
+    -yi MaxVMSize \
+    -yl MaxVMSize_v0.3.0 \
+    -o Zhou2020-MaxVMSize-v2_vs_v3 \
+    -e png
+
+./create_regplot.py \
+    -xd /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-RocheColumbia2022-Default/metrics_summary.txt.gz \
+    -x_transpose \
+    -xi Estimated Number of Cells \
+    -xl Estimated_Number_of_Cells \
+    -yd /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-RocheColumbia2022-Default/jobs/output/slurm_stats.txt.gz \
+    -y_transpose \
+    -yi MaxRSS \
+    -yl MaxRSS_v0.3.0 \
+    -o RocheColumbia2022-EstimatedNumberOfCells-vs-MaxRSS \
+    -e png
+    
+./create_regplot.py \
+    -xd /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-RocheMS2022-Default/metrics_summary.txt.gz \
+    -x_transpose \
+    -xi Estimated Number of Cells \
+    -xl Estimated_Number_of_Cells \
+    -yd /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-RocheMS2022-Default/jobs/output/slurm_stats.txt.gz \
+    -y_transpose \
+    -yi MaxRSS \
+    -yl MaxRSS_v0.3.0 \
+    -o RocheMSa2022-EstimatedNumberOfCells-vs-MaxRSS \
+    -e png
 """
 
 

@@ -53,23 +53,23 @@ Syntax:
 
 def start():
     psam_template = {
-        '#FID': np.nan,
-        'IID': np.nan,
+        '#FID': "NONE",
+        'IID': "NONE",
         'PAT': 0,
         'MAT': 0,
         'SEX': 0,
-        'Provided_Ancestry': np.nan,
-        'genotyping_platform': np.nan,
+        'Provided_Ancestry': "NONE",
+        'genotyping_platform': "NONE",
         'array_available': "N",
         'wgs_available': "N",
         'wes_available': "N",
-        'age': np.nan,
-        'age_range': np.nan,
-        'Study': np.nan,
-        'smoking_status': np.nan,
-        'hormonal_contraception_use_currently': np.nan,
-        'menopause': np.nan,
-        'pregnancy_status': np.nan
+        'age': "NA",
+        'age_range': "NA",
+        'Study': "NONE",
+        'smoking_status': "NONE",
+        'hormonal_contraception_use_currently': "NONE",
+        'menopause': "NONE",
+        'pregnancy_status': "NONE"
     }
 
     samples_df = pd.read_csv(
@@ -97,8 +97,8 @@ def start():
          "Hispanic or Latino": "AMR",
          "American Native or Alaskan Native": "AMR",
          "Black, Negro, African-American": "AFR",
-         "NA": "EUR"})
-    psam_df["Provided_Ancestry"].fillna("EUR", inplace=True)
+         "NA": "NONE"})
+    psam_df["Provided_Ancestry"].fillna("NONE", inplace=True)
     psam_df["age"] = round_float(psam_df["ageDeath"], na="NA")
     for col in psam_df.columns:
         if col not in psam_template:
@@ -126,7 +126,11 @@ def start():
     psam_df["age_range"] = np.floor(psam_df["ageDeath"] / 10) * 10
 
     psam_df = psam_df.loc[samples, ['#FID', 'IID', 'PAT', 'MAT', 'SEX', 'Provided_Ancestry', 'genotyping_platform', 'array_available', 'wgs_available', 'wes_available', 'age', 'age_range', 'Study', 'smoking_status', 'hormonal_contraception_use_currently', 'menopause', 'pregnancy_status']]
-    psam_df.fillna("NA", inplace=True)
+
+    print("\nPSAM data:")
+    print(psam_df)
+    print("")
+
     psam_df.to_csv("AMP_AD_annotdata.psam", sep="\t", index=False, header=True)
 
     sex_df = psam_df[["#FID", "SEX"]].copy()
@@ -140,19 +144,19 @@ def start():
 
 def construct_rosmap_df():
     # Load data.
-    idkey_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/ROSMAP_IDkey.csv", sep=",", header=0, index_col=None)
+    idkey_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/AMP-AD/data/ROSMAP_IDkey.csv", sep=",", header=0, index_col=None)
 
     # Load data.
-    wgs_metadata_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/ROSMAP_assay_wholeGenomeSeq_metadata.csv", sep=",", header=0, index_col=None)
+    wgs_metadata_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/AMP-AD/data/ROSMAP_assay_wholeGenomeSeq_metadata.csv", sep=",", header=0, index_col=None)
     wgs_metadata_df["specimenID"] = wgs_metadata_df["specimenID"].astype(str)
     wgs_metadata_df["wgs_available"] = "N"
     wgs_metadata_df.loc[wgs_metadata_df["assay"] == "wholeGenomeSeq", "wgs_available"] = "Y"
 
-    biospecimen_metadata_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/ROSMAP_biospecimen_metadata.csv", sep=",", header=0, index_col=None)
+    biospecimen_metadata_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/AMP-AD/data/ROSMAP_biospecimen_metadata.csv", sep=",", header=0, index_col=None)
     biospecimen_metadata_df["specimenID"] = biospecimen_metadata_df["specimenID"].astype(str)
     biospecimen_metadata_df["individualID"] = biospecimen_metadata_df["individualID"].astype(str)
 
-    clinical_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/ROSMAP_clinical.csv", sep=",", header=0, index_col=None)
+    clinical_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/AMP-AD/data/ROSMAP_clinical.csv", sep=",", header=0, index_col=None)
     clinical_df["individualID"] = clinical_df["individualID"].astype(str)
 
     # Merge together.
@@ -183,16 +187,16 @@ def construct_rosmap_df():
 
 def construct_mayo_df():
     # Load data.
-    wgs_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/MayoRNAseq_assay_wholeGenomeSeq_metadata.csv", sep=",", header=0, index_col=None)
+    wgs_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/AMP-AD/data/MayoRNAseq_assay_wholeGenomeSeq_metadata.csv", sep=",", header=0, index_col=None)
     wgs_df["specimenID"] = wgs_df["specimenID"].astype(str)
     wgs_df["wgs_available"] = "N"
     wgs_df.loc[wgs_df["assay"] == "wholeGenomeSeq", "wgs_available"] = "Y"
 
-    biospecimen_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/MayoRNAseq_biospecimen_metadata.csv", sep=",", header=0, index_col=None)
+    biospecimen_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/AMP-AD/data/MayoRNAseq_biospecimen_metadata.csv", sep=",", header=0, index_col=None)
     biospecimen_df["specimenID"] = biospecimen_df["specimenID"].astype(str)
     biospecimen_df["individualID"] = ["{:.0f}".format(x) for x in biospecimen_df["individualID"]]
 
-    individual_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/MayoRNAseq_individual_metadata_031422.csv", sep=",", header=0, index_col=None)
+    individual_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/AMP-AD/data/MayoRNAseq_individual_metadata_031422.csv", sep=",", header=0, index_col=None)
     individual_df["individualID"] = individual_df["individualID"].astype(str)
 
     # Merge together.
@@ -214,16 +218,16 @@ def construct_mayo_df():
 
 def construct_msbb_df():
     # Load data.
-    wgs_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/MSBB_assay_wholeGenomeSeq_metadata.csv", sep=",", header=0, index_col=None)
+    wgs_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/AMP-AD/data/MSBB_assay_wholeGenomeSeq_metadata.csv", sep=",", header=0, index_col=None)
     wgs_df["specimenID"] = wgs_df["specimenID"].astype(str)
     wgs_df["wgs_available"] = "N"
     wgs_df.loc[wgs_df["assay"] == "wholeGenomeSeq", "wgs_available"] = "Y"
 
-    biospecimen_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/MSBB_biospecimen_metadata.csv", sep=",", header=0, index_col=None)
+    biospecimen_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/AMP-AD/data/MSBB_biospecimen_metadata.csv", sep=",", header=0, index_col=None)
     biospecimen_df["specimenID"] = biospecimen_df["specimenID"].astype(str)
     biospecimen_df["individualID"] = biospecimen_df["individualID"].astype(str)
 
-    individual_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/MSBB_individual_metadata.csv", sep=",", header=0, index_col=None)
+    individual_df = pd.read_csv("/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/AMP-AD/data/MSBB_individual_metadata.csv", sep=",", header=0, index_col=None)
     individual_df["individualID"] = individual_df["individualID"].astype(str)
 
     # Merge together.
