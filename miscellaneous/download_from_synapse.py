@@ -49,32 +49,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 """
 Syntax: 
-  
-./download_from_synapse.py 
-
-### Mathys 2019 ###
-./download_from_synapse.py \
-    --synapse_ids syn18681734 syn18638475 syn18642926 \
-    --folders processed fastq metadata \
-    --outdir /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Mathys2019
-    
-### Cain 2023 ###
-./download_from_synapse.py \
-    --synapse_ids syn21589957 syn17055069 \
-    --folders processed fastq \
-    --outdir /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Cain2023
-
-### Zhou 2020 ### 
-./download_from_synapse.py \
-    --synapse_ids syn21682218 syn21126450 \
-    --folders metadata fastq \
-    --outdir /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Zhou2020
-    
-### Fujita 2022 ### 
-./download_from_synapse.py \
-    --synapse_ids syn31512863 \
-    --folders Fastq \
-    --outdir /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Fujita2022
+./download_from_synapse.py -h
 """
 
 
@@ -82,12 +57,12 @@ class main():
     def __init__(self):
         # Get the command line arguments.
         arguments = self.create_argument_parser()
-        self.synapse_ids = getattr(arguments, 'synapse_ids')
+        self.entities = getattr(arguments, 'entities')
         self.folders = getattr(arguments, 'folders')
         self.out_dir = getattr(arguments, 'outdir')
 
-        if len(self.synapse_ids) != len(self.folders):
-            print("Error, -synapse_ids and --folders must have equal lengths.")
+        if len(self.entities) != len(self.folders):
+            print("Error, -input and --folders must have equal lengths.")
             exit()
 
         if not os.path.exists(self.out_dir):
@@ -107,11 +82,11 @@ class main():
                             version="{} {}".format(__program__,
                                                    __version__),
                             help="show program's version number and exit")
-        parser.add_argument("--synapse_ids",
+        parser.add_argument("--entities",
                             nargs="*",
                             type=str,
-                            required=True,
-                            help="The synapse ID to download.")
+                            required=False,
+                            help="The synapse ID to download or a file containing synapse IDs.")
         parser.add_argument("--folders",
                             nargs="*",
                             type=str,
@@ -128,24 +103,44 @@ class main():
         self.print_arguments()
 
         # Log in on Synapse.
-        user = input("Synapse username:")
-        password = getpass.getpass('Synapse password:')
+        authToken = getpass.getpass('Synapse authentication token:')
 
         syn = synapseclient.Synapse()
-        syn.login(user, password)
+        syn.login(authToken=authToken)
 
         # Download.
-        for synapse_id, folder in zip(self.synapse_ids, self.folders):
+        for entity, folder in zip(self.entities, self.folders):
+            if os.path.exists(entity):
+                with open(entity, 'r') as f:
+                    for line in f:
+                        entity_code, entity_file = line.strip("\n").split("  ")
+                        if os.path.exists(folder + "/" + entity_file):
+                            print("Skipping '{}' - '{}'".format(entity_code, entity_file))
+                            continue
+                        self.download_file(syn=syn, entity=entity_code, path=folder + "/")
+                f.close()
+            else:
+                self.download_file(syn=syn, entity=entity, path=folder + "/")
+
+    @staticmethod
+    def download_file(syn, entity, path):
+        try:
             _ = synapseutils.syncFromSynapse(syn,
-                                             entity=synapse_id,
-                                             path=folder + "/")
+                                             entity=entity,
+                                             ifcollision="keep.local",
+                                             path=path)
+        except synapseclient.core.exceptions.SynapseUnmetAccessRestrictions as e:
+            print(e)
+        except synapseclient.core.exceptions.SynapseMd5MismatchError as e:
+            print(e)
 
     def print_arguments(self):
         print("General arguments")
-        for synapse_id, folder in zip(self.synapse_ids, self.folders):
-            print("  > entity: {}\tpath: {}/".format(synapse_id, folder))
+        for entity, folder in zip(self.entities, self.folders):
+            print("  > entity: {}\tpath: {}/".format(entity, folder))
         print("  > Output directory: {}".format(self.out_dir))
         print("")
+
 
 if __name__ == '__main__':
     m = main()
