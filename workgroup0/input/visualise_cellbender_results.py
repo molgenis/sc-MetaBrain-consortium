@@ -59,16 +59,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 """
 Syntax: 
-
-## Zhou 2020 ###
-./visualise_cellbender_results.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-07-Zhou2020-Default
-
-./visualise_cellbender_results.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-Zhou2020-ExtendedEpochLowLearn
-    
-./visualise_cellbender_results.py \
-    --workdir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-Zhou2020-CellRangerExpectedCells
+./visualise_cellbender_results.py -h
 """
 
 
