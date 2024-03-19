@@ -55,14 +55,7 @@ TIME_DICT = {
 
 """
 Syntax: 
-
-### Mathys2019 ###
-./run_azimuth_annotation.py \
-    --rscript /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-02-02-WorkGroup2CellType/2023-04-05-Mathys2019/azimuth_annotation.R \
-    --workdir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-02-02-WorkGroup2CellType/2023-04-05-Mathys2019 \
-    --query /groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/Mathys2019/2023-04-05-SeuratObject/Mathys2019.rds \
-    --refdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/screference/Bakken2020/reference \
-    --dry_run
+./run_azimuth_annotation.py -H
 """
 
 

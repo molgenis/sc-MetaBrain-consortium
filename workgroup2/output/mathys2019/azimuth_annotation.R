@@ -12,11 +12,6 @@ library(SeuratData)
 library(patchwork)
 library(ggplot2)
 
-# work_dir <- "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-02-02-WorkGroup2CellType/2023-04-05-Mathys2019"
-# query_file <- "/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/Mathys2019/2023-04-05-SeuratObject/Mathys2019.rds"
-# ref_file <- "/groups/umcg-biogen/tmp01/input/processeddata/single-cell/screference/Bakken2020/reference/reference.Rds"
-# subset <- "all"
-
 args <- commandArgs(trailingOnly = TRUE)
 work_dir <- args[1]
 query_file <- args[2]

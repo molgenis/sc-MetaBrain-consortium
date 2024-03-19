@@ -7,8 +7,8 @@
 # Function: export the human motor cortex reference as a Azimuth reference.
 ############################################################################################################################
 
+.libPaths("/usr/local/lib/R/site-library")
 library(Seurat)
-library(Azimuth)
 args <- commandArgs(trailingOnly = TRUE)
 
 ref <- readRDS(file = args[1])
@@ -68,4 +68,9 @@ ref <- FindClusters(ref, resolution = 1.2)
 # Elapsed time: 17 seconds
 
 # SaveAnnoyIndex(object = ref[["refdr.annoy.neighbors"]], file = paste0(args[3], "/idx.annoy"))
-saveRDS(object = ref, file = paste0(args[3], "/ref.Rds"))
+saveRDS(object = ref, file = args[3])
+
+ref[['RNA']] <- NULL
+ref[['integrated']] <- NULL
+
+saveRDS(object = ref, file = args[3] + ".reduced")

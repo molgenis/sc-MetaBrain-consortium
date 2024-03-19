@@ -54,12 +54,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 """
 Syntax: 
-
-./compare_confusion_matrices.py \
-    --workdir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-02-02-WorkGroup2CellType/2023-04-05-Mathys2019 \
-    --truths broad.cell.type Subcluster \
-    --predictions predicted.major_subclass predicted.minor_subclass \
-    --extension pdf
+./compare_confusion_matrices.py -H
 """
 
 
