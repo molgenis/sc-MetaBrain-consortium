@@ -25,6 +25,7 @@ root directory of this source tree. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import print_function
 import gzip
 import os
+import glob
 
 # Third party imports.
 import numpy as np
@@ -48,31 +49,41 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 """
 Syntax: 
-
-./prepare_Mathys2019_wg3_files.py
+./prepare_Mathys2019_wg3_files.py -h
 """
 
 
 class main():
     def __init__(self):
         # Get the command line arguments.
-        self.workdir = "/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/Mathys2019"
-        self.meta_data1 = "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-02-02-WorkGroup2CellType/2023-04-05-Mathys2019/all/data/seurat_metadata.csv"
-        self.meta_data2 = "/groups/umcg-biogen/tmp01/input/rawdata/single-cell/Mathys2019/metadata/snRNAseqPFC_BA10_biospecimen_metadata.csv"
-        self.meta_data3 = "/groups/umcg-biogen/tmp01/input/rawdata/single-cell/Mathys2019/metadata/snRNAseqPFC_BA10_assay_scRNAseq_metadata.csv"
-        self.fastq_folder = "/groups/umcg-biogen/tmp01/input/rawdata/single-cell/Mathys2019/fastq"
+        self.workdir = "/groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2024-01-10-scMetaBrain-Workgroup3DownstreamAnalyses/2024-02-01-CellAnnotations"
+        # self.barcodes_dir = "/groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-08-28-CellBender-v0.3.0/2023-09-10-Mathys2019-Default"
+        self.barcodes_dir = "/groups/umcg-biogen/tmp02/input/processeddata/single-cell/Mathys2019/"
+        self.meta_data1 = "/groups/umcg-biogen/tmp02/input/processeddata/single-cell/Mathys2019/GTE.tsv"
+        self.meta_data2 = "/groups/umcg-biogen/tmp02/input/rawdata/single-cell/Mathys2019/metadata/snRNAseqPFC_BA10_biospecimen_metadata.csv"
+        self.meta_data3 = "/groups/umcg-biogen/tmp02/input/rawdata/single-cell/Mathys2019/metadata/snRNAseqPFC_BA10_assay_scRNAseq_metadata.csv"
+        self.meta_data4 = "/groups/umcg-biogen/prm03/projects/2022-DeKleinEtAl/output/2020-02-03-phenotype-table/2020-09-04.brain.phenotypes.withReannotatedDiagnosis.txt.gz"
 
     def start(self):
         print("Loading data")
-        meta_data_df1 = self.load_file(self.meta_data1)
-        meta_data_df1 = meta_data_df1[["projid"]].copy()
-        meta_data_df1.index = ["{}_{}".format(index.split("-")[0], row["projid"]) for index, row in meta_data_df1.iterrows()]
-        meta_data_df1.index.name = "Barcode"
-        meta_data_df1["feature barcode"] = [barcode.split("-")[0] for barcode in meta_data_df1.index]
-        meta_data_df1.reset_index(drop=False, inplace=True)
-        meta_data_df1.drop_duplicates(inplace=True)
+        barcodes_list = []
+        for fpath in glob.glob(os.path.join(self.barcodes_dir, "*")):
+            pool = os.path.basename(fpath)
+            # barcodes_fpath = os.path.join(fpath, "cellbender_remove_background_output_cell_barcodes.csv")
+            barcodes_fpath = os.path.join(fpath, "outs", "filtered_feature_bc_matrix", "barcodes.tsv.gz")
+            if not os.path.exists(barcodes_fpath):
+                continue
+            barcodes_df = pd.read_csv(barcodes_fpath, sep="\t", header=None, index_col=None)
+            barcodes_df.columns = ["Barcode"]
+            barcodes_df["projid"] = int(pool)
+            barcodes_df["Barcode"] = [x.split("-")[0] + "_" + pool for x in barcodes_df["Barcode"]]
+            barcodes_list.append(barcodes_df)
+        barcodes_df = pd.concat(barcodes_list, axis=0)
+        print(barcodes_df)
+
+        meta_data_df1 = self.load_file(self.meta_data1, sep="\t", index_col=None)
+        meta_data_df1.columns = ["genotype_id", "projid"]
         print(meta_data_df1)
-        # Pool in  this file???
 
         meta_data_df2 = self.load_file(self.meta_data2, index_col=None)
         meta_data_df2 = meta_data_df2[["projid", "specimenID", "tissue"]].copy()
@@ -80,45 +91,31 @@ class main():
         meta_data_df2.drop_duplicates(inplace=True)
         print(meta_data_df2)
 
-        # df = meta_data_df1.merge(meta_data_df2, on="projid", how="left")
-        #
-        # df["lane"] = np.nan
-        # for specimen_id in df["specimenID"].unique():
-        #     for lane in np.arange(1, 5):
-        #         fastq_file = os.path.join(self.fastq_folder, "{}_L00{}_R1_001.fastq.gz".format(specimen_id, lane))
-        #         print("\tReading '{}'".format(fastq_file))
-        #         feature_barcodes = self.parse_fastq(fastq_file)
-        #         mask = (df["specimenID"] == specimen_id) & (df["feature barcode"].isin(feature_barcodes))
-        #         print("\t  loaded {} unique feature barcodes, {} overlap".format(len(feature_barcodes), np.sum(mask)))
-        #         df.loc[mask, "lane"] = lane
-        #         print(df.loc[mask, :])
-        # print(df)
-
         meta_data_df3 = self.load_file(self.meta_data3, index_col=None)
         meta_data_df3 = meta_data_df3[["specimenID", "platform", "sequencingBatch", "libraryPreparationMethod"]].copy()
         meta_data_df3.columns = ["specimenID", "sequencing_platform", "sequencingBatch", "scrna_platform"]
         meta_data_df3.drop_duplicates(inplace=True)
         print(meta_data_df3)
 
-        df = meta_data_df1.merge(meta_data_df2, on="projid", how="left").merge(meta_data_df3, on="specimenID", how="left")
-        # df = df.merge(meta_data_df3, on="specimenID", how="left")
+        meta_data_df4 = self.load_file(self.meta_data4, sep="\t", index_col=None)
+        meta_data_df4 = meta_data_df4[["genotype_id", "reannotated_diangosis"]].copy()
+        meta_data_df4.columns = ["genotype_id", "sample_condition"]
+        meta_data_df4.dropna(inplace=True)
+        print(meta_data_df4)
 
-        """
-        Barcode                         sequencing_platform sequencing_run  sequencing_lane scrna_platform  plate_based umi_based   biomaterial sorting cell_treatment  sample_condition
-        AAACCTGAGAAACCAT_180920_lane1   NovoSeq_100PE       180920_run1     180920_lane1    10x_3end_v3     N           Y           PBMC        none    UT              healthy
-        TTTGTCAGTTGAGGTG_181231_lane2   NovoSeq_100PE       180920_run1     181231_lane2    10x_3end_v3     N           Y           PBMC        none    3hCA            healthy
-        TTTGTCATCGCCTGTT_181231_lane2   BGISeq500_100PE     181231_run2     181231_lane2    10x_3end_v2     N           Y           CD4T        facs    UT              UC
-        """
+        print(meta_data_df1.merge(meta_data_df4, on="genotype_id", how="left"))
+
+        df = barcodes_df.merge(meta_data_df1, on="projid", how="left").merge(meta_data_df2, on="projid", how="left").merge(meta_data_df3, on="specimenID", how="left").merge(meta_data_df4, on="genotype_id", how="left")
+        # df = df.merge(meta_data_df3, on="specimenID", how="left")
 
         print("Building dataframe")
         df["sequencing_run"] = df["projid"].astype(str) + "_run" + df["sequencingBatch"].astype(str)
         # df["sequencing_lane"] = df["projid"].astype(str) + "_lane" + df["lane"].astype(str)
         df["sequencing_lane"] = df["projid"].astype(str) + "_lane1"
-        df["plate_based"] = np.nan
-        df["umi_based"] = np.nan
+        df["plate_based"] = "N"
+        df["umi_based"] = "Y"
         df["sorting"] = np.nan
         df["cell_treatment"] = "UT"
-        df["sample_condition"] = "healthy"
         df = df[["Barcode", "sequencing_platform", "sequencing_run", "sequencing_lane", "scrna_platform", "plate_based", "umi_based", "biomaterial", "sorting", "cell_treatment", "sample_condition"]].copy()
         print(df)
         print(df.columns.tolist())

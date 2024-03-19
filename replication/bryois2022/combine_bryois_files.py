@@ -34,9 +34,7 @@ import pandas as pd
 
 """
 Syntax:
-./combine_bryois_files.py \
-    --work_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-20-ReplicateInBryois/Bryois2022
-    
+./combine_bryois_files.py -h 
 """
 
 # Metadata

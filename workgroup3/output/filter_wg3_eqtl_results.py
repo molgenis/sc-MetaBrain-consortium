@@ -36,17 +36,7 @@ import h5py
 
 """
 Syntax:
-./filter_wg3_eqtl_results.py \
-    --input_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/2023-04-12-Mathys2019/output/L1/AST \
-    --snp_gene /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-mbQTLBryoisRepl/combos/ASTcombos.txt \
-    --suffix BryoiseQTLs
-    
-############
-    
-./filter_wg3_eqtl_results.py \
-    --input_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/2023-04-12-Mathys2019/output/L1/EX \
-    --snp_gene /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-ReplicateIndeKlein/combos.txt \
-    --suffix deKleineQTLs
+./filter_wg3_eqtl_results.py -h
 """
 
 # Metadata

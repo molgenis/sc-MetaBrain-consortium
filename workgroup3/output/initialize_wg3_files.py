@@ -3,7 +3,7 @@
 """
 File:         initialize_wg3_files.py
 Created:      2023/04/11
-Last Changed:
+Last Changed: 2023/12/06
 Author:       M.Vochteloo
 
 Copyright (C) 2022 University Medical Center Groningen.
@@ -25,7 +25,6 @@ root directory of this source tree. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import print_function
 from datetime import datetime
 import argparse
-import socket
 import os
 import re
 
@@ -49,105 +48,51 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 """
 Syntax: 
-
-### Mathys2019 - Gearshift ###
-./initialize_wg3_files.py \
-    --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA \
-    --dataset_outdir 2023-04-12-Mathys2019 \
-    --image_folder /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/WG3-pipeline-QTL/ \
-    --top_dir /groups/umcg-biogen/tmp01/ /groups/umcg-biogen/tmp01/umcg-mvochteloo/simulated_home:/home/umcg-mvochteloo \
-    --wg1_folder /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation/ \
-    --wg2_folder /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-02-02-WorkGroup2CellType/2023-04-05-Mathys2019/all/ \
-    --unimputed_folder /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation/harmonize_hg38/EUR_harmonised_hg38 \
-    --genotype_input_file /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation/vcf_all_merged/Mathys/Mathys_imputed_hg38.vcf.gz \
-    --wg1_psam update_sex_ancestry/update_sex.psam \
-    --gtf_annotation_file /groups/umcg-biogen/tmp01/input/processeddata/single-cell/refdata-gex-GRCh38-2020-A/genes/genes.gtf \
-    --cell_annotation /groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/Mathys2019/Mathys_cell_annotations.tsv \
-    --wg1_singlets_assigned ../Step2-DemultiplexingAndDoubletRemoval/QC_figures/seurat_object_all_pools_singlet_barcodes_final_assignments.rds \
-    --number_of_permutations 100 \
-    --exclude_ct L1/END
- 
-### Mathys2019 - Nibbler step 2 ###   
-./initialize_wg3_files.py \
-    --step 2 \
-    --work_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA \
-    --dataset_outdir 2023-04-12-Mathys2019 \
-    --image_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/WG3-pipeline-QTL/ \
-    --top_dir /groups/umcg-biogen/tmp02/ /groups/umcg-biogen/tmp02/users/umcg-mvochteloo/simulated_home:/home/umcg-mvochteloo \
-    --number_of_permutations 100 \
-    --minor_allele_frequency 0.05 \
-    --exclude_ct L1/END
-
+./initialize_wg3_files.py -h
 """
 
 class main():
     def __init__(self):
-        self.hostname = socket.gethostname()
-
         # Get the command line arguments.
         arguments = self.create_argument_parser()
-        self.step = getattr(arguments, 'step')
         self.work_dir = getattr(arguments, 'work_dir')
         dataset_outdir = getattr(arguments, 'dataset_outdir')
-        self.image_folder = getattr(arguments, 'image_folder')
-        self.top_dir = ",".join(getattr(arguments, 'top_dir'))
+        self.down_analyses_dir = getattr(arguments, 'down_analyses_dir')
+        self.down_analyses_config = getattr(arguments, 'down_analyses_config')
+        self.bind_path = getattr(arguments, 'bind_path')
+        self.sif_path = getattr(arguments, 'sif_path')
+        self.limix_sif_path = getattr(arguments, 'limix_sif_path')
+        self.repo_dir = getattr(arguments, 'repo_dir')
+        self.poolsheet_path = getattr(arguments, 'poolsheet_path')
+        self.wg1_genotype_folder = getattr(arguments, 'wg1_genotype_folder')
+        self.wg1_demultiplex_folder = getattr(arguments, 'wg1_demultiplex_folder')
+        self.wg2_folder = getattr(arguments, 'wg2_folder')
+        self.cell_annotation_file = getattr(arguments, 'cell_annotation_file')
+        self.ref_dir = getattr(arguments, 'ref_dir')
+        self.gtf_annotation_file = getattr(arguments, 'gtf_annotation_file')
+        self.ancestry = getattr(arguments, 'ancestry')
+        self.cell_level = getattr(arguments, 'cell_level')
+        self.cell_types = getattr(arguments, 'cell_types')
+        self.genome_build = getattr(arguments, 'genome_build')
+        self.filter_samples = getattr(arguments, 'filter_samples')
+        self.save_all_samples = getattr(arguments, 'no_save_all_samples')
+        self.calculate_qtl = getattr(arguments, 'no_qtl')
+        self.output_flat_qtl_results = getattr(arguments, 'output_flat_qtl_results')
+        self.compress_qtl = getattr(arguments, 'no_qtl_compression')
+        self.calculate_ld = getattr(arguments, 'no_ld')
+        self.compress_ld = getattr(arguments, 'no_ld_compression')
+        self.relative_wg1_imputed_genotype_vcf = getattr(arguments, 'relative_wg1_imputed_genotype_vcf')
+        self.relative_wg1_psam = getattr(arguments, 'relative_wg1_psam')
+        self.wg2_pairing = getattr(arguments, 'wg2_pairing')
+        self.eqtl_chunks_n_genes = getattr(arguments, 'eqtl_chunks_n_genes')
+        self.n_expression_pcs = "[" + ".join(getattr(arguments, 'n_expression_pcs')" + "]"
+        self.exclude_temp_in_sbatch = getattr(arguments, 'exclude_temp_in_sbatch')
 
         # Pre-process the dataset output directory.
         date_str = datetime.now().strftime("%Y-%m-%d")
         if not re.match("^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])", dataset_outdir):
             dataset_outdir = "{}-{}".format(date_str, dataset_outdir)
         self.dataset_outdir = dataset_outdir
-
-        # Step 1 arguments.
-        self.data_prep_config = getattr(arguments, 'data_prep_config')
-        self.wg1_folder = getattr(arguments, 'wg1_folder')
-        self.wg2_folder = getattr(arguments, 'wg2_folder')
-        self.unimputed_folder = getattr(arguments, 'unimputed_folder')
-        self.genotype_input_file = getattr(arguments, 'genotype_input_file')
-        self.wg1_psam = getattr(arguments, 'wg1_psam')
-        self.gtf_annotation_file = getattr(arguments, 'gtf_annotation_file')
-        self.cell_annotation = getattr(arguments, 'cell_annotation')
-        self.wg1_singlets_assigned = getattr(arguments, 'wg1_singlets_assigned')
-        self.genotype_dir = getattr(arguments, 'genotype_dir')
-        self.wg1_wg2_qc_taged = getattr(arguments, 'wg1_wg2_qc_taged')
-        self.number_of_genes_in_chunk = getattr(arguments, 'number_of_genes_in_chunk')
-
-        if self.step is None or self.step == 1:
-            for label, value in [("--data_prep_config", self.data_prep_config),
-                                 ("--wg1_folder", self.wg1_folder),
-                                 ("--wg2_folder", self.wg2_folder),
-                                 ("--unimputed_folder", self.unimputed_folder),
-                                 ("--genotype_input_file", self.genotype_input_file),
-                                 ("--wg1_psam", self.wg1_psam),
-                                 ("--gtf_annotation_file", self.gtf_annotation_file),
-                                 ("--cell_annotation", self.cell_annotation),
-                                 ("--wg1_singlets_assigned", self.wg1_singlets_assigned),
-                                 ("--wg1_wg2_qc_taged", self.wg1_wg2_qc_taged),
-                                 ("--number_of_genes_in_chunk", self.number_of_genes_in_chunk)]:
-                if value is None:
-                    print("Argument {} is required when --step equals {}.".format(label, self.step))
-                    exit()
-
-        # Step 2 arguments.
-        self.qtl_config = getattr(arguments, 'qtl_config')
-        self.number_of_permutations = getattr(arguments, 'number_of_permutations')
-        self.minor_allele_frequency = getattr(arguments, 'minor_allele_frequency')
-        self.window_size = getattr(arguments, 'window_size')
-        self.hardy_weinberg_cutoff = getattr(arguments, 'hardy_weinberg_cutoff')
-        self.compress_files = getattr(arguments, 'compress_files')
-        self.exclude_ct = getattr(arguments, 'exclude_ct')
-
-        if self.step is None or self.step == 2:
-            for label, value in [("--qtl_config", self.qtl_config),
-                                 ("--number_of_permutations", self.number_of_permutations),
-                                 ("--minor_allele_frequency", self.minor_allele_frequency),
-                                 ("--window_size", self.window_size),
-                                 ("--hardy_weinberg_cutoff", self.hardy_weinberg_cutoff),
-                                 ("--compress_files", self.compress_files),
-                                 ("--exclude_ct", self.exclude_ct)]:
-                if value is None:
-                    print("Argument {} is required when --step equals {}.".format(label, self.step))
-                    exit()
 
     @staticmethod
     def create_argument_parser():
@@ -161,11 +106,6 @@ class main():
                             version="{} {}".format(__program__,
                                                    __version__),
                             help="show program's version number and exit")
-        parser.add_argument("--step",
-                            type=int,
-                            choices=[1, 2],
-                            default=None,
-                            help="Which step to prepare. Default: None.")
         parser.add_argument("--work_dir",
                             type=str,
                             required=True,
@@ -177,109 +117,142 @@ class main():
                             default=None,
                             help="The name of the output directory where you "
                                  "would like all outputs/results saved.")
-        parser.add_argument("--image_folder",
+        parser.add_argument("--down_analyses_dir",
                             type=str,
                             required=True,
                             default=None,
-                            help="The path to the folder within which the "
-                                 "simgularity image & 'wp3.simg' "
-                                 "'limixDec22.simg' is located")
-        parser.add_argument("--top_dir",
-                            nargs="*",
+                            help=".")
+        parser.add_argument("--down_analyses_config",
                             type=str,
-                            required=True,
-                            help="List of paths to bind to Singularity. "
-                                 "Default: ['/groups/umcg-biogen/tmp01/']")
-
-        # arguments for step 1.
-        parser.add_argument("--data_prep_config",
-                            type=str,
-                            default="wp3_input_create.yaml",
+                            default="sceQTL-Gen_DA.yaml",
                             help="")
-        parser.add_argument("--wg1_folder",
+        parser.add_argument("--bind_path",
                             type=str,
+                            required=True,
                             default=None,
-                            help="The path to the outputs from WG1")
+                            help="List of paths to bind to Singularity.")
+        parser.add_argument("--sif_path",
+                            type=str,
+                            required=True,
+                            default=None,
+                            help="")
+        parser.add_argument("--limix_sif_path",
+                            type=str,
+                            required=True,
+                            default=None,
+                            help="")
+        parser.add_argument("--repo_dir",
+                            type=str,
+                            required=True,
+                            default=None,
+                            help="")
+        parser.add_argument("--poolsheet_path",
+                            type=str,
+                            required=True,
+                            default=None,
+                            help="")
+        parser.add_argument("--wg1_genotype_folder",
+                            type=str,
+                            required=True,
+                            default=None,
+                            help="")
+        parser.add_argument("--wg1_demultiplex_folder",
+                            type=str,
+                            required=True,
+                            default=None,
+                            help="")
         parser.add_argument("--wg2_folder",
                             type=str,
-                            default=None,
-                            help="The path to the outputs from WG2")
-        parser.add_argument("--unimputed_folder",
-                            type=str,
-                            default=None,
-                            help="The path, and base filename to the "
-                                 "unimputed genotype file. These are created "
-                                 "in WG1 and are in plink2 formats.")
-        parser.add_argument("--genotype_input_file",
-                            type=str,
+                            required=True,
                             default=None,
                             help="")
-        parser.add_argument("--wg1_psam",
+        parser.add_argument("--cell_annotation_file",
                             type=str,
+                            required=True,
                             default=None,
-                            help="Relative path, relative to WG1 folder, "
-                                 "psam file with donor information including "
-                                 "both the user provided information and "
-                                 "updates during the WG1 pipeline. "
-                                 "(https://wg1-pipeline-qc.readthedocs.io/en/latest/Imputation/Imputation_Required_Input.html#plink2-reference-snp-genotype-pfiles)")
+                            help="")
+        parser.add_argument("--ref_dir",
+                            type=str,
+                            required=True,
+                            default=None,
+                            help="This is the path to the directory containing "
+                                 "the references files provided for the "
+                                 "downstream analyses")
         parser.add_argument("--gtf_annotation_file",
                             type=str,
+                            required=True,
                             default=None,
-                            help="GTF file path used when quantifying "
-                                 "gene-expression. ")
-        parser.add_argument("--cell_annotation",
+                            help="")
+        parser.add_argument("--ancestry",
                             type=str,
-                            default=None,
-                            help="Relative path, relative to WG1 folder, "
-                                 "psam file with donor information including "
-                                 "both the user provided information and "
-                                 "updates during the WG1 pipeline. "
-                                 "(https://wg1-pipeline-qc.readthedocs.io/en/latest/Imputation/Imputation_Required_Input.html#plink2-reference-snp-genotype-pfiles)")
-        parser.add_argument("--wg1_singlets_assigned",
+                            required=False,
+                            default="EUR",
+                            help="")
+        parser.add_argument("--cell_level",
                             type=str,
-                            default="demultiplexing/output/QC_figures/seurat_object_all_pools_singlet_barcodes_final_assignments.rds",
+                            required=False,
+                            default="L1",
                             help="")
-        parser.add_argument("--genotype_dir",
-                            type=str,
-                            default="genotype_input/",
-                            help="")
-        parser.add_argument("--wg1_wg2_qc_taged",
-                            type=str,
-                            default="WG1_WG2_summary/qc_tag.rds",
-                            help="")
-        parser.add_argument("--number_of_genes_in_chunk",
-                            type=int,
-                            default=500,
-                            help="")
-
-        # argument for step 2.
-        parser.add_argument("--qtl_config",
-                            type=str,
-                            default="Qtl_wp3.yaml",
-                            help="")
-        parser.add_argument("--number_of_permutations",
-                            type=int,
-                            default=1000,
-                            help="")
-        parser.add_argument("--minor_allele_frequency",
-                            type=float,
-                            default=0.01,
-                            help="")
-        parser.add_argument("--window_size",
-                            type=int,
-                            default=1000000,
-                            help="gene + cis window from one side")
-        parser.add_argument("--hardy_weinberg_cutoff",
-                            type=float,
-                            default=0.0001,
-                            help="")
-        parser.add_argument("--compress_files",
-                            action='store_false',
-                            help="")
-        parser.add_argument("--exclude_ct",
+        parser.add_argument("--cell_types",
                             nargs="*",
                             type=str,
-                            default=[],
+                            required=False,
+                            default=["AST", "END", "EX", "IN", "MIC", "OLI", "OPC", "PER"],
+                            help="")
+        parser.add_argument("--genome_build",
+                            type=str,
+                            required=False,
+                            default="hg19",
+                            help="")
+        parser.add_argument("--filter_samples",
+                            action='store_false',
+                            help="")
+        parser.add_argument("--no_save_all_samples",
+                            action='store_false',
+                            help="")
+        parser.add_argument("--no_qtl",
+                            action='store_false',
+                            help="")
+        parser.add_argument("--output_flat_qtl_results",
+                            action='store_true',
+                            help="")
+        parser.add_argument("--no_qtl_compression",
+                            action='store_false',
+                            help="")
+        parser.add_argument("--no_ld",
+                            action='store_false',
+                            help="")
+        parser.add_argument("--no_ld_compression",
+                            action='store_false',
+                            help="")
+        parser.add_argument("--relative_wg1_imputed_genotype_vcf",
+                            type=str,
+                            required=False,
+                            default="vcf_merged_by_ancestries/{ancestry}_imputed_hg38.vcf.gz",
+                            help="")
+        parser.add_argument("--relative_wg1_psam",
+                            type=str,
+                            required=False,
+                            default="update_sex_ancestry/update_sex.psam",
+                            help="")
+        parser.add_argument("--wg2_pairing",
+                            type=str,
+                            required=False,
+                            default="azimuth_l1_brain.csv",
+                            help="")
+        parser.add_argument("--eqtl_chunks_n_genes",
+                            type=int,
+                            required=False,
+                            default=150,
+                            help="")
+        parser.add_argument("--n_expression_pcs",
+                            nargs="*",
+                            type=int,
+                            required=False,
+                            default=[0, 2, 4, 6, 8, 10],
+                            help="")
+        parser.add_argument("--exclude_temp_in_sbatch",
+                            action='store_true',
                             help="")
 
         return parser.parse_args()
@@ -287,157 +260,60 @@ class main():
     def start(self):
         self.print_arguments()
 
-        dataset_work_dir = os.path.join(self.work_dir, self.dataset_outdir)
-        ct_expression_out_dir = os.path.join(self.work_dir, self.dataset_outdir, "input", "L1")
-        for dir in [dataset_work_dir, ct_expression_out_dir]:
-            if not os.path.exists(dir):
-                os.makedirs(dir)
+        print("Generating files")
 
-        if self.step is None or self.step == 1:
-            print("Generating step 1 files")
+        output_dir = os.path.join(self.work_dir, self.dataset_outdir)
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
 
-            output_dir = os.path.join(dataset_work_dir, "Step1-DataPreparation")
-            log_dir = os.path.join(output_dir, "log")
-            for outdir in [output_dir, log_dir]:
-                if not os.path.exists(outdir):
-                    os.makedirs(outdir)
+        log_dir = os.path.join(output_dir, "log")
+        slurm_log_dir = os.path.join(output_dir, "slurm_log")
+        for outdir in [output_dir, log_dir, slurm_log_dir]:
+            if not os.path.exists(outdir):
+                os.makedirs(outdir)
+        snakefile = os.path.join(self.down_analyses_dir, "Snakefile")
+        configfile = os.path.join(output_dir, self.down_analyses_config)
 
-            # Fix some dumb shit
-            if not self.wg1_folder.endswith("/"):
-                self.wg1_folder += "/"
-            if not self.wg2_folder.endswith("/"):
-                self.wg2_folder += "/"
-            if not dataset_work_dir.endswith("/"):
-                dataset_work_dir += "/"
-            if self.wg1_singlets_assigned.startswith("/"):
-                self.wg1_singlets_assigned = self.wg1_singlets_assigned[1:]
-            if self.genotype_dir.startswith("/"):
-                self.genotype_dir = self.genotype_dir[1:]
-            if not self.genotype_dir.endswith("/"):
-                self.genotype_dir += "/"
-            if self.wg1_wg2_qc_taged.startswith("/"):
-                self.wg1_wg2_qc_taged = self.wg1_wg2_qc_taged[1:]
-
-            self.generate_step1_files(
-                wg3_folder=dataset_work_dir,
-                output_dir=output_dir,
-                log_dir=log_dir,
-                snakefile=os.path.join(self.image_folder, "Create_wp3_inputs.smk"),
-                configtemplate=os.path.join(self.image_folder, self.data_prep_config),
-                configfile=os.path.join(output_dir, self.data_prep_config)
-            )
-
-            print("")
-
-        if self.step is None or self.step == 2:
-            print("Generating step 2 files")
-
-            output_dir = os.path.join(dataset_work_dir, "Step2-QTLMapping")
-            log_dir = os.path.join(output_dir, "log")
-            for outdir in [output_dir, log_dir]:
-                if not os.path.exists(outdir):
-                    os.makedirs(outdir)
-
-            if not dataset_work_dir.endswith("/"):
-                dataset_work_dir += "/"
-
-            self.generate_step2_files(
-                wg3_folder=dataset_work_dir,
-                output_dir=output_dir,
-                log_dir=log_dir,
-                snakefile=os.path.join(self.image_folder, "Qtl_Snakefile"),
-                configtemplate=os.path.join(self.image_folder, self.qtl_config),
-                configfile=os.path.join(output_dir, self.qtl_config),
-                exclude_ct=self.exclude_ct
-            )
-
-            print("")
-
-    def generate_step1_files(self, wg3_folder, output_dir, log_dir, snakefile,
-                             configtemplate, configfile):
-        """
-        """
         config_arguments = (
-            ("image_folder", self.image_folder),
-            ("top_dir", self.top_dir),
-            ("WG1_folder", self.wg1_folder),
-            ("WG2_folder", self.wg2_folder),
-            ("WG3_folder", wg3_folder),
-            ("unimputed_folder", self.unimputed_folder),
-            ("genotype_input_file", self.genotype_input_file),
-            ("wg1_psam", self.wg1_psam),
+            ("bind_path", self.bind_path),
+            ("singularity_image", self.sif_path),
+            ("repo_dir", os.path.join(self.down_analyses_dir)),
+            ("singularity_image", self.sif_path),
+            ("limix_singularity_image", self.limix_sif_path),
+            ("repo_dir", self.repo_dir),
+            ("poolsheet_path", os.path.join(self.poolsheet_path)),
+            ("wg1_genotype_folder", self.wg1_genotype_folder),
+            ("wg1_demultiplex_folder", self.wg1_demultiplex_folder),
+            ("wg2_folder", self.wg2_folder),
+            ("cell_annotation_file", self.cell_annotation_file),
+            ("ref_dir", self.ref_dir),
             ("gtf_annotation_file", self.gtf_annotation_file),
-            ("cellAnnotation", self.cell_annotation),
-            ("wg1SingletsAssigned", self.wg1_singlets_assigned),
-            ("genotype_dir", self.genotype_dir),
-            ("wg1_wg2_qc_taged", self.wg1_wg2_qc_taged),
-            ("number_of_genes_in_chunk", self.number_of_genes_in_chunk)
+            ("output_dir", output_dir),
+            ("ancestry", self.ancestry),
+            ("cell_level", self.cell_level),
+            ("cell_types", self.cell_types),
+            ("genome_build", self.genome_build),
+            ("filter_samples", self.filter_samples),
+            ("save_all_samples", self.save_all_samples),
+            ("calculate_qtl", self.calculate_qtl),
+            ("output_flat_qtl_results", self.output_flat_qtl_results),
+            ("compress_qtl", self.compress_qtl),
+            ("calculate_ld", self.calculate_ld),
+            ("compress_ld", self.compress_ld),
+            ("relative_wg1_imputed_genotype_vcf", self.relative_wg1_imputed_genotype_vcf),
+            ("relative_wg1_psam", self.relative_wg1_psam),
+            ("wg2_pairing", self.wg2_pairing),
+            ("eqtl_chunks_n_genes", self.eqtl_chunks_n_genes),
+            ("n_expression_pcs", self.n_expression_pcs)
         )
         self.write_configfile(
-            template=configtemplate,
+            template=os.path.join(self.down_analyses_dir, self.down_analyses_config),
             arguments=config_arguments,
             outpath=configfile
         )
 
-        self.write_dry_run_script(
-            snakefile=snakefile,
-            configfile=configfile,
+        cluster_status_script = self.write_cluster_status_script(
             output_dir=output_dir
-        )
-
-        self.write_unlock_script(
-            snakefile=snakefile,
-            configfile=configfile,
-            output_dir=output_dir
-        )
-
-        self.write_build_dag_script(
-            snakefile=snakefile,
-            configfile=configfile,
-            output_dir=output_dir,
-            outfile="wg3_step1_dag"
-        )
-
-        self.write_run_script(
-            snakefile=snakefile,
-            configfile=configfile,
-            output_dir=output_dir,
-            log_dir=log_dir,
-            jobs=1,
-            restart_times=0,
-            outfile="run_test"
-        )
-
-        self.write_run_script(
-            snakefile=snakefile,
-            configfile=configfile,
-            output_dir=output_dir,
-            log_dir=log_dir,
-            jobs=4,
-            mem=16,
-            outfile="run_4jobs_short"
-        )
-
-    def generate_step2_files(self, wg3_folder, output_dir, log_dir, snakefile,
-                             configtemplate, configfile, exclude_ct):
-        """
-        """
-        config_arguments = (
-            ("image_folder", self.image_folder),
-            ("top_dir", self.top_dir),
-            ("WG3_folder", wg3_folder),
-            ("out_folder", os.path.join(wg3_folder, "output")),
-            ("numberOfPermutations", "'{}'".format(self.number_of_permutations)),
-            ("minorAlleleFrequency", "'{}'".format(self.minor_allele_frequency)),
-            ("windowSize", "'{}'".format(self.window_size)),
-            ("hardyWeinbergCutoff", "'{}'".format(self.hardy_weinberg_cutoff)),
-            ("compressFiles", "true" if self.compress_files else "false"),
-        )
-        self.write_configfile(
-            template=configtemplate,
-            arguments=config_arguments,
-            outpath=configfile,
-            exclude_ct=exclude_ct
         )
 
         self.write_dry_run_script(
@@ -452,50 +328,99 @@ class main():
             output_dir=output_dir
         )
 
-        self.write_build_dag_script(
-            snakefile=snakefile,
-            configfile=configfile,
-            output_dir=output_dir,
-            outfile="wg3_step2_dag"
-        )
+        for i in range(1, 3):
+            self.write_build_dag_script(
+                snakefile=snakefile,
+                configfile=configfile,
+                output_dir=output_dir,
+                outfile="dag{}".format(i)
+            )
+
+        for jobs in [1, 2, 22, 100, 1000, 10000]:
+            self.write_run_script(
+                snakefile=snakefile,
+                configfile=configfile,
+                output_dir=output_dir,
+                log_dir=log_dir,
+                slurm_log_dir=slurm_log_dir,
+                cluster_status_script=cluster_status_script,
+                jobs=jobs,
+                outfile="run_{}jobs".format(jobs)
+            )
 
         self.write_run_script(
             snakefile=snakefile,
             configfile=configfile,
             output_dir=output_dir,
             log_dir=log_dir,
-            jobs=1,
+            slurm_log_dir=slurm_log_dir,
+            cluster_status_script=cluster_status_script,
+            jobs=3,
             restart_times=0,
-            outfile="run_test"
+            qos="priority",
+            outfile="run_dev"
         )
 
-        self.write_run_script(
+        self.write_run_local_script(
             snakefile=snakefile,
             configfile=configfile,
-            output_dir=output_dir,
-            log_dir=log_dir,
-            mem=4,
-            outfile="run_maxjobs_short"
+            output_dir=output_dir
         )
 
-    def write_configfile(self, template, arguments, outpath, exclude_ct=None):
+        self.write_report_script(
+            snakefile=snakefile,
+            configfile=configfile,
+            report=os.path.join(output_dir, "downstream_analyses_report.html"),
+            output_dir=output_dir
+        )
+
+    def write_configfile(self, template, arguments, outpath):
         yaml_lines = []
         for line in open(template, 'r'):
             line = line.replace("\n", "")
-            if line.startswith("ancestry_split_vcf"):
-                line = "genotype_input_file: {}".format(self.genotype_input_file)
-            else:
-                if line.startswith("    - ") and exclude_ct is not None and line.replace("    - ", "") in exclude_ct:
-                    continue
-                for label, argument in arguments:
-                    if line.startswith(label):
-                        line = "{}: {}".format(label, argument)
+            for label, argument in arguments:
+                if line.startswith("  {}:".format(label)):
+                    line = "  {}: {}".format(label, argument)
             yaml_lines.append(line)
 
         self.write_lines_to_file(
             lines=yaml_lines,
             path=outpath
         )
+
+    def write_cluster_status_script(self, output_dir):
+        """
+        https://www.embl.org/groups/bioinformatics-rome/blog/2022/05/snakemake-profile-5-handling-memory-and-timeout-errors/
+        """
+        outfile = os.path.join(output_dir, "status-sacct.sh")
+
+        lines = [
+            '#!/usr/bin/env bash',
+            '# Check status of Slurm job',
+            'jobid="$1"',
+            'if [[ "$jobid" == Submitted ]]',
+            'then',
+            '  echo smk-simple-slurm: Invalid job ID: "$jobid" >&2',
+            '  echo smk-simple-slurm: Did you remember to add the flag --parsable to your sbatch call? >&2',
+            '  exit 1',
+            'fi',
+            'output=`sacct -j "$jobid" --format State --noheader | head -n 1 | awk \'{print $1}\'`',
+            'if [[ $output =~ ^(COMPLETED).* ]]',
+            'then',
+            '  echo success',
+            'elif [[ $output =~ ^(RUNNING|PENDING|COMPLETING|CONFIGURING|SUSPENDED).* ]]',
+            'then',
+            '  echo running',
+            'else',
+            '  echo failed',
+            'fi']
+
+        self.write_lines_to_file(
+            lines=lines,
+            path=outfile
+        )
+
+        return outfile
 
     def write_build_dag_script(self, snakefile, configfile, output_dir,
                                outfile="dag"):
@@ -507,7 +432,7 @@ class main():
             '    --configfile {} \\'.format(configfile),
             '    --dag | \\',
             '    dot -Tsvg \\',
-            '        > {}.svg'.format(outfile)
+            '        > {}.svg'.format(os.path.join(output_dir, outfile))
         ]
         self.write_lines_to_file(
             lines=lines,
@@ -545,55 +470,16 @@ class main():
         )
 
     def write_run_script(self, snakefile, configfile, output_dir, log_dir,
-                         jobs=None, restart_times=2, latency_wait=30,
-                         nodes=1, cpu=1, mem=8,
-                         time="short", until=None, outfile="run"):
-        time_dict = {
-            "short": "05:59:00",
-            "medium": "23:59:00",
-            "long": "6-23:59:00"
-        }
-        max_submit_pu_dict = {
-            "short": 5000,
-            "medium": 5000,
-            "long": 1000
-        }
-
-        if time not in time_dict.keys():
-            print("Error, time not recognized.")
-            exit()
-
-        mem_units = ''
-        resource_allocation = 'qos'
-        max_submit_pu = 50
-        if self.hostname == 'gearshift':
-            mem_units = 'G'
-            resource_allocation = 'qos'
-            max_submit_pu = max_submit_pu_dict[time]
-        elif self.hostname == 'nibbler':
-            mem_units = 'gb'
-            resource_allocation = 'partition'
-            max_submit_pu = max_submit_pu_dict[time]
-        else:
-            print("Error, nrecognised hostname")
-            exit()
-
-        if jobs is None:
-            jobs = max_submit_pu
-
+                         slurm_log_dir, cluster_status_script, nodes=1,
+                         jobs=1, restart_times=0, latency_wait=60,
+                         qos="regular", until=None, outfile="run"):
         lines = [
             '#!/bin/bash',
             '',
             'nohup \\',
             '  snakemake \\',
             '    --snakefile {} \\'.format(snakefile),
-            '    --configfile {} \\'.format(configfile)
-        ]
-
-        if until is not None:
-            lines.extend('    --until {} \\'.format(until))
-
-        lines.extend([
+            '    --configfile {} \\'.format(configfile),
             '    --rerun-incomplete \\',
             '    --jobs {} \\'.format(jobs),
             '    --use-singularity \\',
@@ -602,28 +488,60 @@ class main():
             '    --latency-wait {} \\'.format(latency_wait),
             '    --cluster \\',
             '       "sbatch \\',
+            '       --job-name=snakemake_{rule}_{wildcards} \\',
             '       --nodes={} \\'.format(nodes),
-            '       --cpus-per-task={} \\'.format(cpu),
-            '       --mem={}{} \\'.format(mem, mem_units)
-        ])
-
-        if self.hostname != "nibbler":
-            lines.extend('       --tmp={}{} \\'.format(mem, mem_units))
-
-        lines.extend([
-            '       --time={} \\'.format(time_dict[time]),
-            '       --output={} \\'.format(os.path.join(log_dir, '{rule}.out')),
-            '       --error={} \\'.format(os.path.join(log_dir, '{rule}.out')),
-            '       --export=ALL \\',
-            '       --{}=regular" \\'.format(resource_allocation),
+            '       --cpus-per-task={threads} \\',
+            '       --mem=\$(({resources.mem_per_thread_gb} * {threads}))G \\',
+            '       --tmp=\$(({resources.disk_per_thread_gb} * {threads}))G \\',
+            '       --time={resources.time} \\',
+            '       --output={}'.format(slurm_log_dir) + '/{rule}_{wildcards}.out \\',
+            '       --error={}'.format(slurm_log_dir) + '/{rule}_{wildcards}.out \\',
+            '       --export=NONE \\',
+            '       --qos={} \\'.format(qos),
+            '       --parsable" \\',
+            '    --cluster-status {} \\'.format(cluster_status_script),
             '    > {}/nohup_`date +%Y-%m-%d.%H:%M:%S`.log &'.format(log_dir),
             '',
             'echo "Check status of command with:" ps -p $! -u'
-        ])
+        ]
+
+        if self.exclude_temp_in_sbatch:
+            lines.remove('       --tmp=\$(({resources.disk_per_thread_gb} * {threads}))G \\')
+
+        if until is not None:
+            lines.insert(6, '    --until {} \\'.format(until))
 
         self.write_lines_to_file(
             lines=lines,
             path=os.path.join(output_dir, "{}.sh".format(outfile))
+        )
+
+    def write_run_local_script(self, snakefile, configfile, output_dir):
+        lines = [
+            '#!/bin/bash',
+            '',
+            'snakemake \\',
+            '  --snakefile {} \\'.format(snakefile),
+            '  --configfile {} \\'.format(configfile),
+            '  --cores 1'
+        ]
+        self.write_lines_to_file(
+            lines=lines,
+            path=os.path.join(output_dir, "run_local.sh")
+        )
+
+    def write_report_script(self, snakefile, configfile, report, output_dir):
+        lines = [
+            '#!/bin/bash',
+            '',
+            'snakemake \\',
+            '  --snakefile {} \\'.format(snakefile),
+            '  --configfile {} \\'.format(configfile),
+            '  --report {}'.format(report)
+        ]
+        self.write_lines_to_file(
+            lines=lines,
+            path=os.path.join(output_dir, "report.sh")
         )
 
     @staticmethod
@@ -636,40 +554,39 @@ class main():
 
     def print_arguments(self):
         print("General arguments")
-        print("  > Host name:                         {}".format(self.hostname))
-        print("  > Step:                              {}".format("1 & 2" if self.step is None else str(self.step)))
-        print("  > Working directory:                 {}".format(self.work_dir))
-        print("  > Dataset output directory:          {}".format(self.dataset_outdir))
-        print("  > Image folder:                      {}".format(self.image_folder))
-        print("  > Top dir:                           {}".format(self.top_dir))
+        print("  > Working directory:              {}".format(self.work_dir))
+        print("  > Dataset output directory:       {}".format(self.dataset_outdir))
+        print("  > Down. Analyses directory:       {}".format(self.down_analyses_dir))
+        print("  > Down. Analyses configuration:   {}".format(self.down_analyses_config))
+        print("  > Bind path:                      {}".format(self.bind_path))
+        print("  > Singularity path:               {}".format(self.sif_path))
+        print("  > Limix singularity path:         {}".format(self.limix_sif_path))
+        print("  > Repository folder:              {}".format(self.repo_dir))
+        print("  > Poolsheet path:                 {}".format(self.poolsheet_path))
+        print("  > Workgroup 1 genotype folder:    {}".format(self.wg1_genotype_folder))
+        print("  > Workgroup 1 demultiplex folder: {}".format(self.wg1_demultiplex_folder))
+        print("  > Workgroup 2 folder:             {}".format(self.wg2_folder))
+        print("  > Cell annot. file:               {}".format(self.cell_annotation_file))
+        print("  > Reference directory:            {}".format(self.ref_dir))
+        print("  > GTF annot. file:                {}".format(self.gtf_annotation_file))
+        print("  > Ancestry:                       {}".format(self.ancestry))
+        print("  > Cell level:                     {}".format(self.cell_level))
+        print("  > Cell types:                     {}".format(", ".join(self.cell_types)))
+        print("  > Genome build:                   {}".format(self.genome_build))
+        print("  > Filter samples:                 {}".format(self.filter_samples))
+        print("  > Save all samples:               {}".format(self.save_all_samples))
+        print("  > Calculate QTL:                  {}".format(self.calculate_qtl))
+        print("  > Output flat QTL results:        {}".format(self.output_flat_qtl_results))
+        print("  > Compress QTL:                   {}".format(self.compress_qtl))
+        print("  > Calculate LD:                   {}".format(self.calculate_ld))
+        print("  > Compress LD:                    {}".format(self.compress_ld))
+        print("  > Relative WG1 imp. geno. VCF:    {}".format(self.relative_wg1_imputed_genotype_vcf))
+        print("  > Relative WG1 PSAM:              {}".format(self.relative_wg1_psam))
+        print("  > WG2 pairing:                    {}".format(self.wg2_pairing))
+        print("  > eQTL chunks N genes:            {}".format(self.eqtl_chunks_n_genes))
+        print("  > N expression PCs:               {}".format(self.n_expression_pcs))
+        print("  > Exclude TEMP in SBATCH:         {}".format(self.exclude_temp_in_sbatch))
         print("")
-
-        if self.step is None or self.step == 1:
-            print("[Step 1] Data preparation arguments:")
-            print("  > Configuration file:                {}".format(self.data_prep_config))
-            print("  > Workgroup 1 folder:                {}".format(self.wg1_folder))
-            print("  > Workgroup 2 folder:                {}".format(self.wg2_folder))
-            print("  > Unimputed genotype folder:         {}".format(self.unimputed_folder))
-            print("  > Genotype input file:               {}".format(self.genotype_input_file))
-            print("  > Workgroup 1 PSAM:                  {}".format(self.wg1_psam))
-            print("  > GTF annotation file:               {}".format(self.gtf_annotation_file))
-            print("  > Cell annotation:                   {}".format(self.cell_annotation))
-            print("  > Workgroup 1 signlets assigned:     {}".format(self.wg1_singlets_assigned))
-            print("  > Genotype folder:                   {}".format(self.genotype_dir))
-            print("  > Workgroup1 Workgroup2 QC taged:    {}".format(self.wg1_wg2_qc_taged))
-            print("  > Number of genes in chunk:          {}".format(self.number_of_genes_in_chunk))
-            print("")
-
-        if self.step is None or self.step == 2:
-            print("[Step2] QTL arguments:")
-            print("  > Configuration file:                {}".format(self.qtl_config))
-            print("  > Number of permutations:            {}".format(self.number_of_permutations))
-            print("  > Minor allele frequency (MAF):      {}".format(self.minor_allele_frequency))
-            print("  > Window size:                       {}".format(self.window_size))
-            print("  > Hardy-Weinberg cutoff:             {}".format(self.hardy_weinberg_cutoff))
-            print("  > Compress files:                    {}".format(self.compress_files))
-            print("  > Exclude cell types:                {}".format(", ".join(self.exclude_ct)))
-            print("")
 
 
 if __name__ == '__main__':

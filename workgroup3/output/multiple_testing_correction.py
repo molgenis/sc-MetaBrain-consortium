@@ -38,9 +38,7 @@ from rpy2.robjects.packages import importr
 
 """
 Syntax:
-./multiple_testing_correction.py \
-    --wg3_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/2023-04-12-Mathys2019
-    
+./multiple_testing_correction.py -h
 """
 
 # Metadata
@@ -92,42 +90,43 @@ class main():
         self.print_arguments()
 
         print("Caculating FDR")
-        for annotation_level_dir in glob.glob(os.path.join(self.wg3_folder, "output", "*")):
-            annotation_level = os.path.basename(annotation_level_dir)
-            for cell_type_dir in glob.glob(os.path.join(self.wg3_folder, "output", annotation_level, "*")):
-                cell_type = os.path.basename(cell_type_dir)
-                eqtl_inpath = os.path.join(cell_type_dir, "top_qtl_results_all.txt.gz")
-                if not os.path.exists(eqtl_inpath):
-                    print("Warning, 'top_qtl_results.txt.gz' file not found for {}/{}".format(annotation_level, cell_type))
-                    continue
-                expr_inpath = os.path.join(self.wg3_folder, "input", annotation_level, "{}.Exp.txt".format(cell_type))
-                if not os.path.exists(expr_inpath):
-                    print("Warning, '{}.Exp.txt' file not found for {}/{}".format(cell_type, annotation_level, cell_type))
-                    continue
+        for ancestry_path in glob.glob(os.path.join(self.wg3_folder, "output", "*")):
+            ancestry = os.path.basename(ancestry_path)
+            for cell_level_path in glob.glob(os.path.join(self.wg3_folder, "output", ancestry, "*")):
+                cell_level = os.path.basename(cell_level_path)
+                for cell_type_path in glob.glob(os.path.join(self.wg3_folder, "output", ancestry, cell_level, "*")):
+                    cell_type = os.path.basename(cell_type_path)
+                    eqtl_inpath = os.path.join(self.wg3_folder, "output", ancestry, cell_level, cell_type, "top_qtl_results_all.txt")
+                    if not os.path.exists(eqtl_inpath):
+                        print("Warning, 'top_qtl_results.txt.gz' file not found for {}/{}/{}".format(ancestry, cell_level, cell_type))
+                        continue
+                    expr_inpath = os.path.join(self.wg3_folder, "expression_input", ancestry, cell_level, cell_type, "PostQC", cell_type + ".Exp.txt")
+                    if not os.path.exists(expr_inpath):
+                        print("Warning, '{}.Exp.txt' file not found for {}/{}/{}".format(cell_type, ancestry, cell_level, cell_type))
+                        continue
 
-                # Load the eQTL data.
-                eqtl_df = self.load_file(eqtl_inpath, header=0, index_col=None)
+                    # Load the eQTL data.
+                    eqtl_df = self.load_file(eqtl_inpath, header=0, index_col=None)
 
-                # Load the expression data.
-                expr_df = self.load_file(expr_inpath, index_col=0)
+                    # Load the expression data.
+                    expr_df = self.load_file(expr_inpath, index_col=0)
 
-                # Select the genes.
-                avg_expr = expr_df.mean(axis=1)
-                avg_expr.sort_values(inplace=True, ascending=False)
-                top_genes = set(avg_expr.iloc[:self.n].index)
-                eqtl_df = eqtl_df.loc[eqtl_df["feature_id"].isin(top_genes), :]
+                    # Select the genes.
+                    avg_expr = expr_df.mean(axis=1)
+                    avg_expr.sort_values(inplace=True, ascending=False)
+                    top_genes = set(avg_expr.iloc[:self.n].index)
+                    eqtl_df = eqtl_df.loc[eqtl_df["feature_id"].isin(top_genes), :]
 
-                # Calculate the FDR.
-                eqtl_df["Global_FDR"] = self.qvalues(eqtl_df["empirical_feature_p_value"])
-                eqtl_df["BH-FDR"] = multitest.multipletests(eqtl_df["p_value"], method='fdr_bh')[1]
-                print(eqtl_df["p_value"].max())
-                print(eqtl_df)
+                    # Calculate the FDR.
+                    eqtl_df["Global_FDR"] = self.qvalues(eqtl_df["empirical_feature_p_value"])
+                    eqtl_df["BH-FDR"] = multitest.multipletests(eqtl_df["p_value"], method='fdr_bh')[1]
+                    print(eqtl_df)
 
-                # Save the output.
-                self.save_file(df=eqtl_df, outpath=eqtl_inpath.replace(".txt.gz", "_top{}_FDR_added.txt.gz".format(self.n)))
-                self.save_file(df=eqtl_df, outpath=eqtl_inpath.replace(".txt.gz", "_top{}_FDR_added.xlsx".format(self.n)))
+                    # Save the output.
+                    self.save_file(df=eqtl_df, outpath=eqtl_inpath.replace(".txt.gz", "_top{}_FDR_added.txt.gz".format(self.n)))
+                    # self.save_file(df=eqtl_df, outpath=eqtl_inpath.replace(".txt.gz", "_top{}_FDR_added.xlsx".format(self.n)))
 
-                print("\tAnnotation level: {}\tCell type: {}\tN-genes: {:,}\tN-eQTLs {:,}\tN-eQTLs (BH-FDR) {:,}".format(annotation_level, cell_type, eqtl_df.shape[0], np.sum(eqtl_df["Global_FDR"] < 0.05), np.sum(eqtl_df["BH-FDR"] < 0.05)))
+                    print("\tAncestry: {}\tCell level: {}\tCell type: {}\tN-genes: {:,}\tN-eQTLs {:,}\tN-eQTLs (BH-FDR) {:,}".format(ancestry, cell_level, cell_type, eqtl_df.shape[0], np.sum(eqtl_df["Global_FDR"] < 0.05), np.sum(eqtl_df["BH-FDR"] < 0.05)))
 
     @staticmethod
     def load_file(inpath, header=0, index_col=None, sep="\t"):
