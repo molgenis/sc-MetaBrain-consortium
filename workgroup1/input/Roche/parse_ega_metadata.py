@@ -47,23 +47,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 """
 Syntax: 
-
-./parse_ega_metadata.py
-
-### Columbia2022 ###
-./parse_ega_metadata.py \
-    -i /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Roche/Bryois_Columbia_EGAD00001009168 \
-    -o /groups/umcg-biogen/tmp02/input/processeddata/single-cell/Columbia2022/
-
-### RocheAD2022 ###
-./parse_ega_metadata.py \
-    -i /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Roche/Bryois_RocheAD_EGAD00001009166 \
-    -o /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheAD2022/
-
-### RocheMS2022 ###
-./parse_ega_metadata.py \
-    -i /groups/umcg-biogen/tmp02/input/rawdata/single-cell/Roche/Bryois_RocheMS_EGAD00001009169 \
-    -o /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheMS2022/
+./parse_ega_metadata.py -h
 """
 
 class main():

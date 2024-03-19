@@ -47,32 +47,8 @@ __description__ = "{} is a program developed and maintained by {}. " \
                                         __license__)
 
 """
-Syntax: 
-
-### Mathys 2019 ###
-./prepare_imputed_vcf_per_dataset.py \
-    --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation \
-    --singularity /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-07-Imputation/WG1-pipeline-QC_imputation.sif \
-    --dataset Mathys \
-    --samples /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Mathys2019/Mathys_genotype_samples.txt \
-    --dryrun
-    
-### Zhou 2020 ###
-./prepare_imputed_vcf_per_dataset.py \
-    --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation \
-    --singularity /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-07-Imputation/WG1-pipeline-QC_imputation.sif \
-    --dataset Zhou \
-    --samples /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation/split_per_dataset/Zhou_samples.txt \
-    --dryrun
-    
-### Cain 2023 ###
-./prepare_imputed_vcf_per_dataset.py \
-    --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation \
-    --singularity /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-07-Imputation/WG1-pipeline-QC_imputation.sif \
-    --dataset Cain \
-    --samples /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation/split_per_dataset/Cain_samples.txt \
-    --dryrun
-    
+Syntax:
+./prepare_imputed_vcf_per_dataset.py -h
 """
 
 TIME_DICT = {

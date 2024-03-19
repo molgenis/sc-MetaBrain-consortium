@@ -15,70 +15,10 @@ ANCESTRY = "EUR"
 CHR = "X"
 nrows = 1000
 
-# old_indir = "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-13-ImputationTestDataset/Step1-Imputation"
-# old_indir = "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC/2023-10-07-ImputationTestDataset/Step1-Imputation"
-# new_indir = "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC/2023-10-17-ImputationTestDataset/Step1-Imputation"
-# info = [
-#     ("harmonize_hg38", "harmonize_hg38/{ancestry}_harmonised_hg38.vcf.gz".format(ancestry=ANCESTRY), None),
-#     ("vcf_fixref_hg38", "vcf_fixref_hg38/{ancestry}_fixref_hg38.vcf.gz".format(ancestry=ANCESTRY), None),
-#     ("filter_preimpute_vcf", "filter_preimpute_vcf/{ancestry}_tagged.vcf.gz".format(ancestry=ANCESTRY), None),
-#     ("filter_preimpute_vcf", "filter_preimpute_vcf/{ancestry}_filtered.vcf.gz".format(ancestry=ANCESTRY), None),
-#     ("het_filter", "het_filter/{ancestry}_het_filtered.vcf.gz".format(ancestry=ANCESTRY), None),
-#     ("split_by_chr", "split_by_chr/{ancestry}_chr_{chr}.vcf.gz".format(ancestry=ANCESTRY, chr=CHR), None),
-#     ("eagle_prephasing", "eagle_prephasing/{ancestry}_chr_{chr}_phased.vcf.gz".format(ancestry=ANCESTRY, chr=CHR), None),
-#     ("minimac_imputed", "minimac_imputed/{ancestry}_chr_{chr}.dose.vcf.gz".format(ancestry=ANCESTRY, chr=CHR), None)
-# ]
 
-# old_indir = "/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/AMP-AD/2022-11-03-FilteredGenotypes/"
-# old_indir = "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation"
-# new_indir = "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC/2023-10-12-AMP-AD/Step1-Imputation"
-# info = [
-    # ("normalize", "1-bcftools_norm/", "normalise/chr_{chr}_normalised.vcf.gz".format(chr=CHR)),
-    # ("vcffilter", "2-custom_vcffilter/NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_{chr}.recalibrated_variants_norm_vcffilter-filtered.vcf.gz".format(chr=CHR), "wgs_filter/chr_{chr}_normalised-filtered.vcf.gz".format(chr=CHR)),
-    # ("concat", "3-bcftools_concat/NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_CHR.recalibrated_variants_norm_vcffilter_concat.vcf.gz", "combine_wgs_filtered_vcfs/normalised-filtered.vcf.gz"),
-    # ("harmonize", "harmonize_hg38/{ancestry}_harmonised_hg38.vcf.gz".format(ancestry=ANCESTRY), "harmonize_hg38_per_chr/{ancestry}_harmonised_hg38.vcf.gz".format(ancestry=ANCESTRY, chr=CHR)),
-    # ("vcf_fixref_hg38", "vcf_fixref_hg38/{ancestry}_fixref_hg38.vcf.gz".format(ancestry=ANCESTRY), None),
-    # ("filter_preimpute_vcf", "filter_preimpute_vcf/{ancestry}_tagged.vcf.gz".format(ancestry=ANCESTRY), None),
-    # ("filter_preimpute_vcf", "filter_preimpute_vcf/{ancestry}_filtered.vcf.gz".format(ancestry=ANCESTRY), None),
-    # ("het_filter", "het_filter/{ancestry}_het_filtered.vcf.gz".format(ancestry=ANCESTRY), None),
-    # ("split_by_chr", "split_by_chr2/{ancestry}_chr_{chr}.vcf.gz".format(ancestry=ANCESTRY, chr=CHR), "split_by_chr/{ancestry}_chr_{chr}.vcf.gz".format(ancestry=ANCESTRY, chr=CHR)),
-    # ("eagle_prephasing", "eagle_prephasing/{ancestry}_chr{chr}_phased.vcf.gz".format(ancestry=ANCESTRY, chr=CHR), "eagle_prephasing/{ancestry}_chr_{chr}_phased.vcf.gz".format(ancestry=ANCESTRY, chr=CHR)),
-    # ("minimac_imputed", "minimac_imputed/{ancestry}_chr{chr}.dose.vcf.gz".format(ancestry=ANCESTRY, chr=CHR), "minimac_imputed/{ancestry}_chr_{chr}.dose.vcf.gz".format(ancestry=ANCESTRY, chr=CHR))
-# ]
-
-# old_indir = "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-13-ImputationTestDataset/Step1-Imputation"
-# new_indir = "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC/2023-10-20-ImputationTestDataset/Step1-Imputation"
-# info = [
-#     # ("split_by_chr", "split_by_chr/{ancestry}_chr_{chr}.vcf.gz".format(ancestry=ANCESTRY, chr=CHR), "split_by_chr_for_prephasing/{ancestry}_chr_{chr}.vcf.gz".format(ancestry=ANCESTRY, chr=CHR)),
-#     # ("eagle_prephasing", "eagle_prephasing/{ancestry}_chr{chr}_phased.vcf.gz".format(ancestry=ANCESTRY, chr=CHR), "eagle_prephasing_by_chr/{ancestry}_chr_{chr}_phased.vcf.gz".format(ancestry=ANCESTRY, chr=CHR)),
-#     ("minimac_imputed", "minimac_imputed/{ancestry}_chr_{chr}.dose.vcf.gz".format(ancestry=ANCESTRY, chr=CHR), "minimac_imputation_by_chr/{ancestry}_chr_{chr}.dose.vcf.gz".format(ancestry=ANCESTRY, chr=CHR))
-# ]
-
-# old_indir = "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC/2023-10-07-ImputationTestDataset/Step1-Imputation"
-# new_indir = "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC/2023-10-20-ImputationTestDataset/Step1-Imputation"
-# info = [
-#     ("split_by_chr", "split_by_chr/{ancestry}_chr_{chr}.vcf.gz".format(ancestry=ANCESTRY, chr=CHR), "split_by_chr_for_prephasing/{ancestry}_chr_{chr}.vcf.gz".format(ancestry=ANCESTRY, chr=CHR)),
-#     ("eagle_prephasing", "eagle_prephasing/{ancestry}_chr_{chr}_phased.vcf.gz".format(ancestry=ANCESTRY, chr=CHR), "eagle_prephasing_by_chr/{ancestry}_chr_{chr}_phased.vcf.gz".format(ancestry=ANCESTRY, chr=CHR)),
-#     ("minimac_imputed", "minimac_imputed/{ancestry}_chr_{chr}.dose.vcf.gz".format(ancestry=ANCESTRY, chr=CHR), "minimac_imputation_by_chr/{ancestry}_chr_{chr}.dose.vcf.gz".format(ancestry=ANCESTRY, chr=CHR))
-# ]
-
-# old_indir = "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC/2023-10-07-ImputationTestDataset/Step1-Imputation"
-# new_indir = "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC/2023-10-24-ImputationTestDataset/Step1-Imputation"
-# info = [
-#     ("split_by_chr", "split_by_chr/{ancestry}_chr_{chr}.vcf.gz".format(ancestry=ANCESTRY, chr=CHR), "split_by_chr_for_prephasing/{ancestry}_chr_{chr}.vcf.gz".format(ancestry=ANCESTRY, chr=CHR))
-# ]
-
-old_indir = "/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/AMP-AD/2022-11-03-FilteredGenotypes/2-custom_vcffilter/"
-new_indir = "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC/2023-10-27-AMP-AD/Step1-Imputation/wgs_filter_by_chr"
-info = [
-    ("split_by_chr", "NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_{chr}.recalibrated_variants_norm_vcffilter-filtered.vcf.gz".format(chr=CHR), "chr_{chr}_normalised_filtered.vcf.gz".format(chr=CHR))
-]
-
-# old_indir = "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC/2023-10-27-AMP-AD/Step1-Imputation/test"
-# new_indir = "/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC/2023-10-27-AMP-AD/Step1-Imputation/test"
-# info = [
-#     ("check_sex", "old_sex_check_vcf.vcf", "new_sex_check_vcf.vcf")
-# ]
+# old_indir = ""
+# new_indir = ""
+# info = []
 
 def get_columns(inpath):
     header = None

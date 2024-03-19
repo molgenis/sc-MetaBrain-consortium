@@ -48,68 +48,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 """
 Syntax: 
-
-### ImputationTestDataset - Gearshift ###    
-./initialize_wg1_files.py \
-    --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC \
-    --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC/data/ \
-    --bind_path /groups/umcg-biogen/tmp01/,/groups/umcg-biogen/tmp01/umcg-mvochteloo/simulated_home:/home/umcg-mvochteloo \
-    --sif_path /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC/20231031-0-WG1-pipeline-QC.sif \
-    --dataset_outdir 2023-10-26-ImputationTestDataset \
-    --imputation_subdir 2023-09-19-Imputation \
-    --genotype_path /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-07-Imputation/ImputationTestDataset_plink/hg19_input \
-    --genome_build hg19 \
-    --demultiplexing_subdir 2023-09-06-DemultiplexingAndDoubletRemoval \
-    --poolsheet_filepath /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-13-ImputationTestDataset/wg0_file_directories.tsv \
-    --individual_list_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall/individuals_list_dir/ \
-    --vcf /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2022-10-10-DemultiplexingAndDoubletRemoval/TestData4PipelineSmall/test_dataset.vcf
-   
-### ImputationTestDataset - Nibbler ###    
-./initialize_wg1_files.py \
-    --work_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-10-16-scMetaBrain-WorkGroup1QC \
-    --ref_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-10-16-scMetaBrain-WorkGroup1QC/data/ \
-    --bind_path /groups/umcg-biogen/tmp02/,/groups/umcg-biogen/tmp02/users/umcg-mvochteloo/simulated_home:/home/umcg-mvochteloo \
-    --sif_path /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-10-16-scMetaBrain-WorkGroup1QC/20231106-0-WG1-pipeline-QC.sif \
-    --dataset_outdir 2023-10-31-ImputationTestDataset \
-    --exclude_temp_in_sbatch \
-    --imputation_subdir 2023-10-16-Imputation \
-    --genotype_path /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-10-16-scMetaBrain-WorkGroup1QC/TestData/Imputation/ImputationTestDataset_plink/hg19_input \
-    --genome_build hg19 \
-    --demultiplexing_subdir 2023-10-27-DemultiplexingAndDoubletRemoval \
-    --poolsheet_filepath /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-10-16-scMetaBrain-WorkGroup1QC/TestData/Demultiplexing/TestData4PipelineSmall/wg0_file_directories.tsv \
-    --individual_list_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-10-16-scMetaBrain-WorkGroup1QC/TestData/Demultiplexing/TestData4PipelineSmall/individuals_list_dir/ \
-    --vcf /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-10-16-scMetaBrain-WorkGroup1QC/TestData/Demultiplexing/TestData4PipelineSmall/test_dataset.vcf
-    
-### AMP-AD - Gearshift ###   
-./initialize_wg1_files.py \
-    --step 1 \
-    --work_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC \
-    --ref_dir /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC/data/ \
-    --bind_path /groups/umcg-biogen/tmp01/,/groups/umcg-biogen/tmp01/umcg-mvochteloo/simulated_home:/home/umcg-mvochteloo \
-    --sif_path /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2023-09-06-scMetaBrain-WorkGroup1QC/20231031-0-WG1-pipeline-QC.sif  \
-    --dataset_outdir 2023-10-31-AMP-AD \
-    --imputation_subdir 2023-09-19-Imputation \
-    --genotype_path /groups/umcg-biogen/tmp01/input/AMP-AD/2017-12-08-joint-WGS/NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_CHR.recalibrated_variants \
-    --psam /groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/AMP-AD/AMP_AD_annotdata.psam \
-    --genome_build hg19 \
-    --dataset_samples Mathys2019:/groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/Mathys2019/Mathys_genotype_samples.txt Zhou2020:/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation/split_per_dataset/Zhou_samples.txt Cain2023:/groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation/split_per_dataset/Cain_samples.txt \
-    --is_wgs
-   
-   
-### Roche - Nibbler ###   
-./initialize_wg1_files.py \
-    --step 1 \
-    --work_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-10-16-scMetaBrain-WorkGroup1QC/ \
-    --ref_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-10-16-scMetaBrain-WorkGroup1QC/data/ \
-    --bind_path /groups/umcg-biogen/tmp02/,/groups/umcg-biogen/tmp02/users/umcg-mvochteloo/simulated_home:/home/umcg-mvochteloo \
-    --sif_path /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-10-16-scMetaBrain-WorkGroup1QC/20231031-0-WG1-pipeline-QC.sif \
-    --dataset_outdir 2023-10-31-Roche \
-    --exclude_temp_in_sbatch \
-    --imputation_subdir 2023-10-16-Imputation \
-    --genotype_path /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheGenotypes/RES0103_GSAv3+_anon \
-    --psam /groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheMS2022/Roche.psam \
-    --genome_build b38 \
-    --dataset_samples RocheAD2022:/groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheAD2022/RocheAD_samples.txt RocheMS2022:/groups/umcg-biogen/tmp02/input/processeddata/single-cell/RocheMS2022/RocheAD_samples.txt
+./initialize_wg1_files.py -h
 """
 
 
@@ -123,6 +62,7 @@ class main():
         self.bind_path = getattr(arguments, 'bind_path')
         self.sif_path = getattr(arguments, 'sif_path')
         dataset_outdir = getattr(arguments, 'dataset_outdir')
+        self.repo_dir = getattr(arguments, 'repo_dir')
         self.exclude_temp_in_sbatch = getattr(arguments, 'exclude_temp_in_sbatch')
 
         # Pre-process the dataset output directory.
@@ -132,7 +72,6 @@ class main():
         self.dataset_outdir = dataset_outdir
 
         # Step 1 arguments.
-        self.imputation_subdir = getattr(arguments, 'imputation_subdir')
         self.imputation_config = getattr(arguments, 'imputation_config')
         self.genotype_path = getattr(arguments, 'genotype_path')
         self.psam = getattr(arguments, 'psam')
@@ -141,36 +80,55 @@ class main():
         if self.dataset_samples != "{}":
             self.dataset_samples = "{" + ", ".join([x.replace(":", ": ") for x in self.dataset_samples]) + "}"
         self.is_wgs = getattr(arguments, 'is_wgs')
-        self.exclude_y_chr_in_sex_check = getattr(arguments, 'exclude_y_chr_in_sex_check')
+        self.force_ancestry = getattr(arguments, 'force_ancestry')
 
         if self.step is None or self.step == 1:
-            for label, value in [("--imputation_subdir", self.imputation_subdir),
-                                 ("--imputation_config", self.imputation_config),
+            for label, value in [("--imputation_config", self.imputation_config),
                                  ("--genotype_path", self.genotype_path),
                                  ("--psam", self.psam),
                                  ("--genome_build", self.genome_build),
                                  ("--dataset_samples", self.dataset_samples),
                                  ("--is_wgs", self.is_wgs),
-                                 ("--exclude_y_chr_in_sex_check", self.exclude_y_chr_in_sex_check)]:
+                                 ("--force_ancestry", self.force_ancestry)]:
                 if value is None:
                     print("Argument {} is required when --step equals {}.".format(label, self.step))
                     exit()
 
         # Step 2 arguments.
-        self.demultiplexing_subdir = getattr(arguments, 'demultiplexing_subdir')
         self.demultiplexing_config = getattr(arguments, 'demultiplexing_config')
-        self.poolsheet_filepath = getattr(arguments, 'poolsheet_filepath')
-        self.vcf = getattr(arguments, 'vcf')
+        self.poolsheet_path = getattr(arguments, 'poolsheet_path')
         self.individual_list_dir = getattr(arguments, 'individual_list_dir')
+        self.individual_coupling = getattr(arguments, 'individual_coupling')
+        if self.individual_list_dir is None:
+            self.individual_list_dir = ""
+        self.vcf = getattr(arguments, 'vcf')
+        if self.vcf is None:
+            self.vcf = "[]"
+        self.is_multiplexed = getattr(arguments, 'is_multiplexed')
+        self.sc_data_type = getattr(arguments, 'sc_data_type')
+        self.rename_bam = getattr(arguments, 'rename_bam')
+        self.check_sample_swaps = getattr(arguments, 'no_sample_swap_check')
 
         if self.step is None or self.step == 2:
-            for label, value in [("--demultiplexing_subdir", self.demultiplexing_subdir),
-                                 ("--poolsheet_filepath", self.poolsheet_filepath),
-                                 ("--vcf", self.vcf),
-                                 ("--individual_list_dir", self.individual_list_dir)]:
+            for label, value in [("--poolsheet_path", self.poolsheet_path),
+                                 ("--is_multiplexed", self.is_multiplexed),
+                                 ("--sc_data_type", self.sc_data_type),
+                                 ("--rename_bam", self.rename_bam),
+                                 ("--check_sample_swaps", self.check_sample_swaps)]:
                 if value is None:
                     print("Argument {} is required when --step equals {}.".format(label, self.step))
                     exit()
+            if self.is_multiplexed:
+                for label, value in [("--individual_list_dir", self.individual_list_dir),
+                                     ("--vcf", self.vcf)]:
+                    if value is None:
+                        print("Argument {} is required when --is_multiplexed equals True.".format(label))
+                        exit()
+            if not self.is_multiplexed:
+                for label, value in [("--individual_coupling", self.individual_coupling)]:
+                    if value is None:
+                        print("Argument {} is required when --is_multiplexed equals False.".format(label))
+                        # exit()
 
     @staticmethod
     def create_argument_parser():
@@ -217,15 +175,16 @@ class main():
                             default=None,
                             help="The name of the output directory where you "
                                  "would like all outputs/results saved.")
+        parser.add_argument("--repo_dir",
+                            type=str,
+                            required=True,
+                            default=None,
+                            help="")
         parser.add_argument("--exclude_temp_in_sbatch",
                             action='store_true',
                             help="")
 
         # arguments for step 1.
-        parser.add_argument("--imputation_subdir",
-                            type=str,
-                            default=None,
-                            help="The imputation step subdirectory.")
         parser.add_argument("--imputation_config",
                             type=str,
                             default="sceQTL-Gen_Imputation.yaml",
@@ -251,32 +210,26 @@ class main():
         parser.add_argument("--is_wgs",
                             action='store_true',
                             help="")
+        parser.add_argument("--force_ancestry",
+                            type=str,
+                            default="null",
+                            help="")
         parser.add_argument("--exclude_y_chr_in_sex_check",
                             action='store_true',
                             help="")
 
         # argument for step 2.
-        parser.add_argument("--demultiplexing_subdir",
-                            type=str,
-                            default=None,
-                            help="The demultiplexing and doublet removal step "
-                                 "subdirectory.")
         parser.add_argument("--demultiplexing_config",
                             type=str,
                             default="sceQTL-Gen_Demultiplex.yaml",
                             help="")
-        parser.add_argument("--poolsheet_filepath",
+        parser.add_argument("--poolsheet_path",
                             type=str,
                             default=None,
                             help="Tab separated file that has a header. Each "
                                  "line has a pool name used for the scRNA-seq "
                                  "directories and the number of individuals in "
                                  "each pool.")
-        parser.add_argument("--vcf",
-                            nargs="*",
-                            type=str,
-                            default=None,
-                            help="")
         parser.add_argument("--individual_list_dir",
                             type=str,
                             default=None,
@@ -285,6 +238,32 @@ class main():
                                  "the individuals IDs that are in the pool "
                                  "separated by line (match the genotype "
                                  "individual IDs).")
+        parser.add_argument("--individual_coupling",
+                            type=str,
+                            default="",
+                            help="")
+        parser.add_argument("--vcf",
+                            nargs="*",
+                            type=str,
+                            default=None,
+                            help="")
+        parser.add_argument("--is_multiplexed",
+                            action='store_true',
+                            default=False,
+                            help="")
+        parser.add_argument("--sc_data_type",
+                            type=str,
+                            choices=["single-cell", "single-nucleus"],
+                            default="",
+                            help="")
+        parser.add_argument("--rename_bam",
+                            action='store_true',
+                            default=False,
+                            help="")
+        parser.add_argument("--no_sample_swap_check",
+                            action='store_false',
+                            default=True,
+                            help="")
 
         return parser.parse_args()
 
@@ -306,11 +285,12 @@ class main():
                     os.makedirs(outdir)
 
             self.generate_step1_files(
+                repo_dir=os.path.join(self.repo_dir),
                 output_dir=output_dir,
                 log_dir=log_dir,
                 slurm_log_dir=slurm_log_dir,
-                snakefile=os.path.join(self.work_dir, self.imputation_subdir, "Snakefile"),
-                configtemplate=os.path.join(self.work_dir, self.imputation_subdir, self.imputation_config),
+                snakefile=os.path.join(self.repo_dir, "Imputation", "Snakefile"),
+                configtemplate=os.path.join(self.repo_dir, "Imputation", self.imputation_config),
                 configfile=os.path.join(output_dir, self.imputation_config)
             )
 
@@ -327,17 +307,18 @@ class main():
                     os.makedirs(outdir)
 
             self.generate_step2_files(
+                repo_dir=os.path.join(self.repo_dir),
                 output_dir=output_dir,
                 log_dir=log_dir,
                 slurm_log_dir=slurm_log_dir,
-                snakefile=os.path.join(self.work_dir, self.demultiplexing_subdir, "Snakefile"),
-                configtemplate=os.path.join(self.work_dir, self.demultiplexing_subdir, self.demultiplexing_config),
+                snakefile=os.path.join(self.repo_dir, "Demultiplexing", "Snakefile"),
+                configtemplate=os.path.join(self.repo_dir, "Demultiplexing", self.demultiplexing_config),
                 configfile=os.path.join(output_dir, self.demultiplexing_config)
             )
 
             print("")
 
-    def generate_step1_files(self, output_dir, log_dir, slurm_log_dir, snakefile, configtemplate, configfile):
+    def generate_step1_files(self, repo_dir, output_dir, log_dir, slurm_log_dir, snakefile, configtemplate, configfile):
         """
         Step 1) run 'dry_run.sh'
         Step 2) run 'build_dag1.sh'
@@ -352,15 +333,16 @@ class main():
         Step 11) run 'report.sh'
         """
         config_arguments = (
-            ("ref_dir", self.ref_dir),
+            ("bind_path", self.bind_path),
             ("singularity_image", self.sif_path),
+            ("repo_dir", repo_dir),
             ("genotype_path", self.genotype_path),
             ("psam", self.psam),
             ("genome_build", self.genome_build),
             ("dataset_samples", self.dataset_samples),
+            ("ref_dir", self.ref_dir),
             ("is_wgs", self.is_wgs),
-            ("exclude_y_chr_in_sex_check", self.exclude_y_chr_in_sex_check),
-            ("bind_path", self.bind_path),
+            ("force_ancestry", self.force_ancestry),
             ("output_dir", output_dir)
         )
         self.write_configfile(
@@ -393,7 +375,7 @@ class main():
                 outfile="dag{}".format(i)
             )
 
-        for jobs in [1, 3, 24]:
+        for jobs in [1, 3, 24, 100, 1000, 10000]:
             self.write_run_script(
                 snakefile=snakefile,
                 configfile=configfile,
@@ -418,15 +400,20 @@ class main():
             outfile="run_dev"
         )
 
+        self.write_run_local_script(
+            snakefile=snakefile,
+            configfile=configfile,
+            output_dir=output_dir
+        )
+
         self.write_report_script(
             snakefile=snakefile,
             configfile=configfile,
             report=os.path.join(output_dir, "imputation_report.html"),
-            log_dir=log_dir,
             output_dir=output_dir
         )
 
-    def generate_step2_files(self, output_dir, log_dir, slurm_log_dir, snakefile, configtemplate, configfile):
+    def generate_step2_files(self, repo_dir, output_dir, log_dir, slurm_log_dir, snakefile, configtemplate, configfile):
         """
 
         Step 1) run 'dry_run.sh'
@@ -443,18 +430,28 @@ class main():
         Step 12) run 'report.sh'
         """
         config_arguments = (
-            ("ref_dir", self.ref_dir),
-            ("singularity_image", self.sif_path),
             ("bind_path", self.bind_path),
-            ("poolsheet_filepath", self.poolsheet_filepath),
-            ("vcf", self.vcf),
+            ("singularity_image", self.sif_path),
+            ("repo_dir", repo_dir),
+            ("ref_dir", self.ref_dir),
+            ("poolsheet_path", self.poolsheet_path),
             ("individual_list_dir", self.individual_list_dir),
-            ("output_dir", output_dir)
+            ("individual_coupling", self.individual_coupling),
+            ("vcf", self.vcf),
+            ("output_dir", output_dir),
+            ("is_multiplexed", self.is_multiplexed),
+            ("sc_data_type", self.sc_data_type),
+            ("rename_bam", self.rename_bam),
+            ("check_sample_swaps", self.check_sample_swaps)
         )
         self.write_configfile(
             template=configtemplate,
             arguments=config_arguments,
             outpath=configfile
+        )
+
+        self.write_check_bam_script(
+            output_dir=output_dir
         )
 
         cluster_status_script = self.write_cluster_status_script(
@@ -481,7 +478,7 @@ class main():
                 outfile="dag{}".format(i)
             )
 
-        for jobs in [1, 2, 22]:
+        for jobs in [1, 2, 22, 100, 1000, 10000]:
             self.write_run_script(
                 snakefile=snakefile,
                 configfile=configfile,
@@ -506,11 +503,16 @@ class main():
             outfile="run_dev"
         )
 
+        self.write_run_local_script(
+            snakefile=snakefile,
+            configfile=configfile,
+            output_dir=output_dir
+        )
+
         self.write_report_script(
             snakefile=snakefile,
             configfile=configfile,
             report=os.path.join(output_dir, "demultiplexing_report.html"),
-            log_dir=log_dir,
             output_dir=output_dir
         )
 
@@ -656,23 +658,73 @@ class main():
             path=os.path.join(output_dir, "{}.sh".format(outfile))
         )
 
-    def write_report_script(self, snakefile, configfile, report, log_dir,
-                            output_dir):
+    def write_run_local_script(self, snakefile, configfile, output_dir):
         lines = [
             '#!/bin/bash',
             '',
-            'nohup \\',
-            '  snakemake \\',
-            '    --snakefile {} \\'.format(snakefile),
-            '    --configfile {} \\'.format(configfile),
-            '    --report {} \\'.format(report),
-            '    > {}/nohup_`date +%Y-%m-%d.%H:%M:%S`.log &'.format(log_dir),
+            'snakemake \\',
+            '  --snakefile {} \\'.format(snakefile),
+            '  --configfile {} \\'.format(configfile),
+            '  --cores 1'
+        ]
+        self.write_lines_to_file(
+            lines=lines,
+            path=os.path.join(output_dir, "run_local.sh")
+        )
+
+    def write_report_script(self, snakefile, configfile, report, output_dir):
+        lines = [
+            '#!/bin/bash',
             '',
-            'echo "Check status of command with:" ps -p $! -u'
+            'snakemake \\',
+            '  --snakefile {} \\'.format(snakefile),
+            '  --configfile {} \\'.format(configfile),
+            '  --report {}'.format(report)
         ]
         self.write_lines_to_file(
             lines=lines,
             path=os.path.join(output_dir, "report.sh")
+        )
+
+
+    def write_check_bam_script(self, output_dir):
+        bam_index = None
+        bam_files = []
+        with open(self.poolsheet_path, 'r') as f:
+            for line in f:
+                values = line.strip("\n").split("\t")
+
+                if bam_index is None:
+                    if "Bam" in values:
+                        bam_index = values.index("Bam")
+                    continue
+
+                bam_files.append(values[bam_index])
+        f.close()
+
+        if len(bam_files) == 0:
+            return
+
+        lines = [
+            '#!/bin/bash',
+            '',
+            'declare -a arr=({})'.format(" ".join(bam_files)),
+            '',
+            'echo "Checking for \'chr\' prefix in BAM files:"',
+            '',
+            'sum=0',
+            'for bam in "${arr[@]}"',
+            'do',
+            '   n=$(singularity exec --bind {bind} {sif} samtools view -H $bam | grep SN:chr[0-9XY]* | wc -l)'.format(bind=self.bind_path, sif=self.sif_path),
+            '   if [[ $n -eq 0 ]]; then echo "    $bam"; else echo "    $bam has prefix"; fi',
+            '   sum=$(($sum + $n))',
+            'done',
+            'if [[ $sum -gt 0 ]]; then echo "Please set \'rename_bam\' to True."; else echo "Please set \'rename_bam\' to False."; fi',
+            '',
+        ]
+        self.write_lines_to_file(
+            lines=lines,
+            path=os.path.join(output_dir, "check_bam.sh")
         )
 
     @staticmethod
@@ -691,27 +743,30 @@ class main():
         print("  > Bind path:                    {}".format(self.bind_path))
         print("  > Singularity path:             {}".format(self.sif_path))
         print("  > Dataset output directory:     {}".format(self.dataset_outdir))
+        print("  > Repository directory:         {}".format(self.repo_dir))
         print("  > Exclude TEMP in SBATCH:       {}".format(self.exclude_temp_in_sbatch))
         print("")
 
         if self.step is None or self.step == 1:
             print("[Step 1] Imputation arguments:")
-            print("  > Imputation subdirectory:      {}".format(self.imputation_subdir))
             print("  > Imputation configuration:     {}".format(self.imputation_config))
             print("  > Genotype path:                {}".format(self.genotype_path))
             print("  > PSAM file:                    {}".format(self.psam))
             print("  > Genome build:                 {}".format(self.genome_build))
             print("  > Dataset samples:              {}".format(self.dataset_samples))
             print("  > Is WGS:                       {}".format(self.is_wgs))
+            print("  > Force ancestry:               {}".format(self.force_ancestry))
             print("")
 
         if self.step is None or self.step == 2:
             print("[Step2] Demultiplexing and doublet removal arguments:")
-            print("  > Demultiplexing subdirectory:  {}".format(self.demultiplexing_subdir))
             print("  > Demultiplexing configuration: {}".format(self.demultiplexing_config))
-            print("  > Poolsheet file:               {}".format(self.poolsheet_filepath))
+            print("  > Poolsheet file:               {}".format(self.poolsheet_path))
+            print("  > VCF:                          {}".format(", ".join(self.vcf) if isinstance(self.vcf, list) else ""))
             print("  > Individual list directory:    {}".format(self.individual_list_dir))
-            print("  > VCF:                          {}".format(", ".join(self.vcf)))
+            print("  > Individual coupling file:     {}".format(self.individual_coupling))
+            print("  > Is multiplexed:               {}".format(self.is_multiplexed))
+            print("  > Single-cell data type:        {}".format(self.sc_data_type))
             print("")
 
 

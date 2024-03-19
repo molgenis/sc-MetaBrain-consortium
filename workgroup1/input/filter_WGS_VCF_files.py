@@ -50,22 +50,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 """
 Syntax: 
-
-### AMP-AD ###
-./filter_WGS_VCF_files.py \
-    --filter_script /groups/umcg-biogen/tmp01/input/processeddata/single-cell/custom_vcf_filter.py \
-    --vcf_indir /groups/umcg-biogen/tmp01/input/AMP-AD/2017-12-08-joint-WGS \
-    --vcf_file_format NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_CHR.recalibrated_variants.vcf.gz \
-    --exclude_chr Y others \
-    --exclude_snp rs1361839 \
-    --sex /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/AMP_AD_sexdata.csv \
-    --annotations /groups/umcg-biogen/tmp01/annotation/GenomeReference/dbsnp/b37/All_b37_b151_20180418.vcf.gz \
-    --outdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD \
-    --outfolder 2022-11-03-FilteredGenotypes \
-    --dryrun
-    
-    
-
+./filter_WGS_VCF_files.py -h
 """
 
 CHROMOSOMES = [str(chr) for chr in range(1, 23)] + ["X", "Y", "others"]

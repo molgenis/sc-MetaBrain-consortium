@@ -47,8 +47,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 """
 Syntax: 
-  
-./check_ancestry_and_sex_update_table.py
+./check_ancestry_and_sex_update_table.py -h
 """
 
 

@@ -46,8 +46,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 """
 Syntax: 
-
-./prepare_amp_ad_annot_files.py
+./prepare_amp_ad_annot_files.py -h
 """
 
 

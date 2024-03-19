@@ -47,13 +47,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 """
 Syntax: 
-
-./prepare_Fujita2022_wg1_files.py \
-    --workdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/Fujita2022 \
-    --sample_id_table /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Fujita2022/unique_individualID.txt.gz \
-    --idkey /groups/umcg-biogen/tmp01/input/ROSMAP-scRNAseq/meta/ROSMAP_IDkey.csv \
-    --clinical /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/data/ROSMAP_clinical.csv \
-    --vcf /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation/vcf_all_merged/imputed_hg38.vcf.gz
+./prepare_Fujita2022_wg1_files.py -h
 """
 
 

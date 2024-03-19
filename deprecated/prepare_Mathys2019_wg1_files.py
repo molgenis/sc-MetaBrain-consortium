@@ -47,12 +47,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 """
 Syntax: 
-
-./prepare_Mathys2019_wg1_files.py \
-    --workdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/datasets/Mathys2019 \
-    --sample_id_table /groups/umcg-biogen/tmp01/input/rawdata/single-cell/Mathys2019/metadata/snRNAseqPFC_BA10_biospecimen_metadata.csv \
-    --idkey /groups/umcg-biogen/tmp01/input/ROSMAP-scRNAseq/meta/ROSMAP_IDkey.csv \
-    --vcf /groups/umcg-biogen/tmp01/output/2022-09-01-scMetaBrainConsortium/2022-10-07-WorkGroup1QC/2023-02-02-AMP_AD/Step1-Imputation/vcf_all_merged/imputed_hg38.vcf.gz
+./prepare_Mathys2019_wg1_files.py -h
 """
 
 
@@ -114,7 +109,7 @@ class main():
         idkey_df = self.load_file(self.idkey)
 
         print("Adding genotype column")
-        wgs_dict = dict(zip(idkey_df["projid"], idkey_df["wgs_id"]))
+        wgs_dict = dict(zip(idkey_df["projid"], idkey_df["wgs_id"])) # 20275399 = ROS20275399
         sit_df["genotype_id"] = sit_df["projid"].map(wgs_dict)
 
         print("Subsetting GTE columns")

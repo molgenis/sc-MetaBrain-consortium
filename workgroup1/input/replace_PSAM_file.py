@@ -47,15 +47,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 """
 Syntax: 
-
-### AMP-AD ###
-./replace_PSAM_file.py \
-    --original /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/2022-11-03-FilteredGenotypes/5-plink2_makepgen/NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_CHR.recalibrated_variants_norm_vcffilter_concat_annotate.psam \
-    --new /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/AMP_AD_annotdata.psam
-    
-./replace_PSAM_file.py \
-    --original /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/2022-11-03-FilteredGenotypes/5-plink2_makepgen_after_fill/NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_CHR.recalibrated_variants_norm_vcffilter_concat_annotate.psam \
-    --new /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/AMP_AD_annotdata.psam
+./replace_PSAM_file.py -h
 """
 
 

@@ -50,12 +50,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 """
 Syntax: 
-
-### AMP-AD ###
-./print_WGS_VCF_filter_overview.py \
-    --workdir /groups/umcg-biogen/tmp01/input/processeddata/single-cell/AMP-AD/2022-11-03-FilteredGenotypes \
-    --vcf_file_format NIA_JG_1898_samples_GRM_WGS_b37_JointAnalysis01_2017-12-08_CHR.recalibrated_variants.vcf.gz \
-    --exclude Y others
+./print_WGS_VCF_filter_overview.py -h
 """
 
 
