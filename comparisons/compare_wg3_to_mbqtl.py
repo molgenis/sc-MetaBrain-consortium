@@ -47,14 +47,7 @@ from adjustText import adjust_text
 
 """
 Syntax:
-./compare_wg3_to_mbqtl.py \
-    --work_dir /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-mbQTLBryoisRepl \
-    --dataset_outdir 2023-04-27-Mathys2019WG3_vs_mbQTL \
-    --mbqtl_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-25-mbQTLBryoisRepl/2023-04-25-BryoisRepl \
-    --wg3_folder /groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-04-11-WorkGroup3eQTLAndDEA/2023-04-12-Mathys2019 \
-    --qvalues /groups/umcg-biogen/tmp02/users/umcg-mvochteloo/utils/qvalue_truncp.R \
-    --rb /groups/umcg-biogen/tmp02/users/umcg-mvochteloo/utils/Rb.R
-    
+./compare_wg3_to_mbqtl.py -h
 """
 
 # Metadata
