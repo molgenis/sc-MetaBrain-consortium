@@ -1,3 +1,2 @@
 jobs/*
-deprecated/check_alignment_bam.py
-deprecated/check_souporcell_pipeline.py
+deprecated/*
