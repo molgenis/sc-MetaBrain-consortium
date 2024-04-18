@@ -39,6 +39,8 @@ import pandas as pd
 from natsort import natsort_keygen
 from statsmodels.stats import multitest
 import rpy2.robjects as robjects
+from rpy2.robjects.packages import importr
+from rpy2.rinterface_lib.embedded import RRuntimeError
 from scipy import stats
 import seaborn as sns
 import matplotlib
@@ -81,21 +83,35 @@ class main():
         self.replication_cell_type = getattr(arguments, 'replication_cell_type')
         self.ancestry = getattr(arguments, 'ancestry')
         self.cell_level = getattr(arguments, 'cell_level')
+        self.use_nominal_pvalue = getattr(arguments, 'use_nominal_pvalue')
         self.alpha = getattr(arguments, 'alpha')
-        self.signif_column = getattr(arguments, 'signif_column')
+        self.fdr_calc_method = getattr(arguments, 'fdr_calc_method')
         self.palette_path = getattr(arguments, 'palette')
-        self.extensions = getattr(arguments, 'extension')
+        self.extensions = getattr(arguments, 'extensions')
+        outdir = getattr(arguments, 'outdir')
         self.force = getattr(arguments, 'force')
-        self.qvalues_script = getattr(arguments, 'qvalues')
+        self.qvalue_truncp_script = getattr(arguments, 'qvalue_truncp')
         self.rb_script = getattr(arguments, 'rb')
 
-        self.disc = self.get_class(name=self.discovery_name, path=self.discovery_path)
-        self.repl = self.get_class(name=self.replication_name, path=self.replication_path)
+        # Check if the names are identical.
+        if self.discovery_name == self.replication_name:
+            print("Warning, discovery and replication name are identical")
+            self.discovery_name = self.discovery_name + "1"
+            self.replication_name = self.replication_name + "2"
+
+        self.disc = self.get_class(type="discovery", name=self.discovery_name, path=self.discovery_path)
+        self.repl = self.get_class(type="replication", name=self.replication_name, path=self.replication_path)
 
         # Set variables.
-        self.outdir = os.path.join(str(os.path.dirname(os.path.abspath(__file__))), "replication_plot", "{}discovery_{}replication".format(self.discovery_name, self.replication_name))
-        if not os.path.exists(self.outdir):
-            os.makedirs(self.outdir)
+        if outdir is None:
+            outdir = str(os.path.dirname(os.path.abspath(__file__)))
+        self.data_outdir = os.path.join(outdir, "replication_data", "{}discovery_{}replication".format(self.discovery_name, self.replication_name))
+        self.plot_outdir = os.path.join(outdir, "replication_plot", "{}discovery_{}replication".format(self.discovery_name, self.replication_name))
+        for outdir in [self.data_outdir, self.plot_outdir]:
+            if outdir is None:
+                continue
+            if not os.path.exists(outdir):
+                os.makedirs(outdir)
 
         # Loading palette.
         self.palette = None
@@ -159,35 +175,42 @@ class main():
                             required=False,
                             default="L1",
                             help="")
+        parser.add_argument("--use_nominal_pvalue",
+                            action='store_true',
+                            help="")
         parser.add_argument("--alpha",
-                            type=str,
+                            type=float,
                             required=False,
                             default=0.05,
                             help="")
-        parser.add_argument("--signif_column",
+        parser.add_argument("--fdr_calc_method",
                             type=str,
-                            required=False,
-                            default="pvalue",
-                            help="")
+                            choices=["qvalues", "bh_fdr", "none"],
+                            default="qvalues",
+                            help="The multiple testing correction method "
+                                 "to use. Default: 'qvalues'.")
         parser.add_argument("--palette",
                             type=str,
                             required=False,
                             default=None,
                             help="A color palette file.")
-        parser.add_argument("-e",
-                            "--extension",
+        parser.add_argument("--extensions",
                             nargs="+",
                             type=str,
                             choices=["png", "pdf", "eps"],
                             default=["png"],
                             help="The figure file extension. "
                                  "Default: 'png'.")
+        parser.add_argument("--outdir",
+                            type=str,
+                            default=None,
+                            help="")
         parser.add_argument("--force",
                             action='store_true',
                             help="")
 
         # Required external scripts.
-        parser.add_argument("--qvalues",
+        parser.add_argument("--qvalue_truncp",
                             type=str,
                             default="qvalue_truncp.R",
                             help="The path to the qvalues script")
@@ -198,13 +221,30 @@ class main():
 
         return parser.parse_args()
 
-    def get_class(self, name, path):
+    def get_class(self, type, name, path):
         if "Bryois" in name:
-            return Bryois(name=name, path=path)
+            return Bryois(
+                type=type,
+                name=name,
+                path=path,
+                use_nominal_pvalue=self.use_nominal_pvalue
+            )
         elif "scMetaBrain" in name:
-            return scMetaBrain(name=name, path=path, ancestry=self.ancestry, cell_level=self.cell_level)
+            return scMetaBrain(
+                type=type,
+                name=name,
+                path=path,
+                use_nominal_pvalue=self.use_nominal_pvalue,
+                ancestry=self.ancestry,
+                cell_level=self.cell_level
+            )
         elif "mbQTL" in name:
-            return mbQTL(name=name, path=path)
+            return mbQTL(
+                type=type,
+                name=name,
+                path=path,
+                use_nominal_pvalue=self.use_nominal_pvalue
+            )
         else:
             print("Error, unexpected name '{}'".format(name))
             exit()
@@ -220,7 +260,7 @@ class main():
         #
 
         # First get the top effect per gene in the discovery dataset.
-        discovery_top_filepath = os.path.join(self.outdir, self.discovery_name + self.discovery_cell_type + "TopEffects.txt.gz")
+        discovery_top_filepath = os.path.join(self.data_outdir, self.discovery_name + "_" + self.discovery_cell_type + "_TopEffects.txt.gz")
         if os.path.exists(discovery_top_filepath) and not self.force:
             discovery_top_df = self.load_file(discovery_top_filepath)
         else:
@@ -232,7 +272,7 @@ class main():
         discovery_eqtls = self.disc.get_eqtls_from_summary_stats(df=discovery_top_df)
 
         # Select the specific top effects from the discovery datasets in the replication dataset.
-        replication_filepath = os.path.join(self.outdir, self.replication_name + self.replication_cell_type + "SpecificEffects.txt.gz")
+        replication_filepath = os.path.join(self.data_outdir, self.discovery_name + "_" + self.discovery_cell_type + "_TopEffects_LookupIn_" + self.replication_name + "_" + self.replication_cell_type + ".txt.gz")
         if os.path.exists(replication_filepath) and not self.force:
             replication_df = self.load_file(replication_filepath)
         else:
@@ -252,12 +292,23 @@ class main():
         if overlapped_df is None or overlapped_df.shape[0] == 0:
             print("No rows to plot.")
             exit()
-
-        # Compare.
-        self.plot(
+            
+        self.save_file(df=overlapped_df, outpath=os.path.join(self.data_outdir, self.discovery_name + "_" + self.discovery_cell_type + "_Disc_" + self.replication_name + "_" + self.replication_cell_type + "_Repl_MergedEffects.txt.gz"))
+        
+        replication_stats_df = self.calculate_replication_stats(
             df=overlapped_df,
             disc_name=self.disc.get_name(),
-            repl_name=self.repl.get_name(),
+            repl_name=self.repl.get_name()
+        )
+        print(replication_stats_df)
+        
+        self.save_file(df=replication_stats_df, outpath=os.path.join(self.data_outdir, self.discovery_name + "_" + self.discovery_cell_type + "_Disc_" + self.replication_name + "_" + self.replication_cell_type + "_Repl_ReplicationStats.txt.gz"))
+
+        self.plot_replication(
+            df=overlapped_df,
+            replication_stats_df=replication_stats_df,
+            disc_name=self.discovery_name,
+            repl_name=self.replication_name,
             disc_cell_type=self.discovery_cell_type,
             repl_cell_type=self.replication_cell_type,
         )
@@ -266,26 +317,28 @@ class main():
         print("Arguments:")
         print("  > Discovery path: {}".format(self.discovery_path))
         print("  > Discovery name: {}".format(self.discovery_name))
-        print("  > Discovery cell type: {}".format(", ".join(self.discovery_cell_type)))
+        print("  > Discovery cell type: {}".format(self.discovery_cell_type))
         print("  > Replication path: {}".format(self.replication_path))
         print("  > Replication name: {}".format(self.replication_name))
-        print("  > Replication cell type: {}".format(", ".join(self.replication_cell_type)))
+        print("  > Replication cell type: {}".format(self.replication_cell_type))
         print("  > Palette path: {}".format(self.palette_path))
         print("  > Ancestry: {}".format(self.ancestry))
         print("  > Cell level: {}".format(self.cell_level))
+        print("  > Use nominal p-value: {}".format(self.use_nominal_pvalue))
         print("  > Alpha: {}".format(self.alpha))
-        print("  > Signif. column: {}".format(self.signif_column))
-        print("  > Output directory: {}".format(self.outdir))
+        print("  > FDR calc. method: {}".format(self.fdr_calc_method))
+        print("  > Data directory: {}".format(self.data_outdir))
+        print("  > Plot directory: {}".format(self.plot_outdir))
         print("  > Extensions: {}".format(self.extensions))
         print("  > Force: {}".format(self.force))
-        print("  > qvalues script: {}".format(self.qvalues_script))
+        print("  > qvalues truncp script: {}".format(self.qvalue_truncp_script))
         print("  > Rb script: {}".format(self.rb_script))
         print("")
 
 
     def get_overlapping_variants(self):
         print("Finding overlapping variants...")
-        outpath = os.path.join(self.outdir, "overlapping_variants.pkl")
+        outpath = os.path.join(self.data_outdir, "overlapping_variants.pkl")
 
         overlapping_variants = None
         if os.path.exists(outpath) and not self.force:
@@ -350,7 +403,7 @@ class main():
         print(df)
 
         na_mask = (df[repl_name + " pvalue"].isna()).to_numpy()
-        print("\tReplication N-effects overlapping: {:,}".format(np.sum(na_mask)))
+        print("\tReplication N-effects overlapping: {:,}".format(df.shape[0] - np.sum(na_mask)))
         if np.sum(na_mask) == df.shape[0]:
             return None
 
@@ -369,123 +422,88 @@ class main():
             df[repl_name + " OA"] = df[disc_name + " OA"]
         print("\t{:,} betas where flipped".format(df[repl_name + " flip"].sum()))
 
-        df[disc_name + " FDR"] = multitest.multipletests(df[disc_name + " pvalue"], method='fdr_bh')[1]
+        fdr_calc_function = None
+        if self.fdr_calc_method == "qvalues":
+            fdr_calc_function = self.qvalues
+        elif self.fdr_calc_method == "bh_fdr":
+            fdr_calc_function = self.bh_fdr
+        elif self.fdr_calc_method == "none":
+            fdr_calc_function = lambda p: p
+        else:
+            print("Error, FDR calculation method '{}' is not implemented".format(self.fdr_calc_method))
+            exit()
+
+        df[disc_name + " FDR"] = fdr_calc_function(p=df[disc_name + " pvalue"])
         discovery_mask = (df[disc_name + " FDR"] <= self.alpha).to_numpy()
         print("\tDiscovery N-signif: {:,}".format(np.sum(discovery_mask)))
 
         na_mask = (df[repl_name + " pvalue"].isna()).to_numpy()
-        mask = np.logical_and(discovery_mask, na_mask)
+        mask = np.logical_and(discovery_mask, ~na_mask)
         df[repl_name + " FDR"] = np.nan
         if np.sum(mask) > 1:
-            df.loc[mask, repl_name + " FDR"] = multitest.multipletests(df.loc[mask, repl_name + " pvalue"], method='fdr_bh')[1]
+            df.loc[mask, repl_name + " FDR"] = fdr_calc_function(p=df.loc[mask, repl_name + " pvalue"])
 
         replication_mask = (df[repl_name + " FDR"] <= self.alpha).to_numpy()
         print("\tReplication N-signif: {:,}".format(np.sum(replication_mask)))
-
+        
         return df
+    
+    def calculate_replication_stats(self, df, disc_name, repl_name):
+        repl_stats_df = df.loc[~df[repl_name + " pvalue"].isna(), :].copy()
+        repl_stats_df.sort_values(by=disc_name + " pvalue", inplace=True)
+        
+        disc_rb_beta, disc_rb_se = self.prepare_rb_info(df=repl_stats_df, name=disc_name)
+        repl_rb_beta, repl_rb_se = self.prepare_rb_info(df=repl_stats_df, name=repl_name)
 
+        replication_stats = []
+        for disc_signif, repl_signif in [(False, False), (True, False), (True, True)]:
+            mask = pd.Series(True, index=df.index)
+            if disc_signif:
+                mask = mask & (repl_stats_df[disc_name + " FDR"] <= self.alpha)
+            if repl_signif:
+                mask = mask & (repl_stats_df[repl_name + " FDR"] <= self.alpha)
+            
+            n = mask.sum()
+            ac = None
+            coef = None
+            coefp = None
+            pi1 = None
+            rb = None
 
-    def plot(self, df, disc_name, repl_name, disc_cell_type, repl_cell_type, title=""):
-        print("Plotting {}...".format(title))
+            if n > 0:
+                ac = self.ac(df=repl_stats_df.loc[mask, :], x=disc_name + " beta", y=repl_name + " beta")
+            if n > 1:
+                coef, coefp = self.pearson_r(df=repl_stats_df.loc[mask, :], x=disc_name + " beta", y=repl_name + " beta")
 
-        color = "#808080"
-        if (disc_cell_type == repl_cell_type) and (disc_cell_type in self.palette.keys()):
-            color = self.palette[disc_cell_type]
+                if disc_signif and not repl_signif:
+                    pi1 = min(self.pi1(df=repl_stats_df.loc[mask, :], x=repl_name + " pvalue"), 1)
+                    rb = self.rb(
+                        df=repl_stats_df.loc[mask, :],
+                        b1=disc_rb_beta,
+                        se1=disc_rb_se,
+                        b2=repl_rb_beta,
+                        se2=repl_rb_se,
+                    )
+                    if rb > 1:
+                        rb = 1
+                    if rb < -1:
+                        rb = -1
 
-        plot_df = df.loc[~df[repl_name + " pvalue"].isna(), :].copy()
-        plot_df.sort_values(by=disc_name + " pvalue", inplace=True)
+            replication_stats.append([disc_signif, repl_signif, n, coef, coefp, ac, pi1, rb])
+        replication_stats_df = pd.DataFrame(replication_stats, columns=["Disc significant", "Repl significant", "N", "Coef", "CoefP", "AC", "pi1", "Rb"])
+        replication_stats_df.index = replication_stats_df["Disc significant"].astype(str) + "_" + replication_stats_df["Repl significant"].astype(str)
+        return replication_stats_df
 
-        nrows = 1
-        ncols = 3
+    @staticmethod
+    def bh_fdr(p):
+        return multitest.multipletests(p, method='fdr_bh')[1]
 
-        self.shared_ylim = {i: (0, 1) for i in range(nrows)}
-        self.shared_xlim = {i: (0, 1) for i in range(ncols)}
-
-        sns.set(rc={'figure.figsize': (ncols * 8, nrows * 6)})
-        sns.set_style("ticks")
-        fig, axes = plt.subplots(nrows=nrows,
-                                 ncols=ncols,
-                                 sharex='none',
-                                 sharey='none')
-        if nrows == 1:
-            axes = axes[np.newaxis, ...]
-
-        disc_rb_beta, disc_rb_se = self.prepare_rb_info(df=plot_df, name=disc_name)
-        repl_rb_beta, repl_rb_se = self.prepare_rb_info(df=plot_df, name=repl_name)
-
-        plot_df[disc_name + " log beta"] = self.log_modulus_beta(plot_df[disc_name + " beta"])
-        plot_df[repl_name + " log beta"] = self.log_modulus_beta(plot_df[repl_name + " beta"])
-
-        print("\tPlotting column 1.")
-        xlim, ylim, stats1 = self.scatterplot(
-            df=plot_df,
-            fig=fig,
-            ax=axes[0, 0],
-            x=disc_name + " log beta",
-            y=repl_name + " log beta",
-            xlabel=disc_name + " log eQTL beta",
-            ylabel=repl_name + " log eQTL beta",
-            title="All",
-            color=color,
-            include_ylabel=True
-        )
-        self.update_limits(xlim, ylim, 0, 0)
-
-        print("\tPlotting column 2.")
-        xlim, ylim, stats2 = self.scatterplot(
-            df=plot_df.loc[plot_df[disc_name + " " + self.signif_column] <= self.alpha, :],
-            fig=fig,
-            ax=axes[0, 1],
-            x=disc_name + " log beta",
-            y=repl_name + " log beta",
-            xlabel=disc_name + " log eQTL beta",
-            ylabel="",
-            title=disc_name + " signif.",
-            color=color,
-            include_ylabel=False,
-            pi1_column=repl_name + " pvalue",
-            rb_columns=[(disc_rb_beta, disc_rb_se), (repl_rb_beta, repl_rb_se)]
-        )
-        self.update_limits(xlim, ylim, 0, 1)
-
-        print("\tPlotting column 3.")
-        xlim, ylim, stats3 = self.scatterplot(
-            df=plot_df.loc[(plot_df[disc_name + " " + self.signif_column] <= self.alpha) & (plot_df[repl_name + " " + self.signif_column] <= self.alpha), :],
-            fig=fig,
-            ax=axes[0, 2],
-            x=disc_name + " log beta",
-            y=repl_name + " log beta",
-            label=disc_name + " label",
-            xlabel=disc_name + " log eQTL beta",
-            ylabel="",
-            title="Both signif.",
-            color=color,
-            include_ylabel=False
-        )
-        self.update_limits(xlim, ylim, 0, 2)
-
-        for (m, n), ax in np.ndenumerate(axes):
-            (xmin, xmax) = self.shared_xlim[n]
-            (ymin, ymax) = self.shared_ylim[m]
-
-            xmargin = (xmax - xmin) * 0.05
-            ymargin = (ymax - ymin) * 0.05
-
-            ax.set_xlim(xmin - xmargin - 1, xmax + xmargin)
-            ax.set_ylim(ymin - ymargin, ymax + ymargin)
-
-        # Add the main title.
-        fig.suptitle(title,
-                     fontsize=25,
-                     color="#000000",
-                     weight='bold')
-
-        plt.tight_layout()
-        for extension in self.extensions:
-            filename = "{}_{}_replication_in_{}_{}.{}".format(disc_name, disc_cell_type, repl_name, repl_cell_type, extension)
-            fig.savefig(os.path.join(self.outdir, filename))
-            print("\tSaved {}".format(filename))
-        plt.close()
+    @staticmethod
+    def qvalues(p):
+        qvalue = importr("qvalue")
+        pvals = robjects.FloatVector(p)
+        qobj = robjects.r['qvalue'](pvals)
+        return np.array(qobj.rx2('qvalues'))
 
     def prepare_rb_info(self, df, name):
         se_column = name + " se"
@@ -522,6 +540,155 @@ class main():
         df[se_col] = 1 / a ** (1/2)
 
     @staticmethod
+    def pearson_r(df, x, y):
+        return stats.pearsonr(df[x], df[y])
+
+    @staticmethod
+    def ac(df, x, y):
+        lower_quadrant = df.loc[(df[x] < 0) & (df[y] < 0), :]
+        upper_quadrant = df.loc[(df[x] > 0) & (df[y] > 0), :]
+        n_concordant = lower_quadrant.shape[0] + upper_quadrant.shape[0]
+        concordance = (100 / df.shape[0]) * n_concordant
+        return concordance
+
+    def pi1(self, df, x):
+        robjects.r("source('{}')".format(self.qvalue_truncp_script))
+        p = robjects.FloatVector(df[x])
+        qvalue_truncp = robjects.globalenv['qvalue_truncp']
+        try:
+            pi0 = qvalue_truncp(p)[0]
+        except RRuntimeError as e:
+            print("Warning, could not calculate pi1.")
+            print(e)
+            return np.nan
+
+        return 1 - np.array(pi0)
+
+    def rb(self, df, b1, se1, b2, se2, theta=0):
+        robjects.r("source('{}')".format(self.rb_script))
+        b1 = robjects.FloatVector(df[b1])
+        se1 = robjects.FloatVector(df[se1])
+        b2 = robjects.FloatVector(df[b2])
+        se2 = robjects.FloatVector(df[se2])
+        calcu_cor_true = robjects.globalenv['calcu_cor_true']
+        rb = calcu_cor_true(b1, se1, b2, se2, theta)
+        return np.array(rb)[0][0]
+
+
+    def plot_replication(self, df, replication_stats_df, disc_name, repl_name, disc_cell_type, repl_cell_type, log_modulus=False, title=""):
+        print("Plotting {}...".format(title))
+        plot_df = df.copy()
+
+        color = "#808080"
+        if (disc_cell_type == repl_cell_type) and (disc_cell_type in self.palette.keys()):
+            color = self.palette[disc_cell_type]
+
+        nrows = 1
+        ncols = 3
+
+        self.shared_ylim = {i: (0, 1) for i in range(nrows)}
+        self.shared_xlim = {i: (0, 1) for i in range(ncols)}
+
+        sns.set(rc={'figure.figsize': (ncols * 8, nrows * 6)})
+        sns.set_style("ticks")
+        fig, axes = plt.subplots(nrows=nrows,
+                                 ncols=ncols,
+                                 sharex='none',
+                                 sharey='none')
+        if nrows == 1:
+            axes = axes[np.newaxis, ...]
+
+        prefix = ""
+        if log_modulus:
+            plot_df[disc_name + prefix + " beta"] = self.log_modulus_beta(plot_df[disc_name + " beta"])
+            plot_df[repl_name + prefix + " beta"] = self.log_modulus_beta(plot_df[repl_name + " beta"])
+            prefix = " log"
+
+        plot_df["facecolors"] = "#808080"
+        plot_df.loc[(plot_df[disc_name + " FDR"] <= self.alpha) & (plot_df[repl_name + " FDR"] <= self.alpha), "facecolors"] = color
+
+        print("\tPlotting column 1.")
+        xlim, ylim = self.scatterplot(
+            df=plot_df,
+            fig=fig,
+            ax=axes[0, 0],
+            x=disc_name + prefix + " beta",
+            y=repl_name + prefix + " beta",
+            xlabel=disc_name + prefix + " eQTL beta",
+            ylabel=repl_name + prefix + " eQTL beta",
+            title="All",
+            color=color,
+            include_ylabel=True,
+            annotations=["N = {:,}".format(replication_stats_df.loc["False_False", "N"]),
+                         "r = {:.2f}".format(replication_stats_df.loc["False_False", "N"]),
+                         "AC = {:.0f}%".format(replication_stats_df.loc["False_False", "N"])]
+        )
+        self.update_limits(xlim, ylim, 0, 0)
+
+        print("\tPlotting column 2.")
+        xlim, ylim = self.scatterplot(
+            df=plot_df.loc[plot_df[disc_name + " FDR"] <= self.alpha, :],
+            fig=fig,
+            ax=axes[0, 1],
+            x=disc_name + prefix + " beta",
+            y=repl_name + prefix + " beta",
+            facecolors="facecolors",
+            xlabel=disc_name + prefix + " eQTL beta",
+            ylabel="",
+            title=disc_name + " signif.",
+            color=color,
+            include_ylabel=False,
+            annotations=["N = {:,}".format(replication_stats_df.loc["True_False", "N"]),
+                         "r = {:.2f}".format(replication_stats_df.loc["True_False", "N"]),
+                         "AC = {:.0f}%".format(replication_stats_df.loc["True_False", "N"]),
+                         "\u03C01 = {:.2f}".format(replication_stats_df.loc["True_False", "N"]),
+                         "Rb = {:.2f}".format(replication_stats_df.loc["True_False", "N"])]
+        )
+        self.update_limits(xlim, ylim, 0, 1)
+
+        print("\tPlotting column 3.")
+        xlim, ylim = self.scatterplot(
+            df=plot_df.loc[(plot_df[disc_name + " FDR"] <= self.alpha) & (plot_df[repl_name + " FDR"] <= self.alpha), :],
+            fig=fig,
+            ax=axes[0, 2],
+            x=disc_name + prefix + " beta",
+            y=repl_name + prefix + " beta",
+            label=disc_name + " label",
+            xlabel=disc_name + prefix + " eQTL beta",
+            ylabel="",
+            title="Both signif.",
+            color=color,
+            include_ylabel=False,
+            annotations=["N = {:,}".format(replication_stats_df.loc["True_True", "N"]),
+                         "r = {:.2f}".format(replication_stats_df.loc["True_True", "N"]),
+                         "AC = {:.0f}%".format(replication_stats_df.loc["True_True", "N"])]
+        )
+        self.update_limits(xlim, ylim, 0, 2)
+
+        for (m, n), ax in np.ndenumerate(axes):
+            (xmin, xmax) = self.shared_xlim[n]
+            (ymin, ymax) = self.shared_ylim[m]
+
+            xmargin = (xmax - xmin) * 0.05
+            ymargin = (ymax - ymin) * 0.05
+
+            ax.set_xlim(xmin - xmargin - 1, xmax + xmargin)
+            ax.set_ylim(ymin - ymargin, ymax + ymargin)
+
+        # Add the main title.
+        fig.suptitle(title,
+                     fontsize=25,
+                     color="#000000",
+                     weight='bold')
+
+        plt.tight_layout()
+        for extension in self.extensions:
+            filename = "{}_{}_Disc_{}_{}_Repl.{}".format(disc_name, disc_cell_type, repl_name, repl_cell_type, extension)
+            fig.savefig(os.path.join(self.plot_outdir, filename))
+            print("\tSaved {}".format(filename))
+        plt.close()
+
+    @staticmethod
     def log_modulus_beta(series):
         s = series.copy()
         data = []
@@ -534,7 +701,7 @@ class main():
     def scatterplot(self, df, fig, ax, x="x", y="y", facecolors=None,
                     label=None, max_labels=15, xlabel="", ylabel="", title="",
                     color="#000000", ci=95, include_ylabel=True,
-                    pi1_column=None, rb_columns=None):
+                    annotations=None):
         sns.despine(fig=fig, ax=ax)
 
         if not include_ylabel:
@@ -546,33 +713,7 @@ class main():
             facecolors = df[facecolors]
 
         n = df.shape[0]
-        concordance = np.nan
-        n_concordant = np.nan
-        coef = np.nan
-        pi1 = np.nan
-        rb = np.nan
-
-        if n > 0:
-            lower_quadrant = df.loc[(df[x] < 0) & (df[y] < 0), :]
-            upper_quadrant = df.loc[(df[x] > 0) & (df[y] > 0), :]
-            n_concordant = lower_quadrant.shape[0] + upper_quadrant.shape[0]
-            concordance = (100 / n) * n_concordant
-
-            if n > 1:
-                coef, p = stats.pearsonr(df[x], df[y])
-
-                if pi1_column is not None:
-                    pi1 = self.calculate_p1(p=df[pi1_column])
-
-                if rb_columns is not None:
-                    rb_est = self.calculate_rb(
-                        b1=df[rb_columns[0][0]],
-                        se1=df[rb_columns[0][1]],
-                        b2=df[rb_columns[1][0]],
-                        se2=df[rb_columns[1][1]],
-                        )
-                    rb = rb_est[0]
-
+        if n > 1:
             sns.regplot(x=x, y=y, data=df, ci=ci,
                         scatter_kws={'facecolors': facecolors,
                                      'edgecolors': "#808080"},
@@ -598,20 +739,13 @@ class main():
         ax.axvline(0, ls='--', color="#D7191C", alpha=0.3, zorder=-1)
 
         y_pos = 0.9
-        if n > 0:
-            ax.annotate(
-                'N = {:,}'.format(n),
-                xy=(0.03, 0.9),
-                xycoords=ax.transAxes,
-                color=color,
-                fontsize=14,
-                fontweight='bold'
-            )
-            y_pos -= 0.05
+        for annotation in annotations:
+            if annotation.startswith("N = "):
+                if "N = {:,}".format(n) != annotation:
+                    print("Warning, are you sure these stats match the data you are plotting?")
 
-        if not np.isnan(coef):
             ax.annotate(
-                'r = {:.2f}'.format(coef),
+                annotation,
                 xy=(0.03, y_pos),
                 xycoords=ax.transAxes,
                 color=color,
@@ -619,38 +753,6 @@ class main():
                 fontweight='bold'
             )
             y_pos -= 0.05
-
-        if not np.isnan(concordance):
-            ax.annotate(
-                'concordance = {:.0f}%'.format(concordance),
-                xy=(0.03, y_pos),
-                xycoords=ax.transAxes,
-                color=color,
-                fontsize=14,
-                fontweight='bold'
-            )
-            y_pos -= 0.05
-
-        if not np.isnan(pi1):
-            ax.annotate(
-                '\u03C01 = {:.2f}'.format(pi1),
-                xy=(0.03, y_pos),
-                xycoords=ax.transAxes,
-                color=color,
-                fontsize=14,
-                fontweight='bold'
-            )
-            y_pos -= 0.05
-
-        if not np.isnan(rb):
-            ax.annotate(
-                'Rb = {:.2f}'.format(rb),
-                xy=(0.03, y_pos),
-                xycoords=ax.transAxes,
-                color=color,
-                fontsize=14,
-                fontweight='bold'
-            )
 
         ax.set_title(title,
                      fontsize=22,
@@ -663,28 +765,7 @@ class main():
                       fontsize=14,
                       fontweight='bold')
 
-        stats_df = pd.DataFrame([[n, n_concordant, concordance, coef, pi1, rb]],
-                                columns=["N", "N concordant", "concordance", "pearsonr", "pi1", "Rb"],
-                                index=[0])
-
-        return (df[x].min(), df[x].max()), (df[y].min(), df[y].max()), stats_df
-
-    def calculate_p1(self, p):
-        robjects.r("source('{}')".format(self.qvalues_script))
-        p = robjects.FloatVector(p)
-        qvalue_truncp = robjects.globalenv['qvalue_truncp']
-        pi0 = qvalue_truncp(p)[0]
-        return 1 - np.array(pi0)
-
-    def calculate_rb(self, b1, se1, b2, se2, theta=0):
-        robjects.r("source('{}')".format(self.rb_script))
-        b1 = robjects.FloatVector(b1)
-        se1 = robjects.FloatVector(se1)
-        b2 = robjects.FloatVector(b2)
-        se2 = robjects.FloatVector(se2)
-        calcu_cor_true = robjects.globalenv['calcu_cor_true']
-        rb = calcu_cor_true(b1, se1, b2, se2, theta)
-        return np.array(rb)[0]
+        return (df[x].min(), df[x].max()), (df[y].min(), df[y].max())
 
     def update_limits(self, xlim, ylim, row, col):
         row_ylim = self.shared_ylim[row]
@@ -704,10 +785,12 @@ class main():
 ##############################################################################################################
 
 class Dataset:
-    def __init__(self, name, path):
+    def __init__(self, type, name, path, use_nominal_pvalue):
         self.class_name = None
+        self.type = type
         self.name = name
         self.path = path
+        self.use_nominal_pvalue = use_nominal_pvalue
         self.columns = {
             "gene": None,
             "SNP": None,
@@ -722,19 +805,39 @@ class Dataset:
         }
 
         # Set the class variables.
+        self.nominal_pvalue = None
+        self.adjusted_pvalue = None
         self.snp_pos_df = None
 
         # Class variables.
         self.overlapping_variants = None
+        self.partial_file_column_split = {}
 
     def get_class_name(self):
         return self.class_name
+
+    def get_type(self):
+        return self.type
 
     def get_name(self):
         return self.name
 
     def get_path(self):
         return self.path
+
+    def get_pvalue_label(self):
+        if self.use_nominal_pvalue or self.type == "replication":
+            return self.nominal_pvalue
+
+        if self.type == "discovery":
+            if self.adjusted_pvalue is None:
+                print("Warning, class '{}' does not have adjusted p-value info, using nominal p-value instead.".format(self.name))
+                return self.nominal_pvalue
+
+            return self.adjusted_pvalue
+
+        print("Error, unexpected problem in get_pvalue_label() for class '{}' with use_nominal_pvalue = {}, nominal_pvalue = {}, and adujsted_pvalue = {}".format(self.name, self.use_nominal_pvalue, self.nominal_pvalue, self.adjusted_pvalue))
+        exit()
 
     @staticmethod
     def translate_cell_type(cell_type):
@@ -753,6 +856,43 @@ class Dataset:
     def set_overlapping_variants(self, overlapping_variants):
         print("Error, function 'set_overlapping_variants()' not implemented in {}".format(self.class_name))
         exit()
+
+    def trans_label_to_index(self, inpath, label_dict):
+        partial_file_column_indices = self.get_partial_file_column_index(inpath)
+
+        indices_dict = {}
+        for key, value in label_dict.items():
+            indices_dict[key] = partial_file_column_indices[value]
+
+        return indices_dict
+
+    def get_partial_file_column_index(self, inpath):
+        fhin = None
+        if inpath.endswith(".gz"):
+            fhin = gzip.open(inpath, 'rt')
+        else:
+            fhin = open(inpath, 'r')
+
+        column_indices = {}
+        for line in fhin:
+            values = line.rstrip("\n").split("\t")
+
+            splitted_values = []
+            for col_index, value in enumerate(values):
+                if col_index in self.partial_file_column_split.keys():
+                    splitted_values.extend(values[col_index].split(self.partial_file_column_split[col_index]))
+                else:
+                    splitted_values.append(values[col_index])
+            values = splitted_values
+
+            for name, label in self.columns.items():
+                if label not in values:
+                    continue
+                column_indices[label] = values.index(label)
+            break
+        fhin.close()
+
+        return column_indices
 
     def get_all_effects(self, cell_type):
         df = self.get_effects(cell_type, mode="all")
@@ -823,6 +963,10 @@ class Dataset:
     @staticmethod
     def load_file(inpath, header=0, index_col=None, sep="\t", low_memory=True,
                   nrows=None, skiprows=None, usecols=None):
+        if not os.path.exists(inpath):
+            print("Error, '{}' file not found".format(os.path.basename(inpath)))
+            exit()
+
         print("Loading file...")
         df = pd.read_csv(inpath, sep=sep, header=header, index_col=index_col,
                          low_memory=low_memory, nrows=nrows, skiprows=skiprows,
@@ -836,6 +980,10 @@ class Dataset:
     def load_partial_file(inpath, header=0, index_col=None, sep="\t", nrows=None,
                           skiprows=None, usecols=None, split_cols=None, filter=None, top_effect_cols=None,
                           specific_effect_cols=None, effects=None):
+        if not os.path.exists(inpath):
+            print("Error, '{}' file not found".format(os.path.basename(inpath)))
+            exit()
+
         print("Loading partial file...")
         if inpath.endswith(".gz"):
             fhi = gzip.open(inpath, 'rt')
@@ -849,6 +997,7 @@ class Dataset:
         lines = []
         header_row = header if skiprows is None else skiprows + header
         max_rows = nrows
+        n_values = None
         if skiprows is not None and max_rows is not None:
             max_rows += skiprows
         for i, line in enumerate(fhi):
@@ -858,6 +1007,12 @@ class Dataset:
                 break
 
             values = line.strip("\n").split(sep)
+            if n_values is None:
+                n_values = len(values)
+            if len(values) != n_values:
+                print("  Error, unequal number of columns in the input file, skip kine")
+                continue
+
             if split_cols is not None:
                 splitted_values = []
                 for col_index, value in enumerate(values):
@@ -911,9 +1066,10 @@ class Dataset:
 ##############################################################################################################
 
 class Bryois(Dataset):
-    def __init__(self, name, path):
-        super().__init__(name=name, path=path)
+    def __init__(self, type, name, path, use_nominal_pvalue):
+        super().__init__(type=type, name=name, path=path, use_nominal_pvalue=use_nominal_pvalue)
         self.class_name = "Bryois"
+        self.nominal_pvalue = "Nominal p-value"
 
         # Define the important columns.
         self.columns = {
@@ -923,11 +1079,13 @@ class Bryois(Dataset):
             "OA": "other_allele",
             "beta": "Beta",
             "se": None,
-            "pvalue": "Nominal p-value",
+            "pvalue": self.get_pvalue_label(),
             "N": "N",
             "MAF": "MAF",
             "label": "HGNC"
         }
+
+        self.partial_file_column_split = {0: "_"}
 
     def get_snp_pos_df(self):
         if self.snp_pos_df is None:
@@ -940,10 +1098,6 @@ class Bryois(Dataset):
 
     def load_snp_pos_df(self):
         snp_pos_inpath = os.path.join(self.path, "snp_pos.txt.gz")
-        if not os.path.exists(snp_pos_inpath):
-            print("Error, '{}' file not found".format(os.path.basename(snp_pos_inpath)))
-            exit()
-
         return self.load_file(inpath=snp_pos_inpath)
 
     def set_overlapping_variants(self, overlapping_variants):
@@ -951,11 +1105,21 @@ class Bryois(Dataset):
         trans_dict = dict(zip(snp_pos_df["SNP_id_hg38"], snp_pos_df["SNP"]))
         self.overlapping_variants = set([trans_dict[snp_id] for snp_id in overlapping_variants])
 
+    def get_partial_file_column_index(self, inpath):
+        values = ["HGNC", "Gene", "SNP", "Distance to TSS", "Nominal p-value", "Beta"]
+        column_indices = {}
+        for name, label in self.columns.items():
+            if label not in values:
+                continue
+            column_indices[label] = values.index(label)
+
+        return column_indices
+
     @staticmethod
     def translate_cell_type(cell_type):
         ct_link = {
             "AST": "Astrocytes",
-            "END": "Endothelial",
+            "END": "Endothelial.cells",
             "EX": "Excitatory.neurons",
             "IN": "Inhibitory.neurons",
             "MIC": "Microglia",
@@ -965,27 +1129,84 @@ class Bryois(Dataset):
         }
         return ct_link[cell_type]
 
+    def get_top_effects(self, cell_type):
+        snp_pos_df = self.get_snp_pos_df()
+        snp_pos_df = snp_pos_df[["SNP", "SNP_id_hg38", "SNP_id_hg19", "MAF"]]
+
+        inpath = os.path.join(self.path, "41593_2022_1128_MOESM3_ESM.xlsx")
+        df = pd.read_excel(inpath, sheet_name="Table S2", skiprows=3)
+        df = df.astype({
+            "cell_type": str,
+            "symbol": str,
+            "ensembl": str,
+            "SNP": str,
+            "effect_allele": str,
+            "other_allele": str,
+            "dist_TSS": int,
+            "beta": float,
+            "bpval": float,
+            "adj_p": float,
+            "beta_metabrain": float,
+            "p_metabrain": float,
+            "Replication": str}
+        )
+        df = df.loc[df["cell_type"] == self.translate_cell_type(cell_type).replace("...", " / ").replace(".", " "), :]
+        if df.shape[0] == 0:
+            print("Error, no effects for cell type {}".format(cell_type))
+            return None
+
+        self.nominal_pvalue = "bpval"
+        self.adjusted_pvalue = "adj_p"
+        self.columns.update({
+            "gene": "symbol",
+            "beta": "beta",
+            "pvalue": self.get_pvalue_label(),
+            "label": "symbol"
+        })
+        #TODO this will give issues if you first get the top effects and after get the partial effects
+        # Perhaps better to rename the column to match the ones above
+        df = df.merge(snp_pos_df, on="SNP", how="left")
+        df["N"] = 192
+        df.index = df[self.columns["gene"]] + "_" + df[self.columns["SNP"]].astype(str)
+
+        return self.standardize_format(df, cell_type)
+
     def get_effects(self, cell_type, effects=None, mode="top"):
         snp_pos_df = self.get_snp_pos_df()
 
         df_list = []
         for chromosome in CHROMOSOMES:
             inpath = os.path.join(self.path, "{}.{}.gz".format(self.translate_cell_type(cell_type), chromosome))
-            if not os.path.exists(inpath):
-                print("Error, '{}' file not found".format(os.path.basename(inpath)))
-                exit()
 
             df = None
             if mode == "all":
                 df = self.load_file(inpath, header=None, sep=" ")
-            elif mode == "all-overlapping":
-                df = self.load_partial_file(inpath, header=None, sep=" ", split_cols={0: "_"}, filter=lambda x: x[1] in self.overlapping_variants)
             elif mode == "top":
-                df = self.load_partial_file(inpath, header=None, sep=" ", split_cols={0: "_"}, top_effect_cols={"key": 0, "value": 3})
-            elif mode == "top-overlapping":
-                df = self.load_partial_file(inpath, header=None, sep=" ", split_cols={0: "_"}, top_effect_cols={"key": 0, "value": 3}, filter=lambda x: x[1] in self.overlapping_variants)
+                raise NotImplementedError("get_effects(mode=top) is not implemented in {}".format(self.name))
+                # top_effect_cols = self.trans_label_to_index(
+                #     inpath=inpath,
+                #     label_dict={"key": self.columns["gene"], "value": self.columns["pvalue"]}
+                # )
+                # df = self.load_partial_file(
+                #     inpath,
+                #     header=None,
+                #     sep=" ",
+                #     split_cols=self.partial_file_column_split,
+                #     top_effect_cols=top_effect_cols
+                # )
             elif mode == "specific":
-                df = self.load_partial_file(inpath, header=None, sep=" ", split_cols={0: "_"}, effects=effects, specific_effect_cols={"gene": 0, "snp": 2})
+                specific_effect_cols = self.trans_label_to_index(
+                    inpath=inpath,
+                    label_dict={"gene": self.columns["gene"], "snp": self.columns["SNP"]}
+                )
+                df = self.load_partial_file(
+                    inpath,
+                    header=None,
+                    sep=" ",
+                    split_cols=self.partial_file_column_split,
+                    effects=effects,
+                    specific_effect_cols=specific_effect_cols
+                )
             else:
                 print("Error, mode '{}' not implemented in {}".format(mode, self.class_name))
                 exit()
@@ -999,7 +1220,7 @@ class Bryois(Dataset):
         df.columns = ["HGNC", "Gene", "SNP", "Distance to TSS", "Nominal p-value", "Beta"]
         df = df.astype({"HGNC": str, "Gene": str, "SNP": str, "Distance to TSS": int, "Nominal p-value": float, "Beta": float})
         df = df.merge(snp_pos_df, on="SNP", how="left")
-        df["N"] = 196
+        df["N"] = 192
         df.index = df[self.columns["gene"]] + "_" + df[self.columns["SNP"]]
         return df
 
@@ -1008,9 +1229,11 @@ class Bryois(Dataset):
 
 
 class scMetaBrain(Dataset):
-    def __init__(self, name, path, ancestry, cell_level):
-        super().__init__(name=name, path=path)
+    def __init__(self, type, name, path, use_nominal_pvalue, ancestry, cell_level):
+        super().__init__(type=type, name=name, path=path, use_nominal_pvalue=use_nominal_pvalue)
         self.class_name = "scMetaBrain"
+        self.nominal_pvalue = "p_value"
+        self.adjusted_pvalue = "empirical_feature_p_value"
         self.ancestry = ancestry
         self.cell_level = cell_level
 
@@ -1025,7 +1248,7 @@ class scMetaBrain(Dataset):
             "OA": None,
             "beta": "beta",
             "se": "beta_se",
-            "pvalue": "p_value",
+            "pvalue": self.get_pvalue_label(),
             "N": "n_samples",
             "MAF": "maf",
             "label": "feature_id"
@@ -1045,10 +1268,6 @@ class scMetaBrain(Dataset):
 
     def load_snp_pos_df(self):
         snp_pos_inpath = os.path.join(self.path, "genotype_input/{ancestry}/{ancestry}_imputed_hg38_stats_filtered.vars.gz".format(ancestry=self.ancestry))
-        if not os.path.exists(snp_pos_inpath):
-            print("Error, '{}' file not found".format(os.path.basename(snp_pos_inpath)))
-            exit()
-
         return self.load_partial_file(inpath=snp_pos_inpath, header=0, usecols=[0, 1, 2, 3], filter=lambda x: len(x[3]) == 3)
 
     def set_overlapping_variants(self, overlapping_variants):
@@ -1091,11 +1310,16 @@ class scMetaBrain(Dataset):
             df.index = df[self.columns["gene"]] + "_" + df[self.columns["SNP"]]
         else:
             df = self.get_effects(cell_type, mode="top")
+
+        # Add Bonferroni corrected p-value.
+        if "nTotalTestsPerFeat" in df:
+            df[self.nominal_pvalue + "BonfCorr"] = df[self.nominal_pvalue].astype(float) * df["nTotalTestsPerFeat"].astype(float)
+            df.loc[df[self.nominal_pvalue + "BonfCorr"] > 1., self.nominal_pvalue + "BonfCorr"] = 1.
+
         return self.standardize_format(df, cell_type)
 
     def get_effects(self, cell_type, effects=None, mode="top"):
         qlt_chunks_df = self.get_qtl_chunks(cell_type=cell_type)
-        print(qlt_chunks_df)
 
         df_list = []
         for index, row in qlt_chunks_df.iterrows():
@@ -1242,9 +1466,11 @@ class scMetaBrain(Dataset):
 
 
 class mbQTL(Dataset):
-    def __init__(self, name, path):
-        super().__init__(name=name, path=path)
+    def __init__(self, type, name, path, use_nominal_pvalue):
+        super().__init__(type=type, name=name, path=path, use_nominal_pvalue=use_nominal_pvalue)
         self.class_name = "mbQTL"
+        self.nominal_pvalue = "MetaP"
+        self.adjusted_pvalue = "BetaAdjustedMetaP"
 
         # Define the important columns.
         self.columns = {
@@ -1254,9 +1480,9 @@ class mbQTL(Dataset):
             "OA": "SNPOtherAllele",
             "beta": "MetaBeta",
             "se": "MetaSE",
-            "pvalue": "MetaP",
-            "N": None,
-            "MAF": None,
+            "pvalue": self.get_pvalue_label(),
+            "N": "MetaPN",
+            "MAF": "MAF",
             "label": "Gene"
         }
 
@@ -1265,18 +1491,24 @@ class mbQTL(Dataset):
         return cell_type.capitalize()
 
     def get_effects(self, cell_type, effects=None, mode="top"):
-        inpath = os.path.join(self.path, "{}-TopEffects.txt".format(cell_type.lower()))
-        if not os.path.exists(inpath):
-            print("Error, '{}' file not found".format(os.path.basename(inpath)))
-            exit()
+        full_inpath = os.path.join(self.path, "{}-AllEffects.txt.gz".format(cell_type))
+        top_inpath = os.path.join(self.path, "{}-TopEffects.txt".format(cell_type))
 
         df = None
         if mode == "all":
-            df = self.load_file(inpath)
+            df = self.load_file(full_inpath)
         elif mode == "top":
-            df = self.load_partial_file(inpath, top_effect_cols={"key": 0, "value": 11})
+            df = self.load_file(top_inpath)
         elif mode == "specific":
-            df = self.load_partial_file(inpath, effects=effects, specific_effect_cols={"gene": 0, "snp": 5})
+            specific_effect_cols = self.trans_label_to_index(
+                inpath=full_inpath,
+                label_dict={"gene": self.columns["gene"], "snp": self.columns["SNP"]}
+            )
+            df = self.load_partial_file(
+                full_inpath,
+                effects=effects,
+                specific_effect_cols=specific_effect_cols
+            )
         else:
             print("Error, mode '{}' not implemented in {}".format(mode, self.class_name))
             exit()
@@ -1287,6 +1519,18 @@ class mbQTL(Dataset):
         mask = df["SNPEffectAllele"] == df["SNPOtherAllele"]
         df.loc[mask, "SNPOtherAllele"] = df.loc[mask, "AlleleB"]
         df.drop(["AlleleA", "AlleleB"], axis=1, inplace=True)
+
+        # Update type of N.
+        df["MetaPN"] = df["MetaPN"].astype(float).astype(int)
+
+        # Add Bonferroni corrected p-value.
+        if "NrTestedSNPs" in df:
+            df[self.nominal_pvalue + "BonfCorr"] = df[self.nominal_pvalue].astype(float) * df["NrTestedSNPs"].astype(float)
+            df.loc[df[self.nominal_pvalue + "BonfCorr"] > 1., self.nominal_pvalue + "BonfCorr"] = 1.
+
+        # Add MAF.
+        df["MAF"] = df["SNPEffectAlleleFreq"].astype(float)
+        df.loc[df["MAF"] > 0.5, "MAF"] = 1 - df.loc[df["MAF"] > 0.5, "MAF"]
 
         df.index = df[self.columns["gene"]] + "_" + df[self.columns["SNP"]]
         return df

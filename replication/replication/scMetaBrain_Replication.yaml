@@ -1,0 +1,43 @@
+##############################################################################################################
+##### The following arguments need to be changed by the user to indicating file locations on your system #####
+##############################################################################################################
+inputs:
+  repo_dir: /path/to/repo/dir/ ### Path to the github repository directory
+  discovery_path: /path/to/discovery/directory
+  discovery_name: discovery
+  replication_path: /path/to/replication/directory
+  replication_name: replication
+  palette: /path/to/palette/file
+
+outputs:
+  output_dir: /path/to/parent/out/dir ### The path to the parent dir where you would like all outputs/results saved. This path must exist before running
+
+settings:
+  only_matching: False
+  cell_types: ['AST', 'EX', 'IN', 'MIC', 'OLI', 'OPC', 'PER']
+  use_nominal_pvalue: False
+  alpha: 0.05
+  fdr_calc_method: "bh_fdr"
+  force: False
+  extensions: ['png']
+
+cluster_time: {0: "05:59:00", 1: "23:59:00", 2: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
+
+##############################################################################################################
+##### The following arguments are common parameters that may need to be changed depending on the dataset #####
+##############################################################################################################
+rules:
+  replication_plot_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+  replication_plot_threads: 1 ### Number of threads to use
+  replication_plot_time: 0 ### The time setting to use
+
+  merge_replication_stats_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
+  merge_replication_stats_threads: 1 ### Number of threads to use
+  merge_replication_stats_time: 0 ### The time setting to use
+
+############################################################################################################################################
+##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####
+############################################################################################################################################
+settings_extra:
+  ancestry: "EUR"
+  cell_level: "L1"

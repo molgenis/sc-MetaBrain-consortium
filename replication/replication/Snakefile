@@ -1,0 +1,125 @@
+#!/usr/bin/env python
+
+# Add trailing /.
+if not config["inputs"]["repo_dir"].endswith("/"):
+    config["inputs"]["repo_dir"] += "/"
+if not config["outputs"]["output_dir"].endswith("/"):
+    config["outputs"]["output_dir"] += "/"
+
+if config["inputs"]["discovery_name"] == config["inputs"]["replication_name"]:
+    logger.info("Error, discovery and replication name are the same.")
+    exit("InvalidDiscReplName")
+
+rule all:
+    input: config["outputs"]["output_dir"] + "replication_data/" + config["inputs"]["discovery_name"] + "discovery_" + config["inputs"]["replication_name"] + "replication/" + config["inputs"]["discovery_name"] + "_Disc_" + config["inputs"]["replication_name"] + "_Repl_ReplicationStats.txt.gz"
+
+
+def get_merge_replication_stats_input(wildcards):
+    input_files = []
+    for disc_ct in config["settings"]["cell_types"]:
+        for repl_ct in config["settings"]["cell_types"]:
+            if config["settings"]["only_matching"] and disc_ct != repl_ct:
+                continue
+            input_files.append(config["outputs"]["output_dir"] + "replication_data/" + config["inputs"]["discovery_name"] + "discovery_" + config["inputs"]["replication_name"] + "replication/" + config["inputs"]["discovery_name"] + "_" + disc_ct + "_Disc_" + config["inputs"]["replication_name"] + "_" + repl_ct + "_Repl_ReplicationStats.txt.gz")
+    return input_files
+
+rule merge_replication_stats:
+    input:
+        replication_stats = get_merge_replication_stats_input
+    output:
+        replication_stats = config["outputs"]["output_dir"] + "replication_data/" + config["inputs"]["discovery_name"] + "discovery_" + config["inputs"]["replication_name"] + "replication/" + config["inputs"]["discovery_name"] + "_Disc_" + config["inputs"]["replication_name"] + "_Repl_ReplicationStats.txt.gz",
+        replication_figures = expand(config["outputs"]["output_dir"] + "replication_plot/" + config["inputs"]["discovery_name"] + "discovery_" + config["inputs"]["replication_name"] + "replication/" + config["inputs"]["discovery_name"] + "_Disc_" + config["inputs"]["replication_name"] + "_Repl_{metric}.{extension}", metric=["AC", "pi1", "Rb"], extension=config["settings"]["extensions"])
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["rules"]["merge_replication_stats_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["rules"]["merge_replication_stats_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["rules"]["merge_replication_stats_time"]]
+    threads: config["rules"]["merge_replication_stats_threads"]
+    params:
+        script = config["inputs"]["repo_dir"] + "merge_replication_stats.py",
+        workdir = config["outputs"]["output_dir"] + "replication_data/" + config["inputs"]["discovery_name"] + "discovery_" + config["inputs"]["replication_name"] + "replication/",
+        discovery_name = config["inputs"]["discovery_name"],
+        replication_name = config["inputs"]["replication_name"],
+        cell_types = " ".join(config["settings"]["cell_types"]),
+        plotdir = config["outputs"]["output_dir"] + "replication_plot/" + config["inputs"]["discovery_name"] + "discovery_" + config["inputs"]["replication_name"] + "replication/",
+        palette = "--palette " + config["inputs"]["palette"] if config["inputs"]["palette"] is not None else "",
+        extensions = " ".join(config["settings"]["extensions"]),
+    log: config["outputs"]["output_dir"] + "log/merge_replication_stats.log"
+    shell:
+        """
+        module load Python/3.10.4-GCCcore-11.3.0-bare
+        source ~/env/bin/activate
+
+        python {params.script} \
+            --workdir {params.workdir} \
+            --discovery_name {params.discovery_name} \
+            --replication_name {params.replication_name} \
+            --cell_types {params.cell_types} \
+            --plotdir {params.plotdir} \
+            {params.palette} \
+            --extension {params.extensions}
+
+        deactivate
+        """
+
+rule replication_plot:
+    output:
+        # replication_data = directory(config["outputs"]["output_dir"] + "replication_data/{disc_name}discovery_{repl_name}replication/"),
+        # replication_plot = directory(config["outputs"]["output_dir"] + "replication_plot/{disc_name}discovery_{repl_name}replication/"),
+        merged_effects = config["outputs"]["output_dir"] + "replication_data/" + config["inputs"]["discovery_name"] + "discovery_" + config["inputs"]["replication_name"] + "replication/" + config["inputs"]["discovery_name"] + "_{disc_ct}_Disc_" + config["inputs"]["replication_name"] + "_{repl_ct}_Repl_MergedEffects.txt.gz",
+        replication_stats = config["outputs"]["output_dir"] + "replication_data/" + config["inputs"]["discovery_name"] + "discovery_" + config["inputs"]["replication_name"] + "replication/" + config["inputs"]["discovery_name"] + "_{disc_ct}_Disc_" + config["inputs"]["replication_name"] + "_{repl_ct}_Repl_ReplicationStats.txt.gz",
+        figure = expand(config["outputs"]["output_dir"] + "replication_plot/" + config["inputs"]["discovery_name"] + "discovery_" + config["inputs"]["replication_name"] + "replication/" + config["inputs"]["discovery_name"] + "_{disc_ct}_Disc_" + config["inputs"]["replication_name"] + "_{repl_ct}_Repl.{extension}", extension=config["settings"]["extensions"], allow_missing=True)
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["rules"]["replication_plot_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["rules"]["replication_plot_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["rules"]["replication_plot_time"]]
+    threads: config["rules"]["replication_plot_threads"]
+    params:
+        script = config["inputs"]["repo_dir"] + "replication_plot.py",
+        discovery_path = lambda wildcards: config["inputs"]["discovery_path"].replace("<CT>", wildcards.disc_ct),
+        discovery_name = config["inputs"]["discovery_name"],
+        replication_path = lambda wildcards: config["inputs"]["replication_path"].replace("<CT>", wildcards.repl_ct),
+        replication_name = config["inputs"]["replication_name"],
+        ancestry = config["settings_extra"]["ancestry"],
+        cell_level = config["settings_extra"]["cell_level"],
+        use_nominal_pvalue = "--use_nominal_pvalue" if config["settings"]["use_nominal_pvalue"] else "",
+        alpha = config["settings"]["alpha"],
+        fdr_calc_method = config["settings"]["fdr_calc_method"],
+        palette = "--palette " + config["inputs"]["palette"] if config["inputs"]["palette"] is not None else "",
+        extensions = " ".join(config["settings"]["extensions"]),
+        outdir = config["outputs"]["output_dir"],
+        force = "--force" if config["settings"]["force"] is not None else "",
+        qvalue_truncp_script = config["inputs"]["repo_dir"] + "qvalue_truncp.R",
+        rb_script = config["inputs"]["repo_dir"] + "Rb.R",
+    log: config["outputs"]["output_dir"] + "log/replication_plot.{disc_ct}_discovery.{repl_ct}_replication.log"
+    shell:
+        """
+        module load Python/3.10.4-GCCcore-11.3.0
+        module load R
+        source ~/env/bin/activate
+
+        python {params.script} \
+            --discovery_path {params.discovery_path} \
+            --discovery_name {params.discovery_name} \
+            --discovery_cell_type {wildcards.disc_ct} \
+            --replication_path {params.replication_path} \
+            --replication_name {params.replication_name} \
+            --replication_cell_type {wildcards.repl_ct} \
+            --ancestry {params.ancestry} \
+            --cell_level {params.cell_level} \
+            {params.use_nominal_pvalue} \
+            --alpha {params.alpha} \
+            --fdr_calc_method {params.fdr_calc_method} \
+            {params.palette} \
+            --extensions {params.extensions} \
+            --outdir {params.outdir} \
+            {params.force} \
+            --qvalue_truncp {params.qvalue_truncp_script} \
+            --rb {params.rb_script}
+
+        deactivate
+        """
+
+
+wildcard_constraints:
+    disc_ct = "\w+",
+    repl_ct = "\w+"
