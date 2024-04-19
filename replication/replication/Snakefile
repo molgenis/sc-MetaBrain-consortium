@@ -74,7 +74,7 @@ rule replication_plot:
         time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["rules"]["replication_plot_time"]]
     threads: config["rules"]["replication_plot_threads"]
     params:
-        script = config["inputs"]["repo_dir"] + "replication_plot.py",
+        script = config["inputs"]["repo_dir"] + "replication.py",
         discovery_path = lambda wildcards: config["inputs"]["discovery_path"].replace("<CT>", wildcards.disc_ct),
         discovery_name = config["inputs"]["discovery_name"],
         replication_path = lambda wildcards: config["inputs"]["replication_path"].replace("<CT>", wildcards.repl_ct),

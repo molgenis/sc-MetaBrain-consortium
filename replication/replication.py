@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 """
-File:         replication_plot.py
+File:         replication.py
 Created:      2024/02/28
-Last Changed:
+Last Changed: 2024/04/19
 Author:       M.Vochteloo
 
 Copyright (C) 2020 M.Vochteloo
@@ -52,7 +52,7 @@ from adjustText import adjust_text
 
 """
 Syntax:
-./replication_plot.py -h
+./replication.py -h
 """
 
 # Metadata
@@ -83,9 +83,10 @@ class main():
         self.replication_cell_type = getattr(arguments, 'replication_cell_type')
         self.ancestry = getattr(arguments, 'ancestry')
         self.cell_level = getattr(arguments, 'cell_level')
-        self.use_nominal_pvalue = getattr(arguments, 'use_nominal_pvalue')
+        self.use_pvalue = getattr(arguments, 'use_pvalue')
         self.alpha = getattr(arguments, 'alpha')
         self.fdr_calc_method = getattr(arguments, 'fdr_calc_method')
+        self.log_modulus = getattr(arguments, 'log_modulus')
         self.palette_path = getattr(arguments, 'palette')
         self.extensions = getattr(arguments, 'extensions')
         outdir = getattr(arguments, 'outdir')
@@ -93,20 +94,34 @@ class main():
         self.qvalue_truncp_script = getattr(arguments, 'qvalue_truncp')
         self.rb_script = getattr(arguments, 'rb')
 
+        if self.log_modulus:
+            print("Warning, applying log modulus changes how to plot looks but not how the"
+                  "replication statistics are calculated!")
+
         # Check if the names are identical.
         if self.discovery_name == self.replication_name:
             print("Warning, discovery and replication name are identical")
             self.discovery_name = self.discovery_name + "1"
             self.replication_name = self.replication_name + "2"
 
-        self.disc = self.get_class(type="discovery", name=self.discovery_name, path=self.discovery_path)
-        self.repl = self.get_class(type="replication", name=self.replication_name, path=self.replication_path)
+        self.disc = self.get_class(
+            type="discovery", 
+            name=self.discovery_name, 
+            path=self.discovery_path,
+            cell_type=self.discovery_cell_type
+        )
+        self.repl = self.get_class(
+            type="replication", 
+            name=self.replication_name, 
+            path=self.replication_path,
+            cell_type=self.replication_cell_type
+        )
 
         # Set variables.
         if outdir is None:
             outdir = str(os.path.dirname(os.path.abspath(__file__)))
-        self.data_outdir = os.path.join(outdir, "replication_data", "{}discovery_{}replication".format(self.discovery_name, self.replication_name))
-        self.plot_outdir = os.path.join(outdir, "replication_plot", "{}discovery_{}replication".format(self.discovery_name, self.replication_name))
+        self.data_outdir = os.path.join(outdir, "replication_data", "{}discovery_{}replication".format(self.disc.get_name(), self.repl.get_name()))
+        self.plot_outdir = os.path.join(outdir, "replication_plot", "{}discovery_{}replication".format(self.disc.get_name(), self.repl.get_name()))
         for outdir in [self.data_outdir, self.plot_outdir]:
             if outdir is None:
                 continue
@@ -175,8 +190,10 @@ class main():
                             required=False,
                             default="L1",
                             help="")
-        parser.add_argument("--use_nominal_pvalue",
-                            action='store_true',
+        parser.add_argument("--use_pvalue",
+                            type=str,
+                            choices=["permuted", "bonferroni", "nominal"],
+                            default="permuted",
                             help="")
         parser.add_argument("--alpha",
                             type=float,
@@ -189,6 +206,9 @@ class main():
                             default="qvalues",
                             help="The multiple testing correction method "
                                  "to use. Default: 'qvalues'.")
+        parser.add_argument("--log_modulus",
+                            action='store_true',
+                            help="")
         parser.add_argument("--palette",
                             type=str,
                             required=False,
@@ -221,20 +241,22 @@ class main():
 
         return parser.parse_args()
 
-    def get_class(self, type, name, path):
+    def get_class(self, type, name, path, cell_type):
         if "Bryois" in name:
             return Bryois(
                 type=type,
                 name=name,
                 path=path,
-                use_nominal_pvalue=self.use_nominal_pvalue
+                cell_type=cell_type,
+                use_pvalue=self.use_pvalue
             )
-        elif "scMetaBrain" in name:
-            return scMetaBrain(
+        elif "LIMIX" in name:
+            return LIMIX(
                 type=type,
                 name=name,
                 path=path,
-                use_nominal_pvalue=self.use_nominal_pvalue,
+                cell_type=cell_type,
+                use_pvalue=self.use_pvalue,
                 ancestry=self.ancestry,
                 cell_level=self.cell_level
             )
@@ -243,7 +265,8 @@ class main():
                 type=type,
                 name=name,
                 path=path,
-                use_nominal_pvalue=self.use_nominal_pvalue
+                cell_type=cell_type,
+                use_pvalue=self.use_pvalue
             )
         else:
             print("Error, unexpected name '{}'".format(name))
@@ -260,11 +283,11 @@ class main():
         #
 
         # First get the top effect per gene in the discovery dataset.
-        discovery_top_filepath = os.path.join(self.data_outdir, self.discovery_name + "_" + self.discovery_cell_type + "_TopEffects.txt.gz")
+        discovery_top_filepath = os.path.join(self.data_outdir, self.disc.get_id() + "_TopEffects.txt.gz")
         if os.path.exists(discovery_top_filepath) and not self.force:
             discovery_top_df = self.load_file(discovery_top_filepath)
         else:
-            discovery_top_df = self.disc.get_top_effects(cell_type=self.discovery_cell_type)
+            discovery_top_df = self.disc.get_top_effects()
             self.save_file(df=discovery_top_df, outpath=discovery_top_filepath)
         print(discovery_top_df)
 
@@ -272,45 +295,42 @@ class main():
         discovery_eqtls = self.disc.get_eqtls_from_summary_stats(df=discovery_top_df)
 
         # Select the specific top effects from the discovery datasets in the replication dataset.
-        replication_filepath = os.path.join(self.data_outdir, self.discovery_name + "_" + self.discovery_cell_type + "_TopEffects_LookupIn_" + self.replication_name + "_" + self.replication_cell_type + ".txt.gz")
+        replication_filepath = os.path.join(self.data_outdir, self.disc.get_id() + "_TopEffects_LookupIn_" + self.repl.get_id() + ".txt.gz")
         if os.path.exists(replication_filepath) and not self.force:
             replication_df = self.load_file(replication_filepath)
         else:
-            replication_df = self.repl.get_specific_effects(cell_type=self.replication_cell_type, effects=discovery_eqtls)
+            replication_df = self.repl.get_specific_effects(effects=discovery_eqtls)
             self.save_file(df=replication_df, outpath=replication_filepath)
         print(replication_df)
 
         # Overlap the data frames and harmonise direction of effect.
         overlapped_df = self.overlap_summary_stats(
-            disc_df=discovery_top_df,
-            repl_df=replication_df,
+            disc_df=self.disc.standardize_format(df=discovery_top_df),
+            repl_df=self.repl.standardize_format(df=replication_df),
             disc_name=self.disc.get_name(),
             repl_name=self.repl.get_name()
         )
+        self.save_file(df=overlapped_df, outpath=os.path.join(self.data_outdir, self.disc.get_id() + "_Disc_" + self.repl.get_id() + "_Repl_MergedEffects.txt.gz"))
         print(overlapped_df)
 
-        if overlapped_df is None or overlapped_df.shape[0] == 0:
-            print("No rows to plot.")
-            exit()
-            
-        self.save_file(df=overlapped_df, outpath=os.path.join(self.data_outdir, self.discovery_name + "_" + self.discovery_cell_type + "_Disc_" + self.replication_name + "_" + self.replication_cell_type + "_Repl_MergedEffects.txt.gz"))
-        
+        # Calculate the replication statistics.
         replication_stats_df = self.calculate_replication_stats(
             df=overlapped_df,
             disc_name=self.disc.get_name(),
             repl_name=self.repl.get_name()
         )
+        self.save_file(df=replication_stats_df, outpath=os.path.join(self.data_outdir, self.disc.get_id() + "_Disc_" + self.repl.get_id() + "_Repl_ReplicationStats.txt.gz"))
         print(replication_stats_df)
-        
-        self.save_file(df=replication_stats_df, outpath=os.path.join(self.data_outdir, self.discovery_name + "_" + self.discovery_cell_type + "_Disc_" + self.replication_name + "_" + self.replication_cell_type + "_Repl_ReplicationStats.txt.gz"))
 
+        # Plot the comparison.
         self.plot_replication(
             df=overlapped_df,
             replication_stats_df=replication_stats_df,
-            disc_name=self.discovery_name,
-            repl_name=self.replication_name,
-            disc_cell_type=self.discovery_cell_type,
-            repl_cell_type=self.replication_cell_type,
+            disc_name=self.disc.get_name(),
+            repl_name=self.repl.get_name(),
+            disc_cell_type=self.disc.get_generic_cell_type(),
+            repl_cell_type=self.repl.get_generic_cell_type(),
+            log_modulus=self.log_modulus
         )
 
     def print_arguments(self):
@@ -324,9 +344,10 @@ class main():
         print("  > Palette path: {}".format(self.palette_path))
         print("  > Ancestry: {}".format(self.ancestry))
         print("  > Cell level: {}".format(self.cell_level))
-        print("  > Use nominal p-value: {}".format(self.use_nominal_pvalue))
+        print("  > Use p-value: {}".format(self.use_pvalue))
         print("  > Alpha: {}".format(self.alpha))
         print("  > FDR calc. method: {}".format(self.fdr_calc_method))
+        print("  > Log modulus transform: {}".format(self.log_modulus))
         print("  > Data directory: {}".format(self.data_outdir))
         print("  > Plot directory: {}".format(self.plot_outdir))
         print("  > Extensions: {}".format(self.extensions))
@@ -400,7 +421,6 @@ class main():
         print("\tReplication dataframe '{}' has shape: {}".format(repl_name, repl_df.shape))
 
         df = disc_df.merge(repl_df, left_index=True, right_index=True, how='left')
-        print(df)
 
         na_mask = (df[repl_name + " pvalue"].isna()).to_numpy()
         print("\tReplication N-effects overlapping: {:,}".format(df.shape[0] - np.sum(na_mask)))
@@ -477,17 +497,13 @@ class main():
 
                 if disc_signif and not repl_signif:
                     pi1 = min(self.pi1(df=repl_stats_df.loc[mask, :], x=repl_name + " pvalue"), 1)
-                    rb = self.rb(
+                    rb = max(-1, min(self.rb(
                         df=repl_stats_df.loc[mask, :],
                         b1=disc_rb_beta,
                         se1=disc_rb_se,
                         b2=repl_rb_beta,
                         se2=repl_rb_se,
-                    )
-                    if rb > 1:
-                        rb = 1
-                    if rb < -1:
-                        rb = -1
+                    ), 1))
 
             replication_stats.append([disc_signif, repl_signif, n, coef, coefp, ac, pi1, rb])
         replication_stats_df = pd.DataFrame(replication_stats, columns=["Disc significant", "Repl significant", "N", "Coef", "CoefP", "AC", "pi1", "Rb"])
@@ -579,7 +595,7 @@ class main():
         print("Plotting {}...".format(title))
         plot_df = df.copy()
 
-        color = "#808080"
+        color = "#000000"
         if (disc_cell_type == repl_cell_type) and (disc_cell_type in self.palette.keys()):
             color = self.palette[disc_cell_type]
 
@@ -616,12 +632,12 @@ class main():
             y=repl_name + prefix + " beta",
             xlabel=disc_name + prefix + " eQTL beta",
             ylabel=repl_name + prefix + " eQTL beta",
-            title="All",
+            title="All overlapping",
             color=color,
             include_ylabel=True,
             annotations=["N = {:,}".format(replication_stats_df.loc["False_False", "N"]),
-                         "r = {:.2f}".format(replication_stats_df.loc["False_False", "N"]),
-                         "AC = {:.0f}%".format(replication_stats_df.loc["False_False", "N"])]
+                         "r = {:.2f}".format(replication_stats_df.loc["False_False", "Coef"]),
+                         "AC = {:.0f}%".format(replication_stats_df.loc["False_False", "AC"])]
         )
         self.update_limits(xlim, ylim, 0, 0)
 
@@ -639,10 +655,10 @@ class main():
             color=color,
             include_ylabel=False,
             annotations=["N = {:,}".format(replication_stats_df.loc["True_False", "N"]),
-                         "r = {:.2f}".format(replication_stats_df.loc["True_False", "N"]),
-                         "AC = {:.0f}%".format(replication_stats_df.loc["True_False", "N"]),
-                         "\u03C01 = {:.2f}".format(replication_stats_df.loc["True_False", "N"]),
-                         "Rb = {:.2f}".format(replication_stats_df.loc["True_False", "N"])]
+                         "r = {:.2f}".format(replication_stats_df.loc["True_False", "Coef"]),
+                         "AC = {:.0f}%".format(replication_stats_df.loc["True_False", "AC"]),
+                         "\u03C01 = {:.2f}".format(replication_stats_df.loc["True_False", "pi1"]),
+                         "Rb = {:.2f}".format(replication_stats_df.loc["True_False", "Rb"])]
         )
         self.update_limits(xlim, ylim, 0, 1)
 
@@ -660,8 +676,8 @@ class main():
             color=color,
             include_ylabel=False,
             annotations=["N = {:,}".format(replication_stats_df.loc["True_True", "N"]),
-                         "r = {:.2f}".format(replication_stats_df.loc["True_True", "N"]),
-                         "AC = {:.0f}%".format(replication_stats_df.loc["True_True", "N"])]
+                         "r = {:.2f}".format(replication_stats_df.loc["True_True", "Coef"]),
+                         "AC = {:.0f}%".format(replication_stats_df.loc["True_True", "AC"])]
         )
         self.update_limits(xlim, ylim, 0, 2)
 
@@ -716,7 +732,7 @@ class main():
         if n > 1:
             sns.regplot(x=x, y=y, data=df, ci=ci,
                         scatter_kws={'facecolors': facecolors,
-                                     'edgecolors': "#808080"},
+                                     'edgecolors': facecolors},
                         line_kws={"color": color},
                         ax=ax
                         )
@@ -735,10 +751,10 @@ class main():
                             ax=ax,
                             arrowprops=dict(arrowstyle='-', color='#808080'))
 
-        ax.axhline(0, ls='--', color="#D7191C", alpha=0.3, zorder=-1)
-        ax.axvline(0, ls='--', color="#D7191C", alpha=0.3, zorder=-1)
+        ax.axhline(0, ls='--', color="#808080", alpha=0.3, zorder=-1)
+        ax.axvline(0, ls='--', color="#808080", alpha=0.3, zorder=-1)
 
-        y_pos = 0.9
+        y_pos = 0.95
         for annotation in annotations:
             if annotation.startswith("N = "):
                 if "N = {:,}".format(n) != annotation:
@@ -785,12 +801,19 @@ class main():
 ##############################################################################################################
 
 class Dataset:
-    def __init__(self, type, name, path, use_nominal_pvalue):
+    def __init__(self, type, name, path, cell_type, use_pvalue="permuted"):
         self.class_name = None
         self.type = type
         self.name = name
         self.path = path
-        self.use_nominal_pvalue = use_nominal_pvalue
+        self.generic_cell_type = cell_type
+        self.cell_type = self.translate_cell_type(cell_type=cell_type)
+        self.use_pvalue = use_pvalue
+
+        # Set the class variables.
+        self.nominal_pvalue = None
+        self.bonferroni_pvalue = None
+        self.permuted_pvalue = None
         self.columns = {
             "gene": None,
             "SNP": None,
@@ -804,12 +827,8 @@ class Dataset:
             "label": None
         }
 
-        # Set the class variables.
-        self.nominal_pvalue = None
-        self.adjusted_pvalue = None
+        # Other variables.
         self.snp_pos_df = None
-
-        # Class variables.
         self.overlapping_variants = None
         self.partial_file_column_split = {}
 
@@ -825,18 +844,35 @@ class Dataset:
     def get_path(self):
         return self.path
 
+    def get_generic_cell_type(self):
+        return self.generic_cell_type
+    
+    def get_cell_type(self):
+        return self.cell_type
+    
+    def get_id(self):
+        return self.name + "_" + self.generic_cell_type
+
     def get_pvalue_label(self):
-        if self.use_nominal_pvalue or self.type == "replication":
+        if self.use_pvalue == "nominal" or self.type == "replication":
+            if self.nominal_pvalue is None:
+                print("Error, class '{}' does not have a nominal p-value info.".format(self.name))
+                raise ValueError()
             return self.nominal_pvalue
 
-        if self.type == "discovery":
-            if self.adjusted_pvalue is None:
-                print("Warning, class '{}' does not have adjusted p-value info, using nominal p-value instead.".format(self.name))
-                return self.nominal_pvalue
+        if self.type == "discovery" and self.use_pvalue == "bonferroni":
+            if self.bonferroni_pvalue is None:
+                print("Error, class '{}' does not have a bonferroni p-value info.".format(self.name))
+                raise ValueError()
+            return self.bonferroni_pvalue
 
-            return self.adjusted_pvalue
+        if self.type == "discovery" and self.use_pvalue == "permuted":
+            if self.permuted_pvalue is None:
+                print("Error, class '{}' does not have a permuted p-value info.".format(self.name))
+                raise ValueError()
+            return self.permuted_pvalue
 
-        print("Error, unexpected problem in get_pvalue_label() for class '{}' with use_nominal_pvalue = {}, nominal_pvalue = {}, and adujsted_pvalue = {}".format(self.name, self.use_nominal_pvalue, self.nominal_pvalue, self.adjusted_pvalue))
+        print("Error, unexpected problem in get_pvalue_label() for class '{}' with use_pvalue = {}, nominal_pvalue = {}, bonferroni_pvalue = {}, and permuted_pvalue = {}".format(self.name, self.use_pvalue, self.nominal_pvalue, self.bonferroni_pvalue, self.permuted_pvalue))
         exit()
 
     @staticmethod
@@ -894,71 +930,35 @@ class Dataset:
 
         return column_indices
 
-    def get_all_effects(self, cell_type):
-        df = self.get_effects(cell_type, mode="all")
-        return self.standardize_format(df, cell_type)
+    def get_top_effects(self):
+        return self.get_effects(mode="top")
 
-    def get_all_overlapping_effects(self, cell_type):
+    def get_top_overlapping_effects(self):
         if self.overlapping_variants is None:
             print("Error, overlapping variants not set.")
             exit()
-        df = self.get_effects(cell_type, mode="all-overlapping")
-        return self.standardize_format(df, cell_type)
+        return self.get_effects(mode="top-overlapping")
 
-    def get_top_effects(self, cell_type):
-        df = self.get_effects(cell_type, mode="top")
-        return self.standardize_format(df, cell_type)
+    def get_all_effects(self):
+        return self.get_effects(mode="all")
 
-    def get_top_overlapping_effects(self, cell_type):
+    def get_all_overlapping_effects(self):
         if self.overlapping_variants is None:
             print("Error, overlapping variants not set.")
             exit()
-        df = self.get_effects(cell_type, mode="top-overlapping")
-        return self.standardize_format(df, cell_type)
+        return self.get_effects(mode="all-overlapping")
 
-    def get_specific_effects(self, cell_type, effects):
-        df = self.get_effects(cell_type, effects=effects, mode="specific")
-        return self.standardize_format(df, cell_type)
+
+    def get_specific_effects(self, effects):
+        return self.get_effects(effects=effects, mode="specific")
 
     @abstractmethod
-    def get_effects(self, df, effects=None, mode="top"):
+    def get_effects(self, effects=None, mode="top"):
         print("Error, function 'get_effects()' not implemented in {}".format(self.class_name))
         exit()
 
-    def standardize_format(self, df, cell_type):
-        if df is None:
-            print("Error, empty data frame.")
-            exit()
-
-        columns_of_interest = []
-        new_column_names = []
-        for key, value in self.columns.items():
-            if value is not None:
-                if "CELL_TYPE" in value:
-                    value = value.replace("CELL_TYPE", self.translate_cell_type(cell_type))
-                columns_of_interest.append(value)
-                new_column_names.append("{} {}".format(self.name, key))
-
-        df = df[columns_of_interest].copy()
-        df.columns = new_column_names
-
-        dtypes = {
-            self.name + " gene": str,
-            self.name + " SNP": str,
-            self.name + " EA": str,
-            self.name + " OA": str,
-            self.name + " beta": float,
-            self.name + " se": float,
-            self.name + " pvalue": float,
-            self.name + " N": int,
-            self.name + " MAF": float,
-            self.name + " label": str
-        }
-        df = df.astype({key:value for key, value in dtypes.items() if key in df.columns})
-        return df
-
     def get_eqtls_from_summary_stats(self, df):
-        return dict(zip(df[self.name + " gene"], df[self.name + " SNP"]))
+        return dict(zip(df[self.columns["gene"]], df[self.columns["SNP"]]))
 
     @staticmethod
     def load_file(inpath, header=0, index_col=None, sep="\t", low_memory=True,
@@ -982,7 +982,7 @@ class Dataset:
                           specific_effect_cols=None, effects=None):
         if not os.path.exists(inpath):
             print("Error, '{}' file not found".format(os.path.basename(inpath)))
-            exit()
+            raise FileNotFoundError()
 
         print("Loading partial file...")
         if inpath.endswith(".gz"):
@@ -1062,56 +1062,93 @@ class Dataset:
                                       df.shape))
         return df
 
+    def standardize_format(self, df):
+        if df is None:
+            return None
+
+        columns_of_interest = []
+        new_column_names = []
+        for key, value in self.columns.items():
+            if value is not None:
+                columns_of_interest.append(value)
+                new_column_names.append("{} {}".format(self.name, key))
+
+        df = df[columns_of_interest].copy()
+        df.columns = new_column_names
+
+        dtypes = {
+            self.name + " gene": str,
+            self.name + " SNP": str,
+            self.name + " EA": str,
+            self.name + " OA": str,
+            self.name + " beta": float,
+            self.name + " se": float,
+            self.name + " pvalue": float,
+            self.name + " N": int,
+            self.name + " MAF": float,
+            self.name + " label": str
+        }
+        df = df.astype({key:value for key, value in dtypes.items() if key in df.columns})
+        return df
+
 
 ##############################################################################################################
 
 class Bryois(Dataset):
-    def __init__(self, type, name, path, use_nominal_pvalue):
-        super().__init__(type=type, name=name, path=path, use_nominal_pvalue=use_nominal_pvalue)
+    def __init__(self, type, name, path, cell_type, use_pvalue):
+        super().__init__(type=type, name=name, path=path, cell_type=cell_type, use_pvalue=use_pvalue)
         self.class_name = "Bryois"
-        self.nominal_pvalue = "Nominal p-value"
 
-        # Define the important columns.
-        self.columns = {
+        # Set the class variables.
+        self.nominal_pvalue = "Nominal p-value"
+        self.permuted_pvalue = "adj_p"
+        self.columns.update({
             "gene": "HGNC",
             "SNP": "SNP",
             "EA": "effect_allele",
             "OA": "other_allele",
             "beta": "Beta",
-            "se": None,
             "pvalue": self.get_pvalue_label(),
             "N": "N",
             "MAF": "MAF",
             "label": "HGNC"
-        }
+        })
 
+        # File paths.
+        self.snp_pos_path = os.path.join(self.path, "snp_pos.txt.gz")
+        self.top_effects_path = os.path.join(self.path, "41593_2022_1128_MOESM3_ESM.xlsx")
+        self.all_effects_path = os.path.join(self.path, self.cell_type + ".<CHR>.gz")
+
+        # Other variables.
+        self.all_effects_columns = ["HGNC", "Gene", "SNP", "Distance to TSS", "Nominal p-value", "Beta"]
+        self.all_effects_dtypes = {"HGNC": str, "Gene": str, "SNP": str, "Distance to TSS": int, "Nominal p-value": float, "Beta": float}
+        self.build = "SNP_id_hg38"
+        self.n = 192
         self.partial_file_column_split = {0: "_"}
 
     def get_snp_pos_df(self):
         if self.snp_pos_df is None:
             snp_pos_df = self.load_snp_pos_df()
-            snp_pos_df.index = snp_pos_df["SNP_id_hg38"]
+            snp_pos_df.index = snp_pos_df[self.build]
             snp_pos_df.index.name = None
             self.snp_pos_df = snp_pos_df
 
         return self.snp_pos_df
 
     def load_snp_pos_df(self):
-        snp_pos_inpath = os.path.join(self.path, "snp_pos.txt.gz")
-        return self.load_file(inpath=snp_pos_inpath)
+        return self.load_file(inpath=self.snp_pos_path)
 
     def set_overlapping_variants(self, overlapping_variants):
         snp_pos_df = self.get_snp_pos_df()
-        trans_dict = dict(zip(snp_pos_df["SNP_id_hg38"], snp_pos_df["SNP"]))
+        trans_dict = dict(zip(snp_pos_df[self.build], snp_pos_df["SNP"]))
         self.overlapping_variants = set([trans_dict[snp_id] for snp_id in overlapping_variants])
 
     def get_partial_file_column_index(self, inpath):
-        values = ["HGNC", "Gene", "SNP", "Distance to TSS", "Nominal p-value", "Beta"]
         column_indices = {}
         for name, label in self.columns.items():
-            if label not in values:
+            if label not in self.all_effects_columns:
                 continue
-            column_indices[label] = values.index(label)
+            column_indices[label] = self.all_effects_columns.index(label)
 
         return column_indices
 
@@ -1129,12 +1166,11 @@ class Bryois(Dataset):
         }
         return ct_link[cell_type]
 
-    def get_top_effects(self, cell_type):
+    def get_top_effects(self):
         snp_pos_df = self.get_snp_pos_df()
-        snp_pos_df = snp_pos_df[["SNP", "SNP_id_hg38", "SNP_id_hg19", "MAF"]]
+        snp_pos_df = snp_pos_df[[self.columns["SNP"], self.build, self.columns["MAF"]]]
 
-        inpath = os.path.join(self.path, "41593_2022_1128_MOESM3_ESM.xlsx")
-        df = pd.read_excel(inpath, sheet_name="Table S2", skiprows=3)
+        df = pd.read_excel(self.top_effects_path, sheet_name="Table S2", skiprows=3)
         df = df.astype({
             "cell_type": str,
             "symbol": str,
@@ -1150,50 +1186,32 @@ class Bryois(Dataset):
             "p_metabrain": float,
             "Replication": str}
         )
-        df = df.loc[df["cell_type"] == self.translate_cell_type(cell_type).replace("...", " / ").replace(".", " "), :]
+        df = df.rename(columns={
+            "symbol": self.columns["gene"],
+            "beta": self.columns["beta"],
+            "bpval": self.nominal_pvalue
+        })
+        df = df.loc[df["cell_type"] == self.cell_type.replace("...", " / ").replace(".", " "), :]
         if df.shape[0] == 0:
-            print("Error, no effects for cell type {}".format(cell_type))
+            print("Error, no effects found")
             return None
 
-        self.nominal_pvalue = "bpval"
-        self.adjusted_pvalue = "adj_p"
-        self.columns.update({
-            "gene": "symbol",
-            "beta": "beta",
-            "pvalue": self.get_pvalue_label(),
-            "label": "symbol"
-        })
-        #TODO this will give issues if you first get the top effects and after get the partial effects
-        # Perhaps better to rename the column to match the ones above
         df = df.merge(snp_pos_df, on="SNP", how="left")
-        df["N"] = 192
+        df["N"] = self.n
         df.index = df[self.columns["gene"]] + "_" + df[self.columns["SNP"]].astype(str)
 
-        return self.standardize_format(df, cell_type)
+        return df
 
-    def get_effects(self, cell_type, effects=None, mode="top"):
+    def get_effects(self, effects=None, mode="top"):
         snp_pos_df = self.get_snp_pos_df()
 
         df_list = []
         for chromosome in CHROMOSOMES:
-            inpath = os.path.join(self.path, "{}.{}.gz".format(self.translate_cell_type(cell_type), chromosome))
+            inpath = os.path.join(self.path, self.all_effects_path.replace("<CHR>", chromosome))
 
             df = None
             if mode == "all":
                 df = self.load_file(inpath, header=None, sep=" ")
-            elif mode == "top":
-                raise NotImplementedError("get_effects(mode=top) is not implemented in {}".format(self.name))
-                # top_effect_cols = self.trans_label_to_index(
-                #     inpath=inpath,
-                #     label_dict={"key": self.columns["gene"], "value": self.columns["pvalue"]}
-                # )
-                # df = self.load_partial_file(
-                #     inpath,
-                #     header=None,
-                #     sep=" ",
-                #     split_cols=self.partial_file_column_split,
-                #     top_effect_cols=top_effect_cols
-                # )
             elif mode == "specific":
                 specific_effect_cols = self.trans_label_to_index(
                     inpath=inpath,
@@ -1208,7 +1226,7 @@ class Bryois(Dataset):
                     specific_effect_cols=specific_effect_cols
                 )
             else:
-                print("Error, mode '{}' not implemented in {}".format(mode, self.class_name))
+                print("Error, mode '{}' not implemented in get_effects() - {}".format(mode, self.class_name))
                 exit()
 
             df_list.append(df)
@@ -1217,10 +1235,10 @@ class Bryois(Dataset):
             return None
 
         df = pd.concat(df_list, axis=0)
-        df.columns = ["HGNC", "Gene", "SNP", "Distance to TSS", "Nominal p-value", "Beta"]
-        df = df.astype({"HGNC": str, "Gene": str, "SNP": str, "Distance to TSS": int, "Nominal p-value": float, "Beta": float})
+        df.columns = self.all_effects_columns
+        df = df.astype(self.all_effects_dtypes)
         df = df.merge(snp_pos_df, on="SNP", how="left")
-        df["N"] = 192
+        df["N"] = self.n
         df.index = df[self.columns["gene"]] + "_" + df[self.columns["SNP"]]
         return df
 
@@ -1228,31 +1246,42 @@ class Bryois(Dataset):
 ##############################################################################################################
 
 
-class scMetaBrain(Dataset):
-    def __init__(self, type, name, path, use_nominal_pvalue, ancestry, cell_level):
-        super().__init__(type=type, name=name, path=path, use_nominal_pvalue=use_nominal_pvalue)
-        self.class_name = "scMetaBrain"
-        self.nominal_pvalue = "p_value"
-        self.adjusted_pvalue = "empirical_feature_p_value"
+class LIMIX(Dataset):
+    def __init__(self, type, name, path, cell_type, use_pvalue, ancestry, cell_level):
+        super().__init__(type=type, name=name, path=path, cell_type=cell_type, use_pvalue=use_pvalue)
+        self.class_name = "LIMIX"
         self.ancestry = ancestry
         self.cell_level = cell_level
 
         # Set the class variables.
-        self.qtl_chunks = None
-
-        # Define the important columns.
-        self.columns = {
+        self.nominal_pvalue = "p_value"
+        self.bonferroni_pvalue = "p_value_bonf_corr"
+        self.permuted_pvalue = "empirical_feature_p_value"
+        self.columns.update({
             "gene": "feature_id",
             "SNP": "snp_id",
             "EA": "assessed_allele",
-            "OA": None,
             "beta": "beta",
             "se": "beta_se",
             "pvalue": self.get_pvalue_label(),
             "N": "n_samples",
             "MAF": "maf",
             "label": "feature_id"
-        }
+        })
+
+        # File paths.
+        self.genotype_inpath = os.path.join(self.path, "genotype_input", self.ancestry, self.ancestry + "_imputed_hg38_stats_filtered.vars.gz")
+        self.h5_path = os.path.join(self.path, "output", self.ancestry, self.cell_level, self.cell_type, "qtl", "qtl_results_*.h5")
+        self.top_effects_path = os.path.join(self.path, "output", self.ancestry, self.cell_level, self.cell_type, "top_qtl_results_all.txt")
+        self.all_effects_path = os.path.join(self.path, "output", self.ancestry, self.cell_level, self.cell_type, "qtl_results_all.txt")
+        self.feature_metadata_file = os.path.join(self.path, "output", self.ancestry, self.cell_level, self.cell_type, "qtl", "feature_metadata_<CHUNK>.txt")
+        self.snp_metadata_file = os.path.join(self.path, "output", self.ancestry, self.cell_level, self.cell_type, "qtl", "snp_metadata_<CHUNK>.txt")
+        self.h5_file = os.path.join(self.path, "output", self.ancestry, self.cell_level, self.cell_type, "qtl", "qtl_results_<CHUNK>.h5")
+        self.snp_qc_metrics = os.path.join(self.path, "output", self.ancestry, self.cell_level, self.cell_type, "qtl", "snp_qc_metrics_naContaining_feature_<FEATURE>.txt")
+
+        # Other class variables.
+        self.qtl_results_pattern = "qtl_results_([0-9]{1,2}|X|Y|MT)_([0-9]+)_([0-9]+).h5"
+        self.qtl_chunks = None
 
     def get_ancestry(self):
         return self.ancestry
@@ -1267,26 +1296,31 @@ class scMetaBrain(Dataset):
         return self.snp_pos_df
 
     def load_snp_pos_df(self):
-        snp_pos_inpath = os.path.join(self.path, "genotype_input/{ancestry}/{ancestry}_imputed_hg38_stats_filtered.vars.gz".format(ancestry=self.ancestry))
-        return self.load_partial_file(inpath=snp_pos_inpath, header=0, usecols=[0, 1, 2, 3], filter=lambda x: len(x[3]) == 3)
+        # TODO: this assumes the SNP column is always on index 3.
+        return self.load_partial_file(
+            inpath=self.genotype_inpath,
+            header=0,
+            usecols=[0, 1, 2, 3],
+            filter=lambda x: len(x[3]) == 3
+        )
 
     def set_overlapping_variants(self, overlapping_variants):
         snp_pos_df = self.get_snp_pos_df()
         trans_dict = dict(zip(snp_pos_df.index, snp_pos_df["ID"]))
         self.overlapping_variants = set([trans_dict[snp_id] for snp_id in overlapping_variants])
 
-    def get_qtl_chunks(self, cell_type):
+    def get_qtl_chunks(self):
         if self.qtl_chunks is None:
-            self.qtl_chunks = self.load_qtl_chunks(cell_type)
+            self.qtl_chunks = self.load_qtl_chunks()
 
         return self.qtl_chunks
 
-    def load_qtl_chunks(self, cell_type):
-        qtl_results = glob.glob(os.path.join(self.path, "output", self.ancestry, self.cell_level, cell_type, "qtl", "qtl_results_*.h5"))
+    def load_qtl_chunks(self):
+        qtl_results = glob.glob(self.h5_path)
         qtl_results_data = []
         for filepath in qtl_results:
             basename = os.path.basename(filepath)
-            match = re.match("qtl_results_([0-9]{1,2}|X|Y|MT)_([0-9]+)_([0-9]+).h5", basename)
+            match = re.match(self.qtl_results_pattern, basename)
             qtl_results_data.append([basename, match.group(1), int(match.group(2)), int(match.group(3))])
 
         df = pd.DataFrame(qtl_results_data, columns=["Filename", "Chromosome", "Start", "End"])
@@ -1299,60 +1333,76 @@ class scMetaBrain(Dataset):
         df.sort_values(by=["Chromosome", "Start"], key=natsort_keygen(), ascending=True, inplace=True)
         return df
 
-    @staticmethod
-    def natural_keys(text):
-        return [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', text)]
+    def get_effects(self, effects=None, mode="top"):
+        all_effects_path = self.all_effects_path
+        if not os.path.exists(all_effects_path) and os.path.exists(all_effects_path + ".gz"):
+            all_effects_path = all_effects_path + ".gz"
 
-    def get_top_effects(self, cell_type):
-        inpath = os.path.join(self.path, "output", self.ancestry, self.cell_level, cell_type, "top_qtl_results_all.txt.gz")
-        if os.path.exists(inpath):
-            df = self.load_file(inpath, index_col=0)
-            df.index = df[self.columns["gene"]] + "_" + df[self.columns["SNP"]]
+        top_effects_path = self.top_effects_path
+        if not os.path.exists(top_effects_path) and os.path.exists(top_effects_path + ".gz"):
+            top_effects_path = top_effects_path + ".gz"
+
+        df = None
+        if mode == "top":
+            if os.path.exists(top_effects_path):
+                df = self.load_file(top_effects_path, index_col=0)
+            else:
+                df = self.load_all_h5_files(top=True)
+        elif mode == "all":
+            df = self.load_file(all_effects_path)
+        elif mode == "specific":
+            specific_effect_cols = self.trans_label_to_index(
+                inpath=all_effects_path,
+                label_dict={"gene": self.columns["gene"], "snp": self.columns["SNP"]}
+            )
+            if os.path.exists(all_effects_path):
+                df = self.load_partial_file(
+                    all_effects_path,
+                    effects=effects,
+                    specific_effect_cols=specific_effect_cols
+                )
+            else:
+                df = self.load_all_h5_files(effects=effects)
         else:
-            df = self.get_effects(cell_type, mode="top")
+            print("Error, mode '{}' not implemented in get_effects() - {}".format(mode, self.class_name))
+            exit()
 
         # Add Bonferroni corrected p-value.
         if "nTotalTestsPerFeat" in df:
-            df[self.nominal_pvalue + "BonfCorr"] = df[self.nominal_pvalue].astype(float) * df["nTotalTestsPerFeat"].astype(float)
-            df.loc[df[self.nominal_pvalue + "BonfCorr"] > 1., self.nominal_pvalue + "BonfCorr"] = 1.
+            df[self.bonferroni_pvalue] = df[self.nominal_pvalue].astype(float) * df["nTotalTestsPerFeat"].astype(float)
+            df.loc[df[self.bonferroni_pvalue] > 1., self.bonferroni_pvalue] = 1.
 
-        return self.standardize_format(df, cell_type)
+        df.index = df[self.columns["gene"]] + "_" + df[self.columns["SNP"]]
+        return df
 
-    def get_effects(self, cell_type, effects=None, mode="top"):
-        qlt_chunks_df = self.get_qtl_chunks(cell_type=cell_type)
-
+    def load_all_h5_files(self, effects=None, top=False):
+        qlt_chunks_df = self.get_qtl_chunks()
         df_list = []
         for index, row in qlt_chunks_df.iterrows():
-            df = None
-            if mode == "top":
-                df = self.load_h5_file(cell_type=cell_type, chunk=row["Chunk"], top=True)
-            elif mode == "specific":
-                df = self.load_h5_file(cell_type=cell_type, chunk=row["Chunk"], effects=effects)
-            else:
-                print("Error, mode '{}' not implemented in {}".format(mode, self.class_name))
-                exit()
-
+            df = self.load_h5_file(chunk=row["Chunk"], effects=effects, top=top)
             if df is not None:
                 df_list.append(df)
 
         if len(df_list) == 0:
             return None
 
-        df =  pd.concat(df_list, axis=0)
-        df.index = df[self.columns["gene"]] + "_" + df[self.columns["SNP"]]
-        return df
+        return pd.concat(df_list, axis=0)
 
-    def load_h5_file(self, cell_type, chunk, effects=None, top=False):
+    def load_h5_file(self, chunk, effects=None, top=False):
         print("Loading chunk...")
-        feature_metadata_file = os.path.join(self.path, "output", self.ancestry, self.cell_level, cell_type, "qtl", "feature_metadata_{}.txt.gz".format(chunk))
-        snp_metadata_file = os.path.join(self.path, "output", self.ancestry, self.cell_level, cell_type, "qtl", "snp_metadata_{}.txt.gz".format(chunk))
-        h5_file = os.path.join(self.path, "output", self.ancestry, self.cell_level, cell_type, "qtl", "qtl_results_{}.h5".format(chunk))
+        feature_metadata_file = self.feature_metadata_file.replace("<CHUNK>", chunk)
+        if not os.path.exists(feature_metadata_file) and os.path.exists(feature_metadata_file + ".gz"):
+            feature_metadata_file = feature_metadata_file + ".gz"
+
+        snp_metadata_file = self.snp_metadata_file.replace("<CHUNK>", chunk)
+        if not os.path.exists(snp_metadata_file) and os.path.exists(snp_metadata_file + ".gz"):
+            snp_metadata_file = snp_metadata_file + ".gz"
+
+        h5_file = self.h5_file.replace("<CHUNK>", chunk)
 
         try:
             if os.path.exists(feature_metadata_file):
                 ffea_df = pd.read_table(feature_metadata_file, sep="\t")
-            elif os.path.exists(feature_metadata_file + ".gz"):
-                ffea_df = pd.read_table(feature_metadata_file + ".gz", sep="\t")
             else:
                 print("  Warning, skipping: '{}' missing feature metadata file.".format(chunk))
                 return None
@@ -1369,8 +1419,6 @@ class scMetaBrain(Dataset):
         try:
             if os.path.exists(snp_metadata_file):
                 fsnp_df = pd.read_table(snp_metadata_file, sep="\t")
-            elif os.path.exists(snp_metadata_file + ".gz"):
-                fsnp_df = pd.read_table(snp_metadata_file + ".gz", sep="\t")
             else:
                 print("  Warning, skipping: '{}' missing SNP metadata file.".format(chunk))
                 return None
@@ -1427,12 +1475,12 @@ class scMetaBrain(Dataset):
 
         df = pd.merge(df, ffea_df, on='feature_id', how='left')
 
-        if(len(glob.glob(os.path.join(self.path, "output", self.ancestry, self.cell_level, cell_type, "qtl", "snp_qc_metrics_naContaining_feature_*.txt"))) > 0):
+        if(len(glob.glob(self.snp_qc_metrics.replace("<FEATURE>", "*"))) > 0):
             print("  Error, code not implemented yet")
             exit()
             # tmp_df = pd.DataFrame(columns=df.columns)
             # for key in frez_keys:
-            #     qc_metrics_inpath = os.path.join(self.wg3_folder, "output", self.annotation_level, cell_type, "qtl", "snp_qc_metrics_naContaining_feature_{}.txt".format(key))
+            #     qc_metrics_inpath = self.snp_qc_metrics.replace("<FEATURE>", key)
             #     if os.path.isfile(qc_metrics_inpath):
             #         fsnp_rel = self.load_file(qc_metrics_inpath, header=0, index_col=None)
             #         tmp_t = df.loc[df["feature_id"] == key]
@@ -1450,8 +1498,13 @@ class scMetaBrain(Dataset):
         else:
             df = pd.merge(df, fsnp_df, on='snp_id', how='left')
 
+        if effects is None:
+            df['nTotalTestsPerFeat'] = np.nan
+            for index, value in df['feature_id'].value_counts().iteritems():
+                df.loc[df['feature_id'] == index, 'nTotalTestsPerFeat'] = value
+
         if top:
-            df = df.sort_values(by=['empirical_feature_p_value', "p_value"], ascending=[True, True])
+            df = df.sort_values(by=['empirical_feature_p_value', 'p_value'], ascending=[True, True])
             df = df.groupby(df['feature_id']).first()
             df.reset_index(drop=False, inplace=True)
 
@@ -1466,14 +1519,15 @@ class scMetaBrain(Dataset):
 
 
 class mbQTL(Dataset):
-    def __init__(self, type, name, path, use_nominal_pvalue):
-        super().__init__(type=type, name=name, path=path, use_nominal_pvalue=use_nominal_pvalue)
+    def __init__(self, type, name, path, cell_type, use_pvalue):
+        super().__init__(type=type, name=name, path=path, cell_type=cell_type, use_pvalue=use_pvalue)
         self.class_name = "mbQTL"
-        self.nominal_pvalue = "MetaP"
-        self.adjusted_pvalue = "BetaAdjustedMetaP"
 
-        # Define the important columns.
-        self.columns = {
+        # Set the class variables.
+        self.nominal_pvalue = "MetaP"
+        self.bonferroni_pvalue = "MetaPBonfCorr"
+        self.permuted_pvalue = "BetaAdjustedMetaP"
+        self.columns.update({
             "gene": "Gene",
             "SNP": "SNP",
             "EA": "SNPEffectAllele",
@@ -1484,33 +1538,43 @@ class mbQTL(Dataset):
             "N": "MetaPN",
             "MAF": "MAF",
             "label": "Gene"
-        }
+        })
 
-    @staticmethod
-    def translate_cell_type(cell_type):
-        return cell_type.capitalize()
+        # File paths.
+        self.top_effects_path = os.path.join(self.path, self.cell_type + "-TopEffects.txt")
+        self.all_effects_path = os.path.join(self.path, self.cell_type + "-AllEffects.txt")
 
-    def get_effects(self, cell_type, effects=None, mode="top"):
-        full_inpath = os.path.join(self.path, "{}-AllEffects.txt.gz".format(cell_type))
-        top_inpath = os.path.join(self.path, "{}-TopEffects.txt".format(cell_type))
+
+    # @staticmethod
+    # def translate_cell_type(cell_type):
+    #     return cell_type.capitalize()
+
+    def get_effects(self, effects=None, mode="top"):
+        all_effects_path = self.all_effects_path
+        if not os.path.exists(all_effects_path) and os.path.exists(all_effects_path + ".gz"):
+            all_effects_path = all_effects_path + ".gz"
+
+        top_effects_path = self.top_effects_path
+        if not os.path.exists(top_effects_path) and os.path.exists(top_effects_path + ".gz"):
+            top_effects_path = top_effects_path + ".gz"
 
         df = None
-        if mode == "all":
-            df = self.load_file(full_inpath)
-        elif mode == "top":
-            df = self.load_file(top_inpath)
+        if mode == "top":
+            df = self.load_file(top_effects_path)
+        elif mode == "all":
+            df = self.load_file(all_effects_path)
         elif mode == "specific":
             specific_effect_cols = self.trans_label_to_index(
-                inpath=full_inpath,
+                inpath=all_effects_path,
                 label_dict={"gene": self.columns["gene"], "snp": self.columns["SNP"]}
             )
             df = self.load_partial_file(
-                full_inpath,
+                all_effects_path,
                 effects=effects,
                 specific_effect_cols=specific_effect_cols
             )
         else:
-            print("Error, mode '{}' not implemented in {}".format(mode, self.class_name))
+            print("Error, mode '{}' not implemented in get_effects() - {}".format(mode, self.class_name))
             exit()
 
         # Add the other allele column.
@@ -1523,10 +1587,10 @@ class mbQTL(Dataset):
         # Update type of N.
         df["MetaPN"] = df["MetaPN"].astype(float).astype(int)
 
-        # Add Bonferroni corrected p-value.
+        # Add Bonferroni corrected p-value. Only exists in top_inpath.
         if "NrTestedSNPs" in df:
-            df[self.nominal_pvalue + "BonfCorr"] = df[self.nominal_pvalue].astype(float) * df["NrTestedSNPs"].astype(float)
-            df.loc[df[self.nominal_pvalue + "BonfCorr"] > 1., self.nominal_pvalue + "BonfCorr"] = 1.
+            df[self.bonferroni_pvalue] = df[self.nominal_pvalue].astype(float) * df["NrTestedSNPs"].astype(float)
+            df.loc[df[self.bonferroni_pvalue] > 1., self.bonferroni_pvalue] = 1.
 
         # Add MAF.
         df["MAF"] = df["SNPEffectAlleleFreq"].astype(float)
