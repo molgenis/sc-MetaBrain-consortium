@@ -3,8 +3,10 @@
 ##############################################################################################################
 inputs:
   repo_dir: /path/to/repo/dir/ ### Path to the github repository directory
+  discovery_method: method
   discovery_path: /path/to/discovery/directory
   discovery_name: discovery
+  replication_method: method
   replication_path: /path/to/replication/directory
   replication_name: replication
   palette: /path/to/palette/file
@@ -15,10 +17,13 @@ outputs:
 settings:
   only_matching: False
   cell_types: ['AST', 'EX', 'IN', 'MIC', 'OLI', 'OPC', 'PER']
-  use_nominal_pvalue: False
+  gene: "hgnc"
+  snp: "rsid"
+  pvalue: "permuted"
   alpha: 0.05
   fdr_calc_method: "bh_fdr"
   force: False
+  save: False
   extensions: ['png']
 
 cluster_time: {0: "05:59:00", 1: "23:59:00", 2: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
@@ -31,13 +36,16 @@ rules:
   replication_plot_threads: 1 ### Number of threads to use
   replication_plot_time: 0 ### The time setting to use
 
-  merge_replication_stats_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
-  merge_replication_stats_threads: 1 ### Number of threads to use
-  merge_replication_stats_time: 0 ### The time setting to use
+  plot_replication_stats_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
+  plot_replication_stats_threads: 1 ### Number of threads to use
+  plot_replication_stats_time: 0 ### The time setting to use
 
 ############################################################################################################################################
 ##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####
 ############################################################################################################################################
 settings_extra:
+  python_module: "Python/3.10.4-GCCcore-11.3.0-bare"
+  r_module: "R"
+  python_env_activate: "~/env/bin/activate"
   ancestry: "EUR"
   cell_level: "L1"
