@@ -19,6 +19,7 @@ settings:
   cell_types: ['AST', 'EX', 'IN', 'MIC', 'OLI', 'OPC', 'PER']
   gene: "hgnc"
   snp: "rsid"
+  effect_size: "beta"
   pvalue: "permuted"
   alpha: 0.05
   fdr_calc_method: "bh_fdr"

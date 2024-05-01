@@ -90,6 +90,7 @@ rule replication_plot:
         replication_name = config["inputs"]["replication_name"],
         gene = config["settings"]["gene"],
         snp = config["settings"]["snp"],
+        effect_size = config["settings"]["effect_size"],
         pvalue = config["settings"]["pvalue"],
         alpha = config["settings"]["alpha"],
         fdr_calc_method = config["settings"]["fdr_calc_method"],
@@ -97,7 +98,7 @@ rule replication_plot:
         extensions = " ".join(config["settings"]["extensions"]),
         outdir = config["outputs"]["output_dir"],
         force = "--force" if config["settings"]["force"] is not None else "",
-        no_save = "--no_save" if config["settings"]["no_save"] is not None else "",
+        save = "--save" if config["settings"]["save"] else "",
         qvalue_truncp_script = config["inputs"]["repo_dir"] + "qvalue_truncp.R",
         rb_script = config["inputs"]["repo_dir"] + "Rb.R",
     log: config["outputs"]["output_dir"] + "log/replication_plot.{disc_ct}_discovery.{repl_ct}_replication.log"
@@ -118,6 +119,7 @@ rule replication_plot:
             --replication_cell_type {wildcards.repl_ct} \
             --gene {params.gene} \
             --snp {params.snp} \
+            --effect_size {params.effect_size} \
             --pvalue {params.pvalue} \
             --alpha {params.alpha} \
             --fdr_calc_method {params.fdr_calc_method} \
@@ -125,7 +127,7 @@ rule replication_plot:
             --extensions {params.extensions} \
             --outdir {params.outdir} \
             {params.force} \
-            {params.no_save} \
+            {params.save} \
             --qvalue_truncp {params.qvalue_truncp_script} \
             --rb {params.rb_script}
 
