@@ -16,6 +16,8 @@ outputs:
 
 settings:
   only_matching: False
+  disc_ct_as_param: True
+  repl_ct_as_param: True
   cell_types: ['AST', 'EX', 'IN', 'MIC', 'OLI', 'OPC', 'PER']
   gene: "hgnc"
   snp: "rsid"
