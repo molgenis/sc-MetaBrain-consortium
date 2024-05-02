@@ -504,8 +504,8 @@ class main():
         return df
     
     def calculate_replication_stats(self, df, disc_name, repl_name):
-        repl_stats_df = df.loc[~df[repl_name + " pvalue"].isna(), :].copy()
-        repl_stats_df.sort_values(by=disc_name + " pvalue", inplace=True)
+        repl_stats_df = df.copy()
+        df.sort_values(by=disc_name + " pvalue", inplace=True)
         
         disc_rb_beta, disc_rb_se = self.prepare_rb_info(df=repl_stats_df, name=disc_name)
         repl_rb_beta, repl_rb_se = self.prepare_rb_info(df=repl_stats_df, name=repl_name)
@@ -1440,32 +1440,32 @@ class Bryois(Dataset):
 
         # Other variables.
         self.excel_gene_trans = {
-            "ENSG00000099785": "MARCHF2",
-            "ENSG00000100167": "SEPTIN3",
-            "ENSG00000108387": "SEPTIN4",
-            "ENSG00000117791": "MTARC2",
-            "ENSG00000122545": "SEPTIN7",
-            "ENSG00000136536": "MARCHF7",
-            "ENSG00000138758": "SEPTIN11",
-            "ENSG00000139266": "MARCHF9",
-            "ENSG00000140623": "SEPTIN12",
-            "ENSG00000144583": "MARCHF4",
-            "ENSG00000145416": "MARCHF1",
-            "ENSG00000145495": "MARCHF6",
-            "ENSG00000154997": "SEPTIN14",
-            "ENSG00000164402": "SEPTIN8",
-            "ENSG00000165406": "MARCHF8",
-            "ENSG00000168385": "SEPTIN2",
-            "ENSG00000173077": "DELEC1",
-            "ENSG00000173838": "MARCHF10",
-            "ENSG00000173926": "MARCHF3",
-            "ENSG00000180096": "SEPTIN1",
-            "ENSG00000183654": "MARCHF11",
-            "ENSG00000184640": "SEPTIN9",
-            "ENSG00000184702": "SEPTIN5",
-            "ENSG00000186205": "MTARC1",
-            "ENSG00000186522": "SEPTIN10",
-            "ENSG00000198060": "MARCHF5"
+            "ENSG00000099785": "MARCH2",
+            "ENSG00000100167": "SEPT3",
+            "ENSG00000108387": "SEPT4",
+            "ENSG00000117791": "MARC2",
+            "ENSG00000122545": "SEPT7",
+            "ENSG00000136536": "MARCH7",
+            "ENSG00000138758": "SEPT11",
+            "ENSG00000139266": "MARCH9",
+            "ENSG00000140623": "SEPT12",
+            "ENSG00000144583": "MARCH4",
+            "ENSG00000145416": "MARCH1",
+            "ENSG00000145495": "MARCH6",
+            "ENSG00000154997": "SEPT14",
+            "ENSG00000164402": "SEPT8",
+            "ENSG00000165406": "MARCH8",
+            "ENSG00000168385": "SEPT2",
+            "ENSG00000173077": "DEC1",
+            "ENSG00000173838": "MARCH10",
+            "ENSG00000173926": "MARCH3",
+            "ENSG00000180096": "SEPT1",
+            "ENSG00000183654": "MARCH11",
+            "ENSG00000184640": "SEPT9",
+            "ENSG00000184702": "SEPT5",
+            "ENSG00000186205": "MARC1",
+            "ENSG00000186522": "SEPT10",
+            "ENSG00000198060": "MARCH5",
         }
         self.all_effects_columns = ["symbol_ensembl", "SNP", "dist_TSS", "pval", "beta"]
         self.all_effects_dtypes = {"symbol_ensembl": str, "SNP": str, "dist_TSS": int, "pval": float, "beta": float}
