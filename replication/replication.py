@@ -29,10 +29,9 @@ import glob
 import os
 import re
 import json
-from abc import abstractmethod
 
 # Third party imports.
-import tabix
+# import tabix
 import h5py
 import numpy as np
 import pandas as pd
@@ -70,7 +69,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
                                         __license__)
 
 CHROMOSOMES = [str(chr) for chr in range(1, 23)]
-METHODS = ["LIMIX", "LIMIX_REDUCED", "mbQTL", "mbQTL_MetaBrain", "eQTLMappingPipeline", "Bryois"]
+METHODS = ["LIMIX", "LIMIX_REDUCED", "mbQTL", "mbQTL_MetaBrain", "eQTLMappingPipeline", "eQTLgenPhase2", "Bryois"]
 
 class main():
     def __init__(self):
@@ -398,6 +397,8 @@ class main():
             return mbQTL_MetaBrain
         elif method == "eQTLMappingPipeline":
             return eQTLMappingPipeline
+        elif method == "eQTLgenPhase2":
+            return eQTLgenPhase2
         elif method == "Bryois":
             return Bryois
         else:
@@ -1120,11 +1121,11 @@ class Dataset:
 
     def get_effects(self, effects=None, mode="top"):
         all_effects_path = self.all_effects_path
-        if not os.path.exists(all_effects_path) and os.path.exists(all_effects_path + ".gz"):
+        if all_effects_path and not os.path.exists(all_effects_path) and os.path.exists(all_effects_path + ".gz"):
             all_effects_path = all_effects_path + ".gz"
 
         top_effects_path = self.top_effects_path
-        if not os.path.exists(top_effects_path) and os.path.exists(top_effects_path + ".gz"):
+        if top_effects_path and not os.path.exists(top_effects_path) and os.path.exists(top_effects_path + ".gz"):
             top_effects_path = top_effects_path + ".gz"
 
         df = None
@@ -1662,11 +1663,11 @@ class LIMIX(Dataset):
 
     def get_effects(self, effects=None, mode="top"):
         all_effects_path = self.all_effects_path
-        if not os.path.exists(all_effects_path) and os.path.exists(all_effects_path + ".gz"):
+        if all_effects_path and not os.path.exists(all_effects_path) and os.path.exists(all_effects_path + ".gz"):
             all_effects_path = all_effects_path + ".gz"
 
         top_effects_path = self.top_effects_path
-        if not os.path.exists(top_effects_path) and os.path.exists(top_effects_path + ".gz"):
+        if top_effects_path and not os.path.exists(top_effects_path) and os.path.exists(top_effects_path + ".gz"):
             top_effects_path = top_effects_path + ".gz"
 
         df = None
@@ -2071,6 +2072,69 @@ class eQTLMappingPipeline(Dataset):
         self.top_effects_path = os.path.join(self.path, "2019-12-11-cis-eQTLsFDR-ProbeLevel-CohortInfoRemoved-BonferroniAdded.txt.gz")
         self.all_effects_path = os.path.join(self.path, "cis-eQTLs_full_20180905.txt.gz")
 
+
+##############################################################################################################
+
+
+class eQTLgenPhase2(Dataset):
+    def __init__(self, *args, **kwargs):
+        super(eQTLgenPhase2, self).__init__(*args, **kwargs)
+        self.class_name = "eQTLgenPhase2"
+
+        # Set the class variables.
+        # self.hgnc_gene = [(None, None, None)]
+        self.ensembl_gene = [("phenotype", None, None)]
+        self.rsid_snp = [("variant", None, None)]
+        self.chr_pos_snp = [("chromosome_variant", None, ":"), ("bp_variant", None, None)]
+        self.beta_effect_size = [("beta", None, None)]
+        self.zscore_effect_size = [("z_score", None, None)]
+        self.nominal_pvalue = [("p_value", None, None)]
+        # self.bonferroni_pvalue = [(None, None, None)]
+        # self.permuted_pvalue = [(None, None, None)]
+
+        # Define the uniform column info.
+        self.columns.update({
+            "gene": self.get_gene_label(),
+            "SNP": self.get_snp_label(),
+            "EA": [("allele_eff", None, None)],
+            "OA": [("allele_ref", None, None)],
+            "effect_size": self.get_effect_size_label(),
+            "se": [("standard_error", None, None)],
+            "pvalue": self.get_pvalue_label(),
+            # "FDR": [(None, None, None)],
+            "N": [("sample_size", None, None)],
+            "MAF": [("MAF", None, None)],
+            # "label": self.hgnc_gene
+        })
+
+        # File paths.
+        self.all_effects_path = os.path.join(self.path, "output_empirical_4GenPC20ExpPC_2023-05-27_interestingGeneSnpCombi_fixedConcatenation.csv") # Not really all effects, just the sc-eQTLgen ones
+        # self.top_effects_path = None
+
+    def get_top_effects(self):
+        all_effects_path = self.all_effects_path
+        if not os.path.exists(all_effects_path) and os.path.exists(all_effects_path + ".gz"):
+            all_effects_path = all_effects_path + ".gz"
+
+        top_entries_cols = self.trans_label_to_index(
+            inpath=all_effects_path,
+            label_dict={"key": self.columns["gene"], "value": self.columns["Pvalue"]}
+        )
+        df = self.load_partial_file(
+            all_effects_path,
+            top_entries_cols=top_entries_cols
+        )
+        return self.add_missing_info(df=df)
+
+    def add_missing_info(self, df):
+        if df.empty:
+            return df
+
+        # Add MAF.
+        df["MAF"] = df["allele_eff_freq"].astype(float)
+        df.loc[df["MAF"] > 0.5, "MAF"] = 1 - df.loc[df["MAF"] > 0.5, "MAF"]
+
+        return df
 
 
 if __name__ == '__main__':

@@ -41,37 +41,63 @@ matplotlib.rcParams['ps.fonttype'] = 42
 def plot(df, title="", filename="heatmap"):
     sns.set_style("ticks")
 
-    nrows = len(args.disc_cell_types)
-    ncols = len(args.repl_cell_types)
-    sns.set(rc={'figure.figsize': (3 * nrows, 1 * ncols)})
+    nrows = 1
+    ncols = 3
+    ncolumn_cells = len(args.disc_cell_types)
+    nrow_cells = len(args.repl_cell_types)
+    sns.set(rc={'figure.figsize': (ncols * ncolumn_cells, nrows * nrow_cells if nrow_cells > 1 else 9)})
     sns.set_style("ticks")
-    fig, axes = plt.subplots(nrows=1,
-                             ncols=3,
+    fig, axes = plt.subplots(nrows=nrows,
+                             ncols=ncols,
                              sharex='none',
                              sharey='none')
 
     for col_index, (metric, vmin, center, vmax) in enumerate([("AC", -100, 0, 100),
                                                               ("pi1", -1, 0, 1),
                                                               ("Rb", -1, 0, 1)]):
-        value_df, annot_df = create_pivot_table(
-            df=df.loc[df["Disc significant"] & ~df["Repl significant"], :],
-            index_col="replication_ct",
-            column_col="discovery_ct",
-            value_col=metric,
-            n_digits=0 if metric == "AC" else 2
-        )
+        if ncolumn_cells > 1 and nrow_cells > 1:
+            value_df, annot_df = create_pivot_table(
+                df=df.loc[df["Disc significant"] & ~df["Repl significant"], :],
+                index_col="replication_ct",
+                column_col="discovery_ct",
+                value_col=metric,
+                n_digits=0 if metric == "AC" else 2
+            )
 
-        plot_heatmap(
-            ax=axes[col_index],
-            df=value_df,
-            annot_df=annot_df,
-            vmin=vmin if args.standardise else None,
-            center=center if args.standardise else value_df.min().min(),
-            vmax=vmax if args.standardise else None,
-            xlabel=args.discovery_name + " discovery",
-            ylabel=args.replication_name + " replication",
-            title=metric
-        )
+            plot_heatmap(
+                ax=axes[col_index],
+                df=value_df,
+                annot_df=annot_df,
+                vmin=vmin if args.standardise else None,
+                center=center if args.standardise else value_df.min().min(),
+                vmax=vmax if args.standardise else None,
+                xlabel=args.discovery_name + " discovery",
+                ylabel=args.replication_name + " replication",
+                title=metric
+            )
+        elif (ncolumn_cells > 1 and nrow_cells == 1) or (ncolumn_cells == 1 and nrow_cells > 1):
+            plot_df = df.loc[df["Disc significant"] & ~df["Repl significant"], :].copy()
+
+            if ncolumn_cells > 1 and nrow_cells == 1:
+                x = "discovery_ct"
+                xlabel = args.discovery_name + " discovery"
+                ylabel = args.repl_cell_types[0]
+            else:
+                x = "replication_ct"
+                xlabel = args.replication_name + " replication"
+                ylabel = args.disc_cell_types[0]
+
+            plot_barplot(
+                fig=fig,
+                ax=axes[col_index],
+                df=plot_df,
+                x=x,
+                y=metric,
+                n="N",
+                xlabel=xlabel,
+                ylabel=ylabel if col_index == 0 else "",
+                title=metric
+            )
 
     fig.suptitle(title,
                  fontsize=14,
@@ -99,16 +125,25 @@ def create_pivot_table(df, index_col, column_col, value_col, n_digits=2):
     # TODO: this might not be the most relevant info to show.
     ss_df = df.loc[df[index_col] == df[column_col], [index_col, column_col, "N"]].copy()
     if ss_df.shape[0] > 0:
-        index_ss = dict(zip(ss_df[index_col], ss_df["N"]))
-        columns_ss = dict(zip(ss_df[column_col], ss_df["N"]))
+        index_ss = list(zip(ss_df[index_col], ss_df["N"]))
+        index_ss.sort(key = lambda x: -x[1])
+        index_order = [ss[0] for ss in index_ss]
+
+        columns_ss = list(zip(ss_df[column_col], ss_df["N"]))
+        columns_ss.sort(key = lambda x: -x[1])
+        columns_order = [ss[0] for ss in index_ss]
+
+        value_df = value_df.loc[index_order, columns_order]
+        annot_df = annot_df.loc[index_order, columns_order]
+
         for out_df in [value_df, annot_df]:
-            out_df.index = ['{}\n[N={:,}]'.format(index, index_ss[index]) for index in out_df.index]
-            out_df.columns = ['{}\n[N={:,}]'.format(column, columns_ss[column]) for column in out_df.columns]
+            out_df.index = ['{}\n[N={:,}]'.format(index, n) for index, n in index_ss]
+            out_df.columns = ['{}\n[N={:,}]'.format(column, n) for column, n in columns_ss]
     return value_df, annot_df
 
 
 def plot_heatmap(ax, df, annot_df, vmin=None, vmax=None, center=None, xlabel="", ylabel="", title=""):
-    n = max(df.shape[0], df.shape[1])
+    n = min(df.shape[0], df.shape[1])
 
     sns.heatmap(df,
                 vmin=vmin,
@@ -135,6 +170,36 @@ def plot_heatmap(ax, df, annot_df, vmin=None, vmax=None, center=None, xlabel="",
 
     ax.set_title(title, fontsize=12)
 
+
+def plot_barplot(fig, ax, df, x="x", y="y", n="n", xlabel="", ylabel="", title=""):
+    sns.despine(fig=fig, ax=ax)
+
+    df.sort_values(by=y, inplace=True)
+
+    g = sns.barplot(x=x,
+                    y=y,
+                    data=df,
+                    dodge=False,
+                    order=df[x],
+                    ax=ax)
+
+    for i, (index, row) in enumerate(df.iterrows()):
+        g.text(i,
+               row[y],
+               "{:.2f}\n[N={:,}]\n ".format(row[y], row[n]),
+               fontsize=14,
+               color='black',
+               ha="center")
+
+    ax.set_title(title,
+                 fontsize=22,
+                 fontweight='bold')
+    ax.set_ylabel(ylabel,
+                  fontsize=14,
+                  fontweight='bold')
+    ax.set_xlabel(xlabel,
+                  fontsize=14,
+                  fontweight='bold')
 
 df_list = []
 for discovery_ct in args.disc_cell_types:
