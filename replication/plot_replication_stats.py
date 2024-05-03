@@ -55,6 +55,7 @@ def plot(df, title="", filename="heatmap"):
     for col_index, (metric, vmin, center, vmax) in enumerate([("AC", -100, 0, 100),
                                                               ("pi1", -1, 0, 1),
                                                               ("Rb", -1, 0, 1)]):
+
         if ncolumn_cells > 1 and nrow_cells > 1:
             value_df, annot_df = create_pivot_table(
                 df=df.loc[df["Disc significant"] & ~df["Repl significant"], :],
@@ -64,13 +65,16 @@ def plot(df, title="", filename="heatmap"):
                 n_digits=0 if metric == "AC" else 2
             )
 
+            min_value = value_df.min().min()
+            max_value = value_df.max().max()
+
             plot_heatmap(
                 ax=axes[col_index],
                 df=value_df,
                 annot_df=annot_df,
-                vmin=vmin if args.standardise else None,
-                center=center if args.standardise else value_df.min().min(),
-                vmax=vmax if args.standardise else None,
+                vmin=vmin if args.standardise else (min_value if min_value < 0 else None),
+                center=center if args.standardise else (min_value if min_value > 0 else 0),
+                vmax=vmax if args.standardise else max_value,
                 xlabel=args.discovery_name + " discovery",
                 ylabel=args.replication_name + " replication",
                 title=metric
@@ -122,23 +126,23 @@ def create_pivot_table(df, index_col, column_col, value_col, n_digits=2):
         value_df.loc[row[index_col], row[column_col]] = row[value_col]
         annot_df.loc[row[index_col], row[column_col]] = "{:,}\n{} = {:.{}f}".format(row["N"], value_col, row[value_col], n_digits)
 
-    # TODO: this might not be the most relevant info to show.
-    ss_df = df.loc[df[index_col] == df[column_col], [index_col, column_col, "N"]].copy()
-    if ss_df.shape[0] > 0:
-        index_ss = list(zip(ss_df[index_col], ss_df["N"]))
-        index_ss.sort(key = lambda x: -x[1])
-        index_order = [ss[0] for ss in index_ss]
-
-        columns_ss = list(zip(ss_df[column_col], ss_df["N"]))
-        columns_ss.sort(key = lambda x: -x[1])
-        columns_order = [ss[0] for ss in index_ss]
-
-        value_df = value_df.loc[index_order, columns_order]
-        annot_df = annot_df.loc[index_order, columns_order]
-
-        for out_df in [value_df, annot_df]:
-            out_df.index = ['{}\n[N={:,}]'.format(index, n) for index, n in index_ss]
-            out_df.columns = ['{}\n[N={:,}]'.format(column, n) for column, n in columns_ss]
+    # # TODO: this might not be the most relevant info to show.
+    # ss_df = df.loc[df[index_col] == df[column_col], [index_col, column_col, "N"]].copy()
+    # if ss_df.shape[0] > 0:
+    #     index_ss = list(zip(ss_df[index_col], ss_df["N"]))
+    #     index_ss.sort(key = lambda x: -x[1])
+    #     index_order = [ss[0] for ss in index_ss]
+    #
+    #     columns_ss = list(zip(ss_df[column_col], ss_df["N"]))
+    #     columns_ss.sort(key = lambda x: -x[1])
+    #     columns_order = [ss[0] for ss in index_ss]
+    #
+    #     value_df = value_df.loc[index_order, columns_order]
+    #     annot_df = annot_df.loc[index_order, columns_order]
+    #
+    #     for out_df in [value_df, annot_df]:
+    #         out_df.index = ['{}\n[N={:,}]'.format(index, n) for index, n in index_ss]
+    #         out_df.columns = ['{}\n[N={:,}]'.format(column, n) for column, n in columns_ss]
     return value_df, annot_df
 
 
@@ -219,6 +223,14 @@ print(df)
 
 filename = args.discovery_name + "_Disc_" + args.replication_name + "_Repl_ReplicationStats"
 df.to_csv(os.path.join(args.workdir, filename + ".txt.gz"), sep="\t", header=True, index=False)
+
+print("Replication stats:")
+replication_df = df.loc[df["Disc significant"] & ~df["Repl significant"], ["N", "discovery_ct", "replication_ct"]].merge(
+df.loc[df["Disc significant"] & df["Repl significant"], ["N", "discovery_ct", "replication_ct"]], on=["discovery_ct", "replication_ct"], suffixes=('_discovery', '_replicating')
+)
+for _, row in replication_df.iterrows():
+    print("\t{} - {}:\t{:,} / {:,} ({:.0f}%)".format(row["discovery_ct"], row["replication_ct"], row["N_replicating"], row["N_discovery"], (100 / row["N_discovery"]) * row["N_replicating"]))
+print("")
 
 plot(df=df,
      title="{} vs {}".format(args.discovery_name, args.replication_name),

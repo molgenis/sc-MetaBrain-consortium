@@ -31,7 +31,7 @@ import re
 import json
 
 # Third party imports.
-# import tabix
+# mport tabix
 import h5py
 import numpy as np
 import pandas as pd
@@ -69,7 +69,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
                                         __license__)
 
 CHROMOSOMES = [str(chr) for chr in range(1, 23)]
-METHODS = ["LIMIX", "LIMIX_REDUCED", "mbQTL", "mbQTL_MetaBrain", "eQTLMappingPipeline", "eQTLgenPhase2", "Bryois"]
+METHODS = ["LIMIX", "LIMIX_REDUCED", "mbQTL", "mbQTL_MetaBrain", "eQTLMappingPipeline", "eQTLgenPhase2", "Bryois", "Fujita"]
 
 class main():
     def __init__(self):
@@ -137,7 +137,13 @@ class main():
             "Microglia": "MIC",
             "Oligodendrocytes": "OLI",
             "OPCs...COPs": "OPC",
-            "Pericytes": "PER"
+            "Pericytes": "PER",
+            "Ast": "AST",
+            "End": "END",
+            "Exc": "EX",
+            "Inh": "IN",
+            "Mic": "MIC",
+            "Oli": "OLI"
         }
 
     @staticmethod
@@ -292,7 +298,7 @@ class main():
         else:
             discovery_top_df = disc.get_top_effects()
             if self.save:
-                self.save_file(df=discovery_top_df, outpath=discovery_top_filepath)
+                self.save_file(df=discovery_top_df, outpath=discovery_top_filepath, index=False)
         print(discovery_top_df)
         print("\n")
 
@@ -311,7 +317,7 @@ class main():
         else:
             replication_df = repl.get_specific_effects(effects=discovery_eqtls)
             if self.save:
-                self.save_file(df=replication_df, outpath=replication_filepath)
+                self.save_file(df=replication_df, outpath=replication_filepath, index=False)
         print(replication_df)
         print("\n")
 
@@ -401,6 +407,8 @@ class main():
             return eQTLgenPhase2
         elif method == "Bryois":
             return Bryois
+        elif method == "Fujita":
+            return Fujita
         else:
             print("Error, unexpected method '{}'".format(method))
             exit()
@@ -643,7 +651,14 @@ class main():
         b2 = robjects.FloatVector(df[b2])
         se2 = robjects.FloatVector(df[se2])
         calcu_cor_true = robjects.globalenv['calcu_cor_true']
-        rb = calcu_cor_true(b1, se1, b2, se2, theta)
+
+        try:
+            rb = calcu_cor_true(b1, se1, b2, se2, theta)
+        except RRuntimeError as e:
+            print("Warning, could not calculate Rb.")
+            print(e)
+            return np.nan
+
         return np.array(rb)[0][0]
 
     def translate_cell_type(self, cell_type):
@@ -930,8 +945,8 @@ class Dataset:
         }
 
         # Default input files.
-        self.top_effects_path = None
         self.all_effects_path = None
+        self.top_effects_path = None
 
     def get_class_name(self):
         return self.class_name
@@ -1032,6 +1047,12 @@ class Dataset:
         print("Error, unexpected problem in get_pvalue_label() for class '{}' with pvalue = {}, nominal_pvalue = {}, bonferroni_pvalue = {}, and permuted_pvalue = {}".format(self.name, self.pvalue, self.nominal_pvalue, self.bonferroni_pvalue, self.permuted_pvalue))
         exit()
 
+    def get_top_entries_pvalue_label(self):
+        if self.permuted_pvalue:
+            return self.permuted_pvalue
+
+        return self.nominal_pvalue
+
     def get_eqtl_effects(self, df):
         return self.create_dict_from_df(df=df, key=self.columns["gene"], value=self.columns["SNP"])
 
@@ -1044,22 +1065,24 @@ class Dataset:
     def extract_info(data, query):
         info = ""
         for (column, pattern, sep) in query:
-            if column is not None:
-                if pattern is None:
-                    info += str(data[column])
-                elif isinstance(pattern, str):
-                    try:
-                        info += re.match(pattern, str(data[column])).group(1)
-                    except AttributeError:
-                        print("Error, pattern did not match in extract_info():\tre.match({}, {}).group(1)".format(pattern, str(data[column])))
-                        exit()
-                elif isinstance(pattern, dict):
-                    if not data[column] in pattern:
-                        return None
-                    info += pattern[data[column]]
-                else:
-                    print("Error, unexpected input in extract_info()")
+            if column is None:
+                continue
+
+            if pattern is None:
+                info += str(data[column])
+            elif isinstance(pattern, str):
+                try:
+                    info += re.match(pattern, str(data[column])).group(1)
+                except AttributeError:
+                    print("Error, pattern did not match in extract_info():\tre.match({}, {}).group(1)".format(pattern, str(data[column])))
                     exit()
+            elif isinstance(pattern, dict):
+                if not data[column] in pattern:
+                    return None
+                info += pattern[data[column]]
+            else:
+                print("Error, unexpected input in extract_info()")
+                exit()
 
             if sep is not None:
                 info += sep
@@ -1107,12 +1130,12 @@ class Dataset:
 
         return indices_dict
 
-    def get_top_effects(self):
-        df = self.get_effects(mode="top")
-        return self.add_missing_info(df=df)
-
     def get_all_effects(self):
         df = self.get_effects(mode="all")
+        return self.add_missing_info(df=df)
+
+    def get_top_effects(self):
+        df = self.get_effects(mode="top")
         return self.add_missing_info(df=df)
 
     def get_specific_effects(self, effects):
@@ -1132,7 +1155,17 @@ class Dataset:
         if mode == "all":
             df = self.load_file(all_effects_path)
         elif mode == "top":
-            df = self.load_file(top_effects_path)
+            if top_effects_path is not None and os.path.exists(top_effects_path):
+                df = self.load_file(top_effects_path)
+            else:
+                top_entries_cols = self.trans_label_to_index(
+                    inpath=all_effects_path,
+                    label_dict={"key": self.columns["gene"], "value": self.get_top_entries_pvalue_label()}
+                )
+                df = self.load_partial_file(
+                    all_effects_path,
+                    top_entries_cols=top_entries_cols
+                )
         elif mode == "specific":
             specific_entries_cols = self.trans_label_to_index(
                 inpath=all_effects_path,
@@ -1217,9 +1250,13 @@ class Dataset:
 
     def load_partial_file_w_tabix(self, inpath, header=0, index_col=None, sep="\t", usecols=None,
                                   top_entries_cols=None, specific_entries_cols=None, effects=None):
-        if not os.path.exists(inpath):
-            print("Error, '{}' file not found".format(os.path.basename(inpath)))
-            raise FileNotFoundError()
+        # TODO: this class now only works by tabix query on the SNP position instead of the gene position.
+        #  Not sure how I am supposed to know the gene chr:pos from the HGNC symbol / ensembl ID without using API's
+        #  or first parsing the file line by line anyway (that info is in the line). So unless you indexed on SNP pos
+        #  this function is a lot slower than the line by line one and you would be better off using that one.
+        #  Note to self, if I do somehow get the gene position info then I should could the number of SNPs within a cis
+        #  window and add that as NEntries to make it in line with the line by line code again.
+        raise NotImplementedError("This code sucks, just use the line by line function by setting ignore_tabix=True")
 
         print("Loading partial file with tabix...")
         tb = tabix.open(inpath)
@@ -1230,11 +1267,11 @@ class Dataset:
         n_effects = len(effects)
         i = 0
         for i, snp in enumerate(effects.values()):
-            if i % 1e6 == 0:
+            if i % 10 == 0:
                 print("  Parsed {:,} / {:,} effects".format(i, n_effects), end='\r')
             chr, pos = snp.split(":")
             try:
-                records = tb.query(chr, int(pos) - 1, int(pos) + 1)
+                records = tb.query(chr, int(pos), int(pos))
             except tabix.TabixError:
                 continue
 
@@ -1259,12 +1296,12 @@ class Dataset:
                 if top_entries_cols is None:
                     lines.append(values)
                 else:
-                    key = values[top_entries_cols["key"]]
-                    value = values[top_entries_cols["value"]]
+                    key = self.extract_info(data=values, query=top_entries_cols["key"])
+                    value = float(self.extract_info(data=values, query=top_entries_cols["value"]))
                     if key not in top_entries:
-                        top_entries[key] = (value, values)
+                        top_entries[key] = [value, values]
                     elif key in top_entries and value < top_entries[key][0]:
-                        top_entries[key] = (value, values)
+                        top_entries[key] = [value, values]
                     else:
                         pass
         print("  Parsed {:,} / {:,} effects".format(i, n_effects))
@@ -1333,19 +1370,23 @@ class Dataset:
             if top_entries_cols is None:
                 lines.append(values)
             else:
-                key = values[top_entries_cols["key"]]
-                value = values[top_entries_cols["value"]]
+                key = self.extract_info(data=values, query=top_entries_cols["key"])
+                value = float(self.extract_info(data=values, query=top_entries_cols["value"]))
                 if key not in top_entries:
-                    top_entries[key] = (value, values)
-                elif key in top_entries and value < top_entries[key][0]:
-                    top_entries[key] = (value, values)
+                    top_entries[key] = [value, values, 1]
+                elif key in top_entries:
+                    top_entries[key][2] += 1
+                    if value < top_entries[key][0]:
+                        top_entries[key][0:2] = [value, values]
                 else:
                     pass
         fhi.close()
         print("  Parsed {:,} lines".format(i))
 
         if top_entries_cols is not None:
-            for _, (_, values) in top_entries.items():
+            columns += ["NEntries"]
+            for _, (_, values, nentries) in top_entries.items():
+                values += [nentries]
                 lines.append(values)
 
         return pd.DataFrame(lines, columns=columns, index=indices)
@@ -1364,6 +1405,16 @@ class Dataset:
             return allele2
         else:
             return allele1
+
+    @staticmethod
+    def calc_maf_from_af(row, af_column):
+        af = float(row[af_column])
+        return min(af, 1 - af)
+
+    @staticmethod
+    def calc_bonf_pvalue(row, pvalue_column, ntests_column):
+        bonfp = float(row[pvalue_column]) * float(row[ntests_column])
+        return min(bonfp, 1)
 
     def standardize_format(self, df):
         if df is None:
@@ -1402,196 +1453,6 @@ class Dataset:
 
 ##############################################################################################################
 
-class Bryois(Dataset):
-    def __init__(self, *args, **kwargs):
-        super(Bryois, self).__init__(*args, **kwargs)
-        self.class_name = "Bryois"
-
-        # Set the class variables.
-        self.hgnc_gene = [("symbol_ensembl", "([a-zA-Z0-9-.]+)_ENSG[0-9]+", None)]
-        self.ensembl_gene = [("symbol_ensembl", "[a-zA-Z0-9-.]+_(ENSG[0-9]+)", None)]
-        self.rsid_snp = [("SNP", None, None)]
-        self.chr_pos_snp = [("SNP_id_hg38", "chr((([0-9]{1,2}|X|Y|MT):[0-9]+))", None)]
-        self.beta_effect_size = [("beta", None, None)]
-        # self.zscore_effect_size = [(None, None, None)]
-        self.nominal_pvalue = [("pval", None, None)]
-        # self.bonferroni_pvalue = [(None, None, None)]
-        self.permuted_pvalue = [("bpval", None, None)]
-
-        # Define the uniform column info.
-        self.columns.update({
-            "gene": self.get_gene_label(),
-            "SNP": self.get_snp_label(),
-            "EA": [("effect_allele", None, None)],
-            "OA": [("other_allele", None, None)],
-            "effect_size": self.get_effect_size_label(),
-            # "se": [(None, None, None)],
-            "pvalue": self.get_pvalue_label(),
-            "FDR": [("adj_p", None, None)] if self.type == "discovery" else [(None, None, None)],
-            "N": [("N", None, None)],
-            "MAF": [("MAF", None, None)],
-            "label": self.hgnc_gene
-        })
-
-        # File paths.
-        self.snp_pos_path = os.path.join(self.path, "snp_pos.txt.gz")
-        self.top_effects_path = os.path.join(self.path, "41593_2022_1128_MOESM3_ESM.xlsx")
-        self.all_effects_path = os.path.join(self.path, self.cell_type + ".<CHR>.gz")
-
-        # Other variables.
-        self.excel_gene_trans = {
-            "ENSG00000099785": "MARCH2",
-            "ENSG00000100167": "SEPT3",
-            "ENSG00000108387": "SEPT4",
-            "ENSG00000117791": "MARC2",
-            "ENSG00000122545": "SEPT7",
-            "ENSG00000136536": "MARCH7",
-            "ENSG00000138758": "SEPT11",
-            "ENSG00000139266": "MARCH9",
-            "ENSG00000140623": "SEPT12",
-            "ENSG00000144583": "MARCH4",
-            "ENSG00000145416": "MARCH1",
-            "ENSG00000145495": "MARCH6",
-            "ENSG00000154997": "SEPT14",
-            "ENSG00000164402": "SEPT8",
-            "ENSG00000165406": "MARCH8",
-            "ENSG00000168385": "SEPT2",
-            "ENSG00000173077": "DEC1",
-            "ENSG00000173838": "MARCH10",
-            "ENSG00000173926": "MARCH3",
-            "ENSG00000180096": "SEPT1",
-            "ENSG00000183654": "MARCH11",
-            "ENSG00000184640": "SEPT9",
-            "ENSG00000184702": "SEPT5",
-            "ENSG00000186205": "MARC1",
-            "ENSG00000186522": "SEPT10",
-            "ENSG00000198060": "MARCH5",
-        }
-        self.all_effects_columns = ["symbol_ensembl", "SNP", "dist_TSS", "pval", "beta"]
-        self.all_effects_dtypes = {"symbol_ensembl": str, "SNP": str, "dist_TSS": int, "pval": float, "beta": float}
-        self.n = {
-            "Astrocytes": 192,
-            "Endothelial.cells": 154,
-            "Excitatory.neurons": 191,
-            "Inhibitory.neurons": 173,
-            "Microglia": 190,
-            "Oligodendrocytes": 192,
-            "OPCs...COPs": 188,
-            "Pericytes": 165
-        }[self.cell_type]
-
-    def load_snp_pos_data(self, effects, specific_entries_cols):
-        specific_entries_cols = self.trans_label_to_index(
-            inpath=self.snp_pos_path,
-            label_dict=specific_entries_cols
-        )
-        snp_pos_df =  self.load_partial_file(
-            inpath=self.snp_pos_path,
-            effects=effects,
-            specific_entries_cols=specific_entries_cols
-        )
-        return snp_pos_df
-
-    def get_partial_file_column_index(self):
-        column_indices = {}
-        for index, value in enumerate(self.all_effects_columns):
-            column_indices[value] = index
-
-        return column_indices
-
-    def get_top_effects(self):
-        df = self.load_excel(inpath=self.top_effects_path, sheet_name="Table S2", skiprows=3, dtype=str)
-        df = df.loc[df["cell_type"] == self.cell_type.replace("...", " / ").replace(".", " "), :]
-        for key, value in self.excel_gene_trans.items():
-            df.loc[df["ensembl"] == key, "symbol"] = value
-        df = df.astype({
-            "cell_type": str,
-            "symbol": str,
-            "ensembl": str,
-            "SNP": str,
-            "effect_allele": str,
-            "other_allele": str,
-            "dist_TSS": int,
-            "beta": float,
-            "bpval": float,
-            "adj_p": float,
-            "beta_metabrain": float,
-            "p_metabrain": float,
-            "Replication": str}
-        )
-        df["symbol_ensembl"] = df["symbol"] + "_" + df["ensembl"]
-        if df.shape[0] == 0:
-            print("Error, no effects found")
-            return None
-
-        snp_pos_df = self.load_snp_pos_data(effects=set(df["SNP"]), specific_entries_cols={"key": [("SNP", None, None)]})
-        df = df.merge(snp_pos_df, on=["SNP", "effect_allele", "other_allele"], how="left")
-        df = self.add_missing_info(df=df)
-        return df
-
-    def get_effects(self, effects=None, mode="top"):
-        if effects is None:
-            snp_pos_df = self.load_file(self.snp_pos_path)
-        else:
-            snp_pos_df = self.load_snp_pos_data(effects=set(effects.values()), specific_entries_cols={"key": self.columns["SNP"]})
-
-        specific_entries_cols = None
-        if mode == "specific":
-            label_dict = {"key": self.columns["gene"], "value": self.columns["SNP"]}
-            if self.columns["SNP"][0] not in self.all_effects_columns:
-                extra_info = self.create_dict_from_df(
-                    df=snp_pos_df,
-                    key=[("SNP", None, None)],
-                    value=self.columns["SNP"]
-                )
-                label_dict = {"key": self.columns["gene"], "value": [("SNP", extra_info, None)]}
-
-            specific_entries_cols = self.update_label_dict(
-                label_dict=label_dict,
-                colname_to_index_dict=self.get_partial_file_column_index()
-            )
-
-        df_list = []
-        for chromosome in CHROMOSOMES:
-            inpath = os.path.join(self.path, self.all_effects_path.replace("<CHR>", chromosome))
-
-            df = None
-            if mode == "all":
-                df = self.load_file(inpath, header=None, sep=" ")
-            elif mode == "specific":
-                df = self.load_partial_file(
-                    inpath,
-                    header=None,
-                    sep=" ",
-                    effects=effects,
-                    specific_entries_cols=specific_entries_cols
-                )
-            else:
-                print("Error, mode '{}' not implemented in get_effects() - {}".format(mode, self.class_name))
-                exit()
-
-            df_list.append(df)
-
-        if len(df_list) == 0:
-            return None
-
-        df = pd.concat(df_list, axis=0)
-        df.columns = self.all_effects_columns
-        df = df.astype(self.all_effects_dtypes)
-        df = df.merge(snp_pos_df, on="SNP", how="left")
-        return df
-
-    def add_missing_info(self, df):
-        if df.empty:
-            return df
-
-        # Add missing sample size. This is not always accurate but okay.
-        df["N"] = self.n
-        return df
-
-
-##############################################################################################################
-
 
 class LIMIX(Dataset):
     def __init__(self, *args, **kwargs):
@@ -1625,13 +1486,12 @@ class LIMIX(Dataset):
         })
 
         # File paths.
-        # self.genotype_inpath = os.path.join(self.path, "genotype_input", self.ancestry, self.ancestry + "_imputed_hg38_stats_filtered.vars.gz")
-        self.top_effects_path = os.path.join(self.path.replace("<CT>", self.cell_type), "top_qtl_results_all.txt")
         self.all_effects_path = os.path.join(self.path.replace("<CT>", self.cell_type), "qtl_results_all.txt")
         self.feature_metadata_file = os.path.join(self.path.replace("<CT>", self.cell_type), "qtl", "feature_metadata_<CHUNK>.txt")
         self.snp_metadata_file = os.path.join(self.path.replace("<CT>", self.cell_type), "qtl", "snp_metadata_<CHUNK>.txt")
         self.h5_file = os.path.join(self.path.replace("<CT>", self.cell_type), "qtl", "qtl_results_<CHUNK>.h5")
         self.snp_qc_metrics = os.path.join(self.path.replace("<CT>", self.cell_type), "qtl", "snp_qc_metrics_naContaining_feature_<FEATURE>.txt")
+        self.top_effects_path = os.path.join(self.path.replace("<CT>", self.cell_type), "top_qtl_results_all.txt")
 
         # Other class variables.
         self.qtl_results_pattern = "qtl_results_([0-9]{1,2}|X|Y|MT)_([0-9]+)_([0-9]+).h5"
@@ -1842,17 +1702,17 @@ class LIMIX(Dataset):
         if df.empty:
             return df
 
-        # Add Bonferroni corrected p-value.
-        if "nTotalTestsPerFeat" in df:
-            df["p_value_bonf_corr"] = df[self.nominal_pvalue].astype(float) * df["nTotalTestsPerFeat"].astype(float)
-            df.loc[df["p_value_bonf_corr"] > 1., "p_value_bonf_corr"] = 1.
-
         # Add other allele for check later.
         df["other_allele"] = df.apply(lambda row: self.get_other_allele(row=row, alleles_column="snp_id", pattern="(?:[0-9]{1,2}|X|Y|MT):[0-9]+:([A-Z]+):([A-Z]+)", effect_allele="assessed_allele"), axis=1)
 
+        # Add Bonferroni correct p-value.
+        df["p_value_bonf_corr"] = df.apply(lambda row: self.calc_bonf_pvalue(row=row, pvalue_column="p_value", ntests_column="nTotalTestsPerFeat"), axis=1)
+
         return df
 
+
 ##############################################################################################################
+
 
 class LIMIX_REDUCED(LIMIX):
     def __init__(self, *args, **kwargs):
@@ -1891,18 +1751,20 @@ class LIMIX_REDUCED(LIMIX):
 
         # File paths.
         # self.genotype_inpath = None
-        self.top_effects_path = os.path.join(self.path, self.cell_type + appendix + "top.txt")
         self.all_effects_path = os.path.join(self.path, self.cell_type + appendix + "all.txt")
         self.feature_metadata_file = None
         self.snp_metadata_file = None
         self.h5_file = None
         self.snp_qc_metrics = None
+        self.top_effects_path = os.path.join(self.path, self.cell_type + appendix + "top.txt")
 
         # Other class variables.
         self.qtl_results_pattern = None
         self.qtl_chunks = None
 
+
 ##############################################################################################################
+
 
 class mbQTL(Dataset):
     def __init__(self, *args, **kwargs):
@@ -1936,8 +1798,8 @@ class mbQTL(Dataset):
         })
 
         # File paths.
-        self.top_effects_path = os.path.join(self.path.replace("<CT>", self.cell_type), self.cell_type + "-TopEffects.txt")
         self.all_effects_path = os.path.join(self.path.replace("<CT>", self.cell_type), self.cell_type + "-AllEffects.txt")
+        self.top_effects_path = os.path.join(self.path.replace("<CT>", self.cell_type), self.cell_type + "-TopEffects.txt")
 
     def add_missing_info(self, df):
         if df.empty:
@@ -1946,17 +1808,12 @@ class mbQTL(Dataset):
         # Add the other allele column.
         df["SNPOtherAllele"] = df.apply(lambda row: self.get_other_allele(row=row, alleles_column="SNPAlleles", pattern="([A-Z]+)\/([A-Z]+)", effect_allele="SNPEffectAllele"), axis=1)
 
-        # Update type of N.
-        df["MetaPN"] = df["MetaPN"].astype(float).astype(int)
-
-        # Add Bonferroni corrected p-value. Only exists in top_inpath.
-        if "NrTestedSNPs" in df:
-            df["MetaPBonfCorr"] = df["MetaP"].astype(float) * df["NrTestedSNPs"].astype(float)
-            df.loc[df["MetaPBonfCorr"] > 1., "MetaPBonfCorr"] = 1.
-
         # Add MAF.
-        df["MAF"] = df["SNPEffectAlleleFreq"].astype(float)
-        df.loc[df["MAF"] > 0.5, "MAF"] = 1 - df.loc[df["MAF"] > 0.5, "MAF"]
+        df["MAF"] = df.apply(lambda row: self.calc_maf_from_af(row=row, af_column="SNPEffectAlleleFreq"), axis=1)
+
+        # Add Bonferroni correct p-value.
+        if "NrTestedSNPs" in df:
+            df["MetaPBonfCorr"] = df.apply(lambda row: self.calc_bonf_pvalue(row=row, pvalue_column="MetaP", ntests_column="NrTestedSNPs"), axis=1)
 
         return df
 
@@ -1996,8 +1853,8 @@ class mbQTL_MetaBrain(mbQTL):
         })
 
         # File paths.
-        self.top_effects_path = os.path.join(self.path, "merged-withqval.txt.gz")
         self.all_effects_path = os.path.join(self.path, "chr<CHR>-AllEffects-sorted.bgz.txt.gz")
+        self.top_effects_path = os.path.join(self.path, "merged-withqval.txt.gz")
 
     def get_top_effects(self):
         df = self.load_file(self.top_effects_path)
@@ -2069,8 +1926,8 @@ class eQTLMappingPipeline(Dataset):
         })
 
         # File paths.
-        self.top_effects_path = os.path.join(self.path, "2019-12-11-cis-eQTLsFDR-ProbeLevel-CohortInfoRemoved-BonferroniAdded.txt.gz")
         self.all_effects_path = os.path.join(self.path, "cis-eQTLs_full_20180905.txt.gz")
+        self.top_effects_path = os.path.join(self.path, "2019-12-11-cis-eQTLsFDR-ProbeLevel-CohortInfoRemoved-BonferroniAdded.txt.gz")
 
 
 ##############################################################################################################
@@ -2118,7 +1975,7 @@ class eQTLgenPhase2(Dataset):
 
         top_entries_cols = self.trans_label_to_index(
             inpath=all_effects_path,
-            label_dict={"key": self.columns["gene"], "value": self.columns["Pvalue"]}
+            label_dict={"key": self.columns["gene"], "value": self.get_top_entries_pvalue_label()}
         )
         df = self.load_partial_file(
             all_effects_path,
@@ -2131,8 +1988,255 @@ class eQTLgenPhase2(Dataset):
             return df
 
         # Add MAF.
-        df["MAF"] = df["allele_eff_freq"].astype(float)
-        df.loc[df["MAF"] > 0.5, "MAF"] = 1 - df.loc[df["MAF"] > 0.5, "MAF"]
+        df["MAF"] = df.apply(lambda row: self.calc_maf_from_af(row=row, af_column="allele_eff_freq"), axis=1)
+
+        return df
+
+
+##############################################################################################################
+
+class Bryois(Dataset):
+    def __init__(self, *args, **kwargs):
+        super(Bryois, self).__init__(*args, **kwargs)
+        self.class_name = "Bryois"
+
+        # Set the class variables.
+        self.hgnc_gene = [("symbol_ensembl", "([a-zA-Z0-9-.]+)_ENSG[0-9]+", None)]
+        self.ensembl_gene = [("symbol_ensembl", "[a-zA-Z0-9-.]+_(ENSG[0-9]+)", None)]
+        self.rsid_snp = [("SNP", None, None)]
+        self.chr_pos_snp = [("SNP_id_hg38", "chr((([0-9]{1,2}|X|Y|MT):[0-9]+))", None)]
+        self.beta_effect_size = [("beta", None, None)]
+        # self.zscore_effect_size = [(None, None, None)]
+        self.nominal_pvalue = [("pval", None, None)]
+        # self.bonferroni_pvalue = [(None, None, None)]
+        self.permuted_pvalue = [("bpval", None, None)]
+
+        # Define the uniform column info.
+        self.columns.update({
+            "gene": self.get_gene_label(),
+            "SNP": self.get_snp_label(),
+            "EA": [("effect_allele", None, None)],
+            "OA": [("other_allele", None, None)],
+            "effect_size": self.get_effect_size_label(),
+            # "se": [(None, None, None)],
+            "pvalue": self.get_pvalue_label(),
+            "FDR": [("adj_p", None, None)] if self.type == "discovery" else [(None, None, None)],
+            "N": [("N", None, None)],
+            "MAF": [("MAF", None, None)],
+            "label": self.hgnc_gene
+        })
+
+        # File paths.
+        self.all_effects_path = os.path.join(self.path, self.cell_type + ".<CHR>.gz")
+        self.snp_pos_path = os.path.join(self.path, "snp_pos.txt.gz")
+        self.top_effects_path = os.path.join(self.path, "41593_2022_1128_MOESM3_ESM.xlsx")
+
+        # Other variables.
+        self.excel_gene_trans = {
+            "ENSG00000099785": "MARCH2",
+            "ENSG00000100167": "SEPT3",
+            "ENSG00000108387": "SEPT4",
+            "ENSG00000117791": "MARC2",
+            "ENSG00000122545": "SEPT7",
+            "ENSG00000136536": "MARCH7",
+            "ENSG00000138758": "SEPT11",
+            "ENSG00000139266": "MARCH9",
+            "ENSG00000140623": "SEPT12",
+            "ENSG00000144583": "MARCH4",
+            "ENSG00000145416": "MARCH1",
+            "ENSG00000145495": "MARCH6",
+            "ENSG00000154997": "SEPT14",
+            "ENSG00000164402": "SEPT8",
+            "ENSG00000165406": "MARCH8",
+            "ENSG00000168385": "SEPT2",
+            "ENSG00000173077": "DEC1",
+            "ENSG00000173838": "MARCH10",
+            "ENSG00000173926": "MARCH3",
+            "ENSG00000180096": "SEPT1",
+            "ENSG00000183654": "MARCH11",
+            "ENSG00000184640": "SEPT9",
+            "ENSG00000184702": "SEPT5",
+            "ENSG00000186205": "MARC1",
+            "ENSG00000186522": "SEPT10",
+            "ENSG00000198060": "MARCH5",
+        }
+        self.all_effects_columns = ["symbol_ensembl", "SNP", "dist_TSS", "pval", "beta"]
+        self.all_effects_dtypes = {"symbol_ensembl": str, "SNP": str, "dist_TSS": int, "pval": float, "beta": float}
+
+        # These are the best estimates I can get. At least it is better than just assuming 192 for every cell type.
+        self.n = {
+            "Astrocytes": 192,
+            "Endothelial.cells": 154,
+            "Excitatory.neurons": 191,
+            "Inhibitory.neurons": 173,
+            "Microglia": 190,
+            "Oligodendrocytes": 192,
+            "OPCs...COPs": 188,
+            "Pericytes": 165
+        }[self.cell_type]
+
+    def load_snp_pos_data(self, effects, specific_entries_cols):
+        specific_entries_cols = self.trans_label_to_index(
+            inpath=self.snp_pos_path,
+            label_dict=specific_entries_cols
+        )
+        snp_pos_df =  self.load_partial_file(
+            inpath=self.snp_pos_path,
+            effects=effects,
+            specific_entries_cols=specific_entries_cols
+        )
+        return snp_pos_df
+
+    def get_partial_file_column_index(self):
+        column_indices = {}
+        for index, value in enumerate(self.all_effects_columns):
+            column_indices[value] = index
+
+        return column_indices
+
+    def get_top_effects(self):
+        df = self.load_excel(inpath=self.top_effects_path, sheet_name="Table S2", skiprows=3, dtype=str)
+        df = df.loc[df["cell_type"] == self.cell_type.replace("...", " / ").replace(".", " "), :]
+        for key, value in self.excel_gene_trans.items():
+            df.loc[df["ensembl"] == key, "symbol"] = value
+        df = df.astype({
+            "cell_type": str,
+            "symbol": str,
+            "ensembl": str,
+            "SNP": str,
+            "effect_allele": str,
+            "other_allele": str,
+            "dist_TSS": int,
+            "beta": float,
+            "bpval": float,
+            "adj_p": float,
+            "beta_metabrain": float,
+            "p_metabrain": float,
+            "Replication": str}
+        )
+        df["symbol_ensembl"] = df["symbol"] + "_" + df["ensembl"]
+        if df.shape[0] == 0:
+            print("Error, no effects found")
+            return None
+
+        snp_pos_df = self.load_snp_pos_data(effects=set(df["SNP"]), specific_entries_cols={"key": [("SNP", None, None)]})
+        df = df.merge(snp_pos_df, on=["SNP", "effect_allele", "other_allele"], how="left")
+        df = self.add_missing_info(df=df)
+        return df
+
+    def get_effects(self, effects=None, mode="top"):
+        if effects is None:
+            snp_pos_df = self.load_file(self.snp_pos_path)
+        else:
+            snp_pos_df = self.load_snp_pos_data(effects=set(effects.values()), specific_entries_cols={"key": self.columns["SNP"]})
+
+        specific_entries_cols = None
+        if mode == "specific":
+            label_dict = {"key": self.columns["gene"], "value": self.columns["SNP"]}
+            if self.columns["SNP"][0] not in self.all_effects_columns:
+                extra_info = self.create_dict_from_df(
+                    df=snp_pos_df,
+                    key=[("SNP", None, None)],
+                    value=self.columns["SNP"]
+                )
+                label_dict = {"key": self.columns["gene"], "value": [("SNP", extra_info, None)]}
+
+            specific_entries_cols = self.update_label_dict(
+                label_dict=label_dict,
+                colname_to_index_dict=self.get_partial_file_column_index()
+            )
+
+        df_list = []
+        for chromosome in CHROMOSOMES:
+            inpath = os.path.join(self.path, self.all_effects_path.replace("<CHR>", chromosome))
+
+            df = None
+            if mode == "all":
+                df = self.load_file(inpath, header=None, sep=" ")
+            elif mode == "specific":
+                df = self.load_partial_file(
+                    inpath,
+                    header=None,
+                    sep=" ",
+                    effects=effects,
+                    specific_entries_cols=specific_entries_cols
+                )
+            else:
+                print("Error, mode '{}' not implemented in get_effects() - {}".format(mode, self.class_name))
+                exit()
+
+            df_list.append(df)
+
+        if len(df_list) == 0:
+            return None
+
+        df = pd.concat(df_list, axis=0)
+        df.columns = self.all_effects_columns
+        df = df.astype(self.all_effects_dtypes)
+        df = df.merge(snp_pos_df, on="SNP", how="left")
+        return df
+
+    def add_missing_info(self, df):
+        if df.empty:
+            return df
+
+        # Add missing sample size.
+        df["N"] = self.n
+        return df
+
+
+##############################################################################################################
+
+
+class Fujita(Dataset):
+    def __init__(self, *args, **kwargs):
+        super(Fujita, self).__init__(*args, **kwargs)
+        self.class_name = "Fujita"
+
+        # Set the class variables.
+        self.hgnc_gene = [("gene_symbol", None, None)]
+        self.ensembl_gene = [("gene_id", None, None)]
+        self.rsid_snp = [("snps", None, None)]
+        self.chr_pos_snp = [("chr38", "chr([0-9]{1,2}|X|Y|MT)", None), ("pos38", None, None)]
+        self.beta_effect_size = [("beta", None, None)]
+        # self.zscore_effect_size = [(None, None, None)]
+        self.nominal_pvalue = [("pvalue", None, None)]
+        self.bonferroni_pvalue = [("bonf_pvalue", None, None)]
+        # self.permuted_pvalue = [(None, None, None)]
+
+        # Define the uniform column info.
+        self.columns.update({
+            "gene": self.get_gene_label(),
+            "SNP": self.get_snp_label(),
+            "EA": [("ALT", None, None)], # Don't ask me why but for some reason the alternative allele is the effect allele
+            "OA": [("REF", None, None)],
+            "effect_size": self.get_effect_size_label(),
+            "se": [("se", None, None)],
+            "pvalue": self.get_pvalue_label(),
+            # "FDR": [(None, None, None)] if self.type == "discovery" else [(None, None, None)],
+            "N": [(None, None, None)],
+            "MAF": [(None, None, None)],
+            "label": self.hgnc_gene
+        })
+
+        # File paths.
+        self.all_effects_path = os.path.join(self.path, "celltype-eqtl-sumstats." + self.cell_type + ".tsv")
+        # self.top_effects_path = None
+        self.n = 424
+
+    def add_missing_info(self, df):
+        if df.empty:
+            return df
+
+        # Add MAF.
+        df["MAF"] = df.apply(lambda row: self.calc_maf_from_af(row=row, af_column="ALT_AF"), axis=1)
+
+        # Add missing sample size.
+        df["N"] = self.n
+
+        # Add Bonferroni correct p-value.
+        if "NEntries" in df.columns:
+            df["bonf_pvalue"] = df.apply(lambda row: self.calc_bonf_pvalue(row=row, pvalue_column="pvalue", ntests_column="NEntries"), axis=1)
 
         return df
 
