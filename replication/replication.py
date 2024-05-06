@@ -294,7 +294,7 @@ class main():
         print("### Loading discovery data... ###")
         discovery_top_filepath = os.path.join(self.data_outdir, disc.get_id() + "_TopEffects.txt.gz")
         if os.path.exists(discovery_top_filepath) and not self.force:
-            discovery_top_df = self.load_file(discovery_top_filepath)
+            discovery_top_df = self.load_file(discovery_top_filepath, index_col=None)
         else:
             discovery_top_df = disc.get_top_effects()
             if self.save:
@@ -313,7 +313,7 @@ class main():
         print("### Loading replication data... ###")
         replication_filepath = os.path.join(self.data_outdir, disc.get_id() + "_TopEffects_LookupIn_" + repl.get_id() + ".txt.gz")
         if os.path.exists(replication_filepath) and not self.force:
-            replication_df = self.load_file(replication_filepath)
+            replication_df = self.load_file(replication_filepath, index_col=None)
         else:
             replication_df = repl.get_specific_effects(effects=discovery_eqtls)
             if self.save:
@@ -1442,11 +1442,14 @@ class Dataset:
             self.name + " se": float,
             self.name + " pvalue": float,
             self.name + " FDR": float,
-            self.name + " N": int,
+            self.name + " N": float,
             self.name + " MAF": float,
             self.name + " label": str
         }
         standard_df = standard_df.astype({key:value for key, value in dtypes.items() if key in standard_df.columns})
+        # this needs to be done in two steps to deal with thingsl ike '180.0'.
+        if self.name + " N" in standard_df:
+            standard_df[self.name + " N"] = standard_df[self.name + " N"].astype(int)
         standard_df.index = standard_df[self.name + " gene"] + "_" + standard_df[self.name + " SNP"]
         return standard_df
 
