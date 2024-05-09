@@ -17,12 +17,13 @@ outputs:
 settings:
   only_matching: False
   cell_types: ['AST', 'EX', 'IN', 'MIC', 'OLI', 'OPC', 'PER']
-  gene: "hgnc"
-  snp: "rsid"
-  effect_size: "beta"
+  gene: "ensembl"
+  snp: "chr:pos"
+  effect: "zscore"
+  allow_infer: False
   pvalue: "permuted"
   alpha: 0.05
-  fdr_calc_method: "bh_fdr"
+  fdr_calc_method: "qvalues"
   force: False
   save: False
   extensions: ['png']
@@ -48,5 +49,3 @@ settings_extra:
   python_module: "Python/3.10.4-GCCcore-11.3.0-bare"
   r_module: "R"
   python_env_activate: "~/env/bin/activate"
-  ancestry: "EUR"
-  cell_level: "L1"

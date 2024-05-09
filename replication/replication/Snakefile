@@ -51,6 +51,7 @@ rule plot_replication_stats:
     shell:
         """
         module load {params.python_module}
+        set +u
         source {params.python_env_activate}
 
         python {params.script} \
@@ -64,6 +65,7 @@ rule plot_replication_stats:
             --extension {params.extensions}
 
         deactivate
+        set -u
         """
 
 
@@ -92,8 +94,9 @@ rule replication_plot:
         replication_name = config["inputs"]["replication_name"],
         gene = config["settings"]["gene"],
         snp = config["settings"]["snp"],
-        effect_size = config["settings"]["effect_size"],
         pvalue = config["settings"]["pvalue"],
+        effect = config["settings"]["effect"],
+        allow_infer = config["settings"]["allow_infer"],
         alpha = config["settings"]["alpha"],
         fdr_calc_method = config["settings"]["fdr_calc_method"],
         palette = "--palette " + config["inputs"]["palette"] if config["inputs"]["palette"] is not None else "",
@@ -108,6 +111,7 @@ rule replication_plot:
         """
         module load {params.python_module}
         module load {params.r_module}
+        set +u
         source {params.python_env_activate}
 
         python {params.script} \
@@ -121,8 +125,9 @@ rule replication_plot:
             --replication_cell_type {wildcards.repl_ct} \
             --gene {params.gene} \
             --snp {params.snp} \
-            --effect_size {params.effect_size} \
             --pvalue {params.pvalue} \
+            --effect {params.effect} \
+            --allow_infer {params.allow_infer} \
             --alpha {params.alpha} \
             --fdr_calc_method {params.fdr_calc_method} \
             {params.palette} \
@@ -134,4 +139,5 @@ rule replication_plot:
             --rb {params.rb_script}
 
         deactivate
+        set -u
         """
