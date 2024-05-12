@@ -284,6 +284,8 @@ class main():
             cell_type=self.discovery_cell_type,
             allow_infer=self.allow_infer
         )
+        print(disc)
+
         repl = self.get_method_class(method=self.replication_method)(
             type="replication",
             name=self.replication_name,
@@ -291,6 +293,7 @@ class main():
             cell_type=self.replication_cell_type,
             allow_infer=self.allow_infer
         )
+        print(repl)
 
         self.check_data_availability(class_object=disc, class_type="discovery")
         self.check_data_availability(class_object=repl, class_type="replication")
@@ -309,7 +312,7 @@ class main():
         print("\n")
 
         if discovery_top_df is None or discovery_top_df.shape[0] == 0:
-            print("Error, discovery dataframe is empty. Does '{}' exist?".format(disc.get_top_effects_path(original=True)))
+            print("Error, discovery dataframe is empty.")
             exit()
 
         # Create a dict of top effects with keys being gene names and values being SNPs.
@@ -329,7 +332,7 @@ class main():
         print("\n")
 
         if replication_df is None or replication_df.shape[0] == 0:
-            print("Error, replication dataframe is empty. Does '{}' exist?".format(disc.get_all_effects_path(original=True)))
+            print("Error, replication dataframe is empty.")
             exit()
 
         # Overlap the data frames and harmonise direction of effect.
@@ -343,6 +346,10 @@ class main():
         self.save_file(df=overlapped_df, outpath=os.path.join(self.data_outdir, disc.get_id() + "_Disc_" + repl.get_id() + "_Repl_MergedEffects.txt.gz"))
         print(overlapped_df)
         print("\n")
+
+        if overlapped_df is None or overlapped_df.shape[0] == 0:
+            print("Error, merged dataframe is empty.")
+            exit()
 
         # Remove missingness.
         overlapped_df = overlapped_df.loc[~overlapped_df[repl.get_name() + " " + self.effect].isna(), :]
@@ -478,7 +485,7 @@ class main():
     def overlap_summary_stats(self, disc_df, repl_df, disc_name, repl_name):
         print("Discovery dataframe '{}' has shape: {}".format(disc_name, disc_df.shape))
         if disc_name + " alleles" in disc_df.columns:
-            disc_df.index = disc_df.index + "_" + disc_df[disc_name + " alleles"]
+            disc_df.index = disc_df.index + "_" + self.reorder_alleles(df=disc_df, column=disc_name + " alleles")
         if len(set(disc_df.index)) != disc_df.shape[0]:
             print("\tError, discovery contains duplicate indices")
             self.print_duplicate_indices(df=disc_df)
@@ -486,11 +493,15 @@ class main():
 
         print("Replication dataframe '{}' has shape: {}".format(repl_name, repl_df.shape))
         if repl_name + " alleles" in repl_df.columns:
-            repl_df.index = repl_df.index + "_" + repl_df[repl_name + " alleles"]
+            repl_df.index = repl_df.index + "_" + self.reorder_alleles(df=repl_df, column=repl_name + " alleles")
         if len(set(repl_df.index)) != repl_df.shape[0]:
             print("\tError, replication contains duplicate indices")
             self.print_duplicate_indices(df=repl_df)
             exit()
+
+        if not disc_name + " EA" in disc_df.columns or not repl_name + " EA" in repl_df.columns:
+            print("Error, could not very effect allele!")
+            return None
 
         if disc_name + " alleles" not in disc_df.columns or repl_name + " alleles" not in repl_df.columns:
             print("Warning, could not verify that the alleles match. Assuming it is fine; use with caution!")
@@ -507,16 +518,27 @@ class main():
         # Check which effects are missing in the replication data frame.
         na_mask = (df[repl_name + " " + self.effect].isna()).to_numpy()
 
-        # Make sure we flip both the beta and z-score and whatever else for effect columns there might be.
+        # Flip the effects. Make sure we flip both the beta and z-score and whatever else for effect columns there might be.
         df[repl_name + " flip"] = False
         df.loc[~na_mask, repl_name + " flip"] = df.loc[~na_mask, repl_name + " EA"] != df.loc[~na_mask, disc_name + " EA"]
         for effect in EFFECTS:
             if repl_name + " " + effect in df.columns:
                 df[repl_name + " " + effect] = df[repl_name + " " + effect] * df[repl_name + " flip"].map({True: -1, False: 1})
-        if disc_name + " EA" in df.columns:
-            df[repl_name + " EA"] = df[disc_name + " EA"]
-        if repl_name + " OA" in df.columns:
+
+        # Fix the effect allee and other allele columns.
+        if disc_name + " OA" in df.columns:
+            # If the discovery has the other allele we can just copy all the info from the discovery.
             df[repl_name + " OA"] = df[disc_name + " OA"]
+            df[repl_name + " EA"] = df[disc_name + " EA"]
+        elif repl_name + " OA" in df.columns:
+            # If the discovery does not have the other allele but the replication does. We then first need to update
+            # the other allele column and then we can just copy the effect allele from the discovery.
+            df.loc[df[repl_name + " flip"], repl_name + " OA"] = df.loc[df[repl_name + " flip"], repl_name + " EA"]
+            df[repl_name + " EA"] = df[disc_name + " EA"]
+        else:
+            # If neither one has the other allele we can technically move the flipped allees to the other allele column
+            # but since we aren't sure about the alleles I rather just keep them empty.
+            pass
         print("\nNumber of effects flipped: {:,}".format(df[repl_name + " flip"].sum()))
 
         fdr_calc_function = None
@@ -547,6 +569,10 @@ class main():
         print("Number of replication significant effects: {:,}".format(np.sum(replication_mask)))
 
         return df
+
+    @staticmethod
+    def reorder_alleles(df, column):
+        return df[column].apply(lambda value: "/".join(sorted(value.split("/"))))
 
     @staticmethod
     def print_duplicate_indices(df):
@@ -944,6 +970,8 @@ class Dataset:
         # Option 3: data is two or more full columns [("A", None, sep), ("B", None, sep)]
         # Option 4: data is a combination of option 2 and option 3 [("A", "(a-zA-Z]+)_", sep), ("B", None, sep)]
         # Option 5: data needs info from other file [("A", {"A": "a"}, sep)], prepare info as a translate dictionary
+        # TODO; one thing I did not consider yet is if you want to use a regex pattern and then apply a transalte dict. Since this
+        #  did not occur yet I will just deal with it once I encounter it.
         self.na = [(None, None, None)]
         self.columns = {
             "gene_hgnc": self.na,
@@ -970,7 +998,7 @@ class Dataset:
         self.all_effects_path = None
         self.top_effects_path = None
 
-        # Default sample size.
+        # Default sample size, equal for all effects.
         self.n = None
 
         # Default settings.
@@ -998,6 +1026,12 @@ class Dataset:
 
     def get_allow_infer(self):
         return self.allow_infer
+
+    def get_na(self):
+        return self.na
+
+    def get_columns(self):
+        return self.columns
 
     def get_column(self, column):
         if column not in self.columns:
@@ -1041,35 +1075,47 @@ class Dataset:
 
         return False
 
-    def get_all_effects_path(self, original=False):
-        if original:
-            return self.top_effects_path
-        return self.get_effects_path(effects_path=self.all_effects_path)
+    def set_all_effects_path(self, effects_path):
+        self.all_effects_path = self.get_fpath(fpath=effects_path)
 
-    def get_top_effects_path(self, original=False):
-        if original:
-            return self.top_effects_path
-        return self.get_effects_path(effects_path=self.top_effects_path)
+    def get_all_effects_path(self):
+        return self.all_effects_path
 
-    def get_effects_path(self, effects_path):
-        if effects_path is None:
+    def set_top_effects_path(self, effects_path):
+        self.top_effects_path = self.get_fpath(fpath=effects_path)
+
+    def get_top_effects_path(self):
+        return self.top_effects_path
+
+    @staticmethod
+    def get_fpath(fpath):
+        if fpath is None:
             return None
 
-        if os.path.exists(effects_path):
-            return effects_path
+        if os.path.exists(fpath):
+            return fpath
 
-        if os.path.exists(effects_path + ".gz"):
-            return effects_path + ".gz"
+        if os.path.exists(fpath + ".gz"):
+            return fpath + ".gz"
 
-        if "<CHR>" in effects_path:
+        if os.path.exists(fpath.rstrip(".gz")):
+            return fpath.rstrip(".gz")
+
+        if "<CHR>" in fpath:
             for chromosome in CHROMOSOMES:
-                chr_effects_path = effects_path.replace("<CHR>", chromosome)
+                chr_effects_path = fpath.replace("<CHR>", chromosome)
                 if not os.path.exists(chr_effects_path) and not os.path.exists(chr_effects_path + ".gz"):
                     return None
 
-            return effects_path
+            return fpath
 
         return None
+
+    def get_n(self):
+        return self.n
+
+    def get_ignore_tabix(self):
+        return self.ignore_tabix
 
     def get_eqtl_effects(self, df, gene, snp):
         genes = df.apply(lambda row: self.extract_info(data=row, query=self.get_column(gene)), axis=1)
@@ -1083,6 +1129,10 @@ class Dataset:
 
             if gene not in effects:
                 effects[gene] = set()
+
+            if snp in effects[gene]:
+                print("Warning, {} - {} is duplicated.".format(gene, snp))
+    
             effects[gene].add(snp)
 
         return effects
@@ -1160,8 +1210,8 @@ class Dataset:
 
     @staticmethod
     def get_file_header(inpath, header=0, sep="\t"):
-        if not os.path.exists(inpath):
-            raise FileNotFoundError("Warning, '{}' file not found".format(os.path.basename(inpath)))
+        if inpath is None or not os.path.exists(inpath):
+            raise FileNotFoundError("Warning, '{}' file not found".format(inpath))
 
         if inpath.endswith(".gz"):
             fhin = gzip.open(inpath, 'rt')
@@ -1218,6 +1268,12 @@ class Dataset:
             print("Warning, failed to load 'top_effects_path'. Selecting top effects from 'all_effects_path' instead.")
             pass
 
+        for label in [gene, "nominal_pvalue"]:
+            if not self.contains_data(label=label):
+                print("Error, get_top_effects() from the all effects file is unavailable for {} since"
+                      " there is '{}' data available.".format(self.class_name, label))
+                exit()
+
         df = self.get_effects_wrapper(
             inpath=self.get_all_effects_path(),
             label_dict={"key": self.get_column(column=gene), "value": self.get_column(column="nominal_pvalue")},
@@ -1241,6 +1297,12 @@ class Dataset:
         return df
 
     def get_specific_effects(self, effects=None, gene=None, snp=None):
+        for label in [gene, snp]:
+            if not self.contains_data(label=label):
+                print("Error, get_specific_effects() from the all effects file is unavailable for {} since"
+                      " there is '{}' data available.".format(self.class_name, label))
+                exit()
+
         # This function loads in specific gene-SNP combos from the 'all_effects_path' file.
         df = self.get_effects_wrapper(
             inpath=self.get_all_effects_path(),
@@ -1270,7 +1332,7 @@ class Dataset:
         # This function wraps around extract_(all/top/specific)effects() to allow for
         # processing of these files per chromosome.
         if inpath is None:
-            raise FileNotFoundError()
+            raise FileNotFoundError("Warning, '{}' file not found".format(inpath))
 
         if "<CHR>" not in inpath:
             return func(inpath=inpath, *args, **kwargs)
@@ -1290,26 +1352,26 @@ class Dataset:
     @staticmethod
     def load_file(inpath, header=0, index_col=None, sep="\t", low_memory=True,
                   nrows=None, skiprows=None, usecols=None):
-        if not os.path.exists(inpath):
-            raise FileNotFoundError("Warning, '{}' file not found".format(os.path.basename(inpath)))
+        if inpath is None or not os.path.exists(inpath):
+            raise FileNotFoundError("Warning, '{}' file not found".format(inpath))
 
         print("Loading file...")
         df = pd.read_csv(inpath, sep=sep, header=header, index_col=index_col,
                          low_memory=low_memory, nrows=nrows, skiprows=skiprows,
                          usecols=usecols)
-        print("Loaded dataframe: {} "
+        print("\tLoaded dataframe: {} "
               "with shape: {}".format(os.path.basename(inpath),
                                       df.shape))
         return df
 
     @staticmethod
     def load_excel(inpath, sheet_name, skiprows=None, dtype=None):
-        if not os.path.exists(inpath):
-            raise FileNotFoundError("Warning, '{}' file not found".format(os.path.basename(inpath)))
+        if inpath is None or not os.path.exists(inpath):
+            raise FileNotFoundError("Warning, '{}' file not found".format(inpath))
 
         print("Loading file...")
         df = pd.read_excel(inpath, sheet_name=sheet_name, skiprows=skiprows, dtype=dtype)
-        print("Loaded dataframe: {} "
+        print("\tLoaded dataframe: {} "
               "with shape: {}".format(os.path.basename(inpath),
                                       df.shape))
         return df
@@ -1317,8 +1379,8 @@ class Dataset:
     def load_partial_file(self, inpath, header=0, index_col=None, sep="\t", nrows=None,
                           skiprows=None, usecols=None, top_entries_cols=None,
                           specific_entries_cols=None, effects=None, ignore_tabix=False):
-        if not os.path.exists(inpath):
-            raise FileNotFoundError("Warning, '{}' file not found".format(os.path.basename(inpath)))
+        if inpath is None or not os.path.exists(inpath):
+            raise FileNotFoundError("Warning, '{}' file not found".format(inpath))
 
         if os.path.exists(inpath + ".tbi") and not ignore_tabix:
             df = self.load_partial_file_w_tabix(
@@ -1345,7 +1407,7 @@ class Dataset:
                 effects=effects
             )
 
-        print("Loaded dataframe: {} "
+        print("\tLoaded dataframe: {} "
               "with shape: {}".format(os.path.basename(inpath),
                                       df.shape))
         return df
@@ -1542,7 +1604,7 @@ class Dataset:
 
         # Fill in the beta standard error.
         if not self.has_column("beta_se") and self.contains_data("beta_se"):
-            print("\tAdding beta_se column (infered)")
+            print("\tAdding beta_se column (inferred)")
             df["beta_se"] = self.calc_beta_and_se(df=df, zscore_column=self.get_column("zscore"), maf_column=self.get_column("MAF"), n_column=self.get_column("N"))
             self.columns["beta_se"] = [("beta_se", None, None)]
 
@@ -1650,13 +1712,7 @@ class Dataset:
         for i, (_, row) in enumerate(df.iterrows()):
             row_info = []
             for argument, query in self.columns.items():
-                info = self.extract_info(data=row, query=query)
-
-                # Sort the alleles for matching later.
-                if argument == "alleles" and info is not None:
-                    info = "/".join(sorted(info.split("/")))
-
-                row_info.append(info)
+                row_info.append(self.extract_info(data=row, query=query))
                 if i == 0:
                     columns.append(self.name + " " + argument)
             df_info.append(row_info)
@@ -1695,13 +1751,31 @@ class Dataset:
             else:
                 standard_df[column] = standard_df[column].astype(dtype)
 
-        # Remove FDR if we do not want it.
+        # Remove FDR if we do not want it (in the case of replication).
         if self.name + " FDR" in standard_df and not include_fdr:
             standard_df.drop([self.name + " FDR"], axis=1, inplace=True)
 
         standard_df.index = standard_df[self.name + " " + gene] + "_" + standard_df[self.name + " " + snp]
         return standard_df
 
+    def __str__(self):
+        return "{} dataset:\n  class_name = {}\n  name = {}\n  path = {}\n  " \
+               "cell_type = {}\n  allow_infer = {}\n  na = {}\n  columns = {}\n  " \
+               "all_effects_path = {}\n  top_effects_path = {}\n  n = {}\n  " \
+               "ignore_tabix = {}\n".format(
+            self.type.title(),
+            self.class_name,
+            self.name,
+            self.path,
+            self.cell_type,
+            self.allow_infer,
+            self.na,
+            "\n    " + "\n    ".join(["{} = {}".format(key, value) for key, value in self.columns.items() if value != self.na]),
+            self.all_effects_path,
+            self.top_effects_path,
+            self.n,
+            self.ignore_tabix
+        )
 
 ##############################################################################################################
 
@@ -1734,25 +1808,27 @@ class LIMIX(Dataset):
         })
 
         # File paths.
-        self.all_effects_path = os.path.join(self.path.replace("<CT>", self.cell_type), "qtl_results_all.txt")
+        self.set_all_effects_path(effects_path=os.path.join(self.path.replace("<CT>", self.cell_type), "qtl_results_all.txt"))
+        self.set_top_effects_path(effects_path=os.path.join(self.path.replace("<CT>", self.cell_type), "top_qtl_results_all.txt"))
+
+        # Other file paths.
         self.feature_metadata_file = os.path.join(self.path.replace("<CT>", self.cell_type), "qtl", "feature_metadata_<CHUNK>.txt")
         self.snp_metadata_file = os.path.join(self.path.replace("<CT>", self.cell_type), "qtl", "snp_metadata_<CHUNK>.txt")
-        self.h5_file = os.path.join(self.path.replace("<CT>", self.cell_type), "qtl", "qtl_results_<CHUNK>.h5")
+        self.qtl_results_file = os.path.join(self.path.replace("<CT>", self.cell_type), "qtl", "qtl_results_<CHUNK>.h5")
         self.snp_qc_metrics = os.path.join(self.path.replace("<CT>", self.cell_type), "qtl", "snp_qc_metrics_naContaining_feature_<FEATURE>.txt")
-        self.top_effects_path = os.path.join(self.path.replace("<CT>", self.cell_type), "top_qtl_results_all.txt")
 
         # Other class variables.
-        self.qtl_results_pattern = "qtl_results_([0-9]{1,2}|X|Y|MT)_([0-9]+)_([0-9]+).h5"
+        self.chunk_pattern = "(([0-9]{1,2}|X|Y|MT)_([0-9]+)_([0-9]+))"
         self.qtl_chunks = None
 
     def get_top_effects(self, gene=None, snp=None):
         try:
             return self.load_file(self.get_top_effects_path())
         except FileNotFoundError:
-            print("Warning, failed to load 'top_effects_path'. Selecting top effects from 'h5 files' instead.")
+            print("Warning, failed to load 'top_effects_path'. Selecting top effects from chunk files instead.")
             pass
 
-        return self.load_h5_files(top=True)
+        return self.load_qtl_data(gene=gene, snp=snp, top=True)
 
 
     def get_specific_effects(self, effects=None, gene=None, snp=None):
@@ -1770,16 +1846,16 @@ class LIMIX(Dataset):
 
             return df
         except FileNotFoundError:
-            print("Warning, failed to load 'top_effects_path'. Selecting top effects from 'h5 files' instead.")
+            print("Warning, failed to load 'top_effects_path'. Selecting top effects from chunk files instead.")
             pass
 
-        return self.load_h5_files(effects=effects, gene=gene, snp=snp)
+        return self.load_qtl_data(effects=effects, gene=gene, snp=snp)
 
-    def load_h5_files(self, effects=None, gene=None, snp=None, top=False):
+    def load_qtl_data(self, effects=None, gene=None, snp=None, top=False):
         qlt_chunks_df = self.get_qtl_chunks()
         df_list = []
         for index, row in qlt_chunks_df.iterrows():
-            df = self.load_h5_file(chunk=row["Chunk"], effects=effects, gene=gene, snp=snp, top=top)
+            df = self.load_qtl_chunk(chunk=row["Chunk"], effects=effects, gene=gene, snp=snp, top=top)
             if df is not None:
                 df_list.append(df)
 
@@ -1795,24 +1871,17 @@ class LIMIX(Dataset):
         return self.qtl_chunks
 
     def load_qtl_chunks(self):
-        qtl_results = glob.glob(self.h5_file.replace("<CHUNK>", "*"))
+        qtl_results = glob.glob(self.qtl_results_file.replace("<CHUNK>", "*"))
         qtl_results_data = []
         for filepath in qtl_results:
-            basename = os.path.basename(filepath)
-            match = re.match(self.qtl_results_pattern, basename)
-            qtl_results_data.append([basename, match.group(1), int(match.group(2)), int(match.group(3))])
+            match = re.match(self.qtl_results_file.replace("<CHUNK>", self.chunk_pattern), filepath)
+            qtl_results_data.append([os.path.basename(filepath), match.group(1), match.group(2), int(match.group(3)), int(match.group(4))])
 
-        df = pd.DataFrame(qtl_results_data, columns=["Filename", "Chromosome", "Start", "End"])
-        df.insert(1, "Chunk", df["Chromosome"] + "_" + df["Start"].astype(str) + "_" + df["End"].astype(str))
-        df = df.astype({"Filename": str,
-                        "Chunk": str,
-                        "Chromosome": str,
-                        "Start": int,
-                        "End": int})
+        df = pd.DataFrame(qtl_results_data, columns=["Filename", "Chunk", "Chromosome", "Start", "End"])
         df.sort_values(by=["Chromosome", "Start"], key=natsort_keygen(), ascending=True, inplace=True)
         return df
 
-    def load_h5_file(self, chunk, effects=None, gene=None, snp=None, top=False):
+    def load_qtl_chunk(self, chunk, effects=None, gene=None, snp=None, top=False):
         print("Loading chunk...")
         feature_metadata_file = self.feature_metadata_file.replace("<CHUNK>", chunk)
         if not os.path.exists(feature_metadata_file) and os.path.exists(feature_metadata_file + ".gz"):
@@ -1822,7 +1891,7 @@ class LIMIX(Dataset):
         if not os.path.exists(snp_metadata_file) and os.path.exists(snp_metadata_file + ".gz"):
             snp_metadata_file = snp_metadata_file + ".gz"
 
-        h5_file = self.h5_file.replace("<CHUNK>", chunk)
+        qtl_results_file = self.qtl_results_file.replace("<CHUNK>", chunk)
 
         try:
             if os.path.exists(feature_metadata_file):
@@ -1864,7 +1933,7 @@ class LIMIX(Dataset):
                                  columns={"chromosome": "snp_chromosome",
                                           "position": "snp_position"})
 
-        frez = h5py.File(h5_file, 'r')
+        frez = h5py.File(qtl_results_file, 'r')
         frez_keys = [k.replace('_i_', '') for k in list(frez.keys())]
 
         df_list = []
@@ -1941,8 +2010,20 @@ class LIMIX(Dataset):
                                       df.shape))
         return df
 
+    def __str__(self):
+        class_str = super(LIMIX, self).__str__()
+        return (class_str.rstrip("\n") +
+                "\n  qtl_results_file = {}\n  feature_metadata_file = {}\n  " \
+                "snp_metadata_file = {}\n  snp_qc_metrics = {}\n  chunk_pattern = {}\n".format(
+                    self.qtl_results_file,
+                    self.feature_metadata_file,
+                    self.snp_metadata_file,
+                    self.snp_qc_metrics,
+                    self.chunk_pattern
+                ))
 
-##############################################################################################################
+
+        ##############################################################################################################
 
 
 class LIMIX_REDUCED(LIMIX):
@@ -1972,22 +2053,47 @@ class LIMIX_REDUCED(LIMIX):
             "MAF": [("maf", None, None)]
         })
 
-        appendix = ".wg3_Ye_wg3_wijst2018_wg3_sawcer_wg3_oneK1k_wg3_okada_wg3_Li_wg3_Franke_split_v3_wg3_Franke_split_v2_"
-        if self.cell_type == "CD4_T":
-            appendix = ".wg3_Ye_wg3_wijst2018_wg3_Trynka_wg3_sawcer_wg3_oneK1k_wg3_okada_wg3_Nawijn_wg3_Li_wg3_Franke_split_v3_wg3_Franke_split_v2_"
-
         # File paths.
-        # self.genotype_inpath = None
-        self.all_effects_path = os.path.join(self.path, self.cell_type + appendix + "all.txt")
+        self.set_all_effects_path()
+        self.set_top_effects_path()
+
+        # Other file paths.
+        self.qtl_results_file = None
         self.feature_metadata_file = None
         self.snp_metadata_file = None
-        self.h5_file = None
         self.snp_qc_metrics = None
-        self.top_effects_path = os.path.join(self.path, self.cell_type + appendix + "top.txt")
 
         # Other class variables.
-        self.qtl_results_pattern = None
+        self.chunk_pattern = None
         self.qtl_chunks = None
+
+    def set_all_effects_path(self, effects_path=None):
+        if effects_path is None:
+            effects_path = self.find_effects_path(indir=self.path, prefix=self.cell_type, contains='all')
+        self.all_effects_path = self.get_fpath(fpath=effects_path)
+
+    def set_top_effects_path(self, effects_path=None):
+        if effects_path is None:
+            effects_path = self.find_effects_path(indir=self.path, prefix=self.cell_type, contains='top')
+        self.top_effects_path = self.get_fpath(fpath=effects_path)
+
+    @staticmethod
+    def find_effects_path(indir, prefix=None, contains=None, prefer_unzipped=True):
+        effects_path = None
+        for fpath in glob.glob(os.path.join(indir, "*")):
+            basename = os.path.basename(fpath)
+            if (prefix is not None and basename.startswith(prefix)) and (contains is not None and contains in basename):
+                if effects_path is None:
+                    effects_path = fpath
+                    continue
+
+                print("Warning, find_effects_path(indir={}, prefix={}, contains={}, prefer_unzipped={}) matches multiple files.".format(indir, prefix, contains, prefer_unzipped))
+                if prefer_unzipped and (effects_path.endswith(".gz") and not fpath.endswith(".gz")):
+                    effects_path = fpath
+
+        if effects_path is None:
+            print("Warning, find_effects_path(indir={}, prefix={}, contains={}) matches no file.".format(indir, prefix, contains))
+        return effects_path
 
 
 ##############################################################################################################
@@ -2021,8 +2127,8 @@ class mbQTL(Dataset):
         })
 
         # File paths.
-        self.all_effects_path = os.path.join(self.path.replace("<CT>", self.cell_type), self.cell_type + "-AllEffects.txt")
-        self.top_effects_path = os.path.join(self.path.replace("<CT>", self.cell_type), self.cell_type + "-TopEffects.txt")
+        self.set_all_effects_path(effects_path=os.path.join(self.path.replace("<CT>", self.cell_type), self.cell_type + "-AllEffects.txt"))
+        self.set_top_effects_path(effects_path=os.path.join(self.path.replace("<CT>", self.cell_type), self.cell_type + "-TopEffects.txt"))
 
 
 ##############################################################################################################
@@ -2056,8 +2162,8 @@ class mbQTL_MetaBrain(mbQTL):
         })
 
         # File paths.
-        self.all_effects_path = os.path.join(self.path, "chr<CHR>-AllEffects-sorted.bgz.txt.gz")
-        self.top_effects_path = os.path.join(self.path, "merged-withqval.txt.gz")
+        self.set_all_effects_path(effects_path=os.path.join(self.path, "chr<CHR>-AllEffects-sorted.bgz.txt.gz"))
+        self.set_top_effects_path(effects_path=os.path.join(self.path, "merged-withqval.txt.gz"))
 
 
 ##############################################################################################################
@@ -2091,8 +2197,8 @@ class eQTLMappingPipeline(Dataset):
         })
 
         # File paths.
-        self.all_effects_path = os.path.join(self.path, "cis-eQTLs_full_20180905.txt")
-        self.top_effects_path = os.path.join(self.path, "2019-12-11-cis-eQTLsFDR-ProbeLevel-CohortInfoRemoved-BonferroniAdded.txt") # TODO: for some reason this still has multiple snps per gene in there.
+        self.set_all_effects_path(effects_path=os.path.join(self.path, "cis-eQTLs_full_20180905.txt"))
+        self.set_top_effects_path(effects_path=os.path.join(self.path, "2019-12-11-cis-eQTLsFDR-ProbeLevel-CohortInfoRemoved-BonferroniAdded.txt")) # TODO: for some reason this still has multiple snps per gene in there.
 
     def get_top_effects(self, gene=None, snp=None):
         df = self.get_effects_wrapper(
@@ -2118,7 +2224,7 @@ class eQTLgenPhase2(Dataset):
             "SNP_chr:pos": [("chromosome_variant", None, ":"), ("bp_variant", None, None)],
             "alleles": [("allele_ref", None, "/"), ("allele_eff", None, None)],
             "EA": [("allele_eff", None, None)],
-            # "OA": [(None, None, None)],z
+            # "OA": [(None, None, None)],
             "beta": [("beta", None, None)],
             "beta_se": [("standard_error", None, None)],
             # "n_tests": [(None, None, None)],
@@ -2133,8 +2239,8 @@ class eQTLgenPhase2(Dataset):
         })
 
         # File paths.
-        self.all_effects_path = os.path.join(self.path, "output_empirical_4GenPC20ExpPC_2023-05-27_interestingGeneSnpCombi_fixedConcatenation.csv")  # Not really all effects, just the sc-eQTLgen ones
-        # self.top_effects_path = None
+        self.set_all_effects_path(effects_path=os.path.join(self.path, "output_empirical_4GenPC20ExpPC_2023-05-27_interestingGeneSnpCombi_fixedConcatenation.csv"))  # Not really all effects, just the sc-eQTLgen ones
+        # self.set_top_effects_path(effects_path=None)
 
 ##############################################################################################################
 
@@ -2149,7 +2255,7 @@ class Bryois(Dataset):
             "gene_ensembl": [("symbol_ensembl", "[a-zA-Z0-9-.]+_(ENSG[0-9]+)", None)],
             "SNP_rsid": [("SNP", None, None)],
             "SNP_chr:pos": [("SNP_id_hg38", "chr((([0-9]{1,2}|X|Y|MT):[0-9]+))", None)],
-            "alleles": [("allele_ref", None, "/"), ("other_allele", None, None)],
+            "alleles": [("effect_allele", None, "/"), ("other_allele", None, None)],
             "EA": [("effect_allele", None, None)],
             "OA": [("other_allele", None, None)],
             "beta": [("beta", None, None)],
@@ -2166,9 +2272,9 @@ class Bryois(Dataset):
         })
 
         # File paths.
-        self.all_effects_path = os.path.join(self.path, self.cell_type + ".<CHR>.gz")
-        self.top_effects_path = os.path.join(self.path, self.cell_type + ".top.gz")
-        self.snp_pos_path = os.path.join(self.path, "snp_pos.txt.gz")
+        self.set_all_effects_path(effects_path=os.path.join(self.path, self.cell_type + ".<CHR>.gz"))
+        self.set_top_effects_path(effects_path=os.path.join(self.path, self.cell_type + ".top.gz"))
+        self.snp_pos_path = self.get_fpath(fpath=os.path.join(self.path, "snp_pos.txt.gz"))
 
         # Other variables.
         self.all_effects_columns = ["symbol_ensembl", "SNP", "dist_TSS", "pval", "beta"]
@@ -2224,6 +2330,13 @@ class Bryois(Dataset):
             )
         except FileNotFoundError:
             print("Warning, failed to load 'top_effects_path'. Selecting top effects from 'all_effects_path' instead.")
+
+            for label in [gene, "nominal_pvalue"]:
+                if not self.contains_data(label=label):
+                    print("Error, get_top_effects() from the all effects file is unavailable for {} since"
+                          " there is '{}' data available.".format(self.class_name, label))
+                    exit()
+
             df = self.get_effects_wrapper(
                 inpath=self.get_all_effects_path(),
                 func=self.extract_top_effects
@@ -2285,6 +2398,14 @@ class Bryois(Dataset):
         )
         return df
 
+    def __str__(self):
+        class_str = super(Bryois, self).__str__()
+        return (class_str.rstrip("\n") +
+                "\n  snp_pos_path = {}\n  all_effects_columns = {}\n".format(
+                    self.snp_pos_path,
+                    self.all_effects_columns
+                ))
+
 
 
 ##############################################################################################################
@@ -2318,8 +2439,8 @@ class Fujita(Dataset):
         })
 
         # File paths.
-        self.all_effects_path = os.path.join(self.path, "celltype-eqtl-sumstats." + self.cell_type + ".tsv")
-        # self.top_effects_path = None
+        self.set_all_effects_path(effects_path=os.path.join(self.path, "celltype-eqtl-sumstats." + self.cell_type + ".tsv"))
+        # self.set_top_effects_path(effects_path=None)
         self.n = 424
 
 
