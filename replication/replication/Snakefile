@@ -1,10 +1,16 @@
 #!/usr/bin/env python
+import os
 
 # Add trailing /.
 if not config["inputs"]["repo_dir"].endswith("/"):
     config["inputs"]["repo_dir"] += "/"
 if not config["outputs"]["output_dir"].endswith("/"):
     config["outputs"]["output_dir"] += "/"
+
+# Check if the singularity image exists.
+if not os.path.exists(config["inputs"]["singularity_image"]):
+    logger.info("Error, the singularity image does not exist.\n\nExiting.")
+    exit("MissingSIFFile")
 
 if config["inputs"]["discovery_name"] == config["inputs"]["replication_name"]:
     logger.info("Error, discovery and replication name are the same.")
@@ -36,8 +42,8 @@ rule plot_replication_stats:
         time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["rules"]["plot_replication_stats_time"]]
     threads: config["rules"]["plot_replication_stats_threads"]
     params:
-        python_module = config["settings_extra"]["python_module"],
-        python_env_activate = config["settings_extra"]["python_env_activate"],
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "plot_replication_stats.py",
         workdir = config["outputs"]["output_dir"] + "replication_data/" + config["inputs"]["discovery_name"] + "discovery_" + config["inputs"]["replication_name"] + "replication/",
         discovery_name = config["inputs"]["discovery_name"],
@@ -50,11 +56,7 @@ rule plot_replication_stats:
     log: config["outputs"]["output_dir"] + "log/plot_replication_stats.log"
     shell:
         """
-        module load {params.python_module}
-        set +u
-        source {params.python_env_activate}
-
-        python {params.script} \
+        singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --workdir {params.workdir} \
             --discovery_name {params.discovery_name} \
             --replication_name {params.replication_name} \
@@ -63,9 +65,6 @@ rule plot_replication_stats:
             --plotdir {params.plotdir} \
             {params.palette} \
             --extension {params.extensions}
-
-        deactivate
-        set -u
         """
 
 
@@ -82,9 +81,8 @@ rule replication_plot:
         time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["rules"]["replication_plot_time"]]
     threads: config["rules"]["replication_plot_threads"]
     params:
-        python_module = config["settings_extra"]["python_module"],
-        r_module = config["settings_extra"]["r_module"],
-        python_env_activate = config["settings_extra"]["python_env_activate"],
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "replication.py",
         discovery_method = config["inputs"]["discovery_method"],
         discovery_path = lambda wildcards: config["inputs"]["discovery_path"].replace("<CT>", wildcards.disc_ct.replace("EUR-", "EUR/")),
@@ -96,7 +94,8 @@ rule replication_plot:
         snp = config["settings"]["snp"],
         pvalue = config["settings"]["pvalue"],
         effect = config["settings"]["effect"],
-        allow_infer = config["settings"]["allow_infer"],
+        allow_infer = "--allow_infer" if config["settings"]["allow_infer"] else "",
+        rm_dupl = config["settings"]["rm_dupl"],
         alpha = config["settings"]["alpha"],
         fdr_calc_method = config["settings"]["fdr_calc_method"],
         palette = "--palette " + config["inputs"]["palette"] if config["inputs"]["palette"] is not None else "",
@@ -109,12 +108,7 @@ rule replication_plot:
     log: config["outputs"]["output_dir"] + "log/replication_plot.{disc_ct}_discovery.{repl_ct}_replication.log"
     shell:
         """
-        module load {params.python_module}
-        module load {params.r_module}
-        set +u
-        source {params.python_env_activate}
-
-        python {params.script} \
+        singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --discovery_method {params.discovery_method} \
             --discovery_path {params.discovery_path} \
             --discovery_name {params.discovery_name} \
@@ -127,7 +121,8 @@ rule replication_plot:
             --snp {params.snp} \
             --pvalue {params.pvalue} \
             --effect {params.effect} \
-            --allow_infer {params.allow_infer} \
+            {params.allow_infer} \
+            --rm_dupl {params.rm_dupl} \
             --alpha {params.alpha} \
             --fdr_calc_method {params.fdr_calc_method} \
             {params.palette} \
@@ -137,7 +132,4 @@ rule replication_plot:
             {params.save} \
             --qvalue_truncp {params.qvalue_truncp_script} \
             --rb {params.rb_script}
-
-        deactivate
-        set -u
         """

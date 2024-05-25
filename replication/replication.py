@@ -37,15 +37,19 @@ import numpy as np
 import pandas as pd
 from natsort import natsort_keygen
 from statsmodels.stats import multitest
-import rpy2.robjects as robjects
-from rpy2.robjects.packages import importr
-from rpy2.rinterface_lib.embedded import RRuntimeError
 from scipy import stats
 import seaborn as sns
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from adjustText import adjust_text
+
+# R imports. This is needed to prevent loading of the RProfile file.
+import rpy2.rinterface as rinterface
+rinterface.embedded.set_initoptions(options=["rpy2", "--quiet", "--no-save", "--no-init-file"])
+rinterface.initr()
+from rpy2.robjects.packages import importr
+import rpy2.robjects as robjects
 
 # Local application imports.
 
@@ -69,7 +73,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
                                         __license__)
 
 CHROMOSOMES = [str(chr) for chr in range(1, 23)]
-METHODS = ["LIMIX", "LIMIX_REDUCED", "mbQTL", "mbQTL_MetaBrain", "eQTLMappingPipeline", "eQTLgenPhase2", "Bryois", "Fujita"]
+METHODS = ["LIMIX", "LIMIX_REDUCED", "mbQTL", "mbQTL_MetaBrain", "eQTLMappingPipeline", "eQTLgenPhase2", "Bryois", "Bryois_REDUCED", "Fujita", "DeconQTL", "PICALO"]
 EFFECTS = ["zscore", "beta"]
 
 
@@ -90,6 +94,7 @@ class main():
         self.pvalue = getattr(arguments, 'pvalue') + "_pvalue"
         self.effect = getattr(arguments, 'effect')
         self.allow_infer = getattr(arguments, 'allow_infer')
+        self.rm_dupl = getattr(arguments, 'rm_dupl')
         self.alpha = getattr(arguments, 'alpha')
         self.fdr_calc_method = getattr(arguments, 'fdr_calc_method')
         self.log_modulus = getattr(arguments, 'log_modulus')
@@ -142,12 +147,21 @@ class main():
             "Oligodendrocytes": "OLI",
             "OPCs...COPs": "OPC",
             "Pericytes": "PER",
+            "EndothelialCells": "END",
+            "ExcitatoryNeurons": "EX",
+            "InhibitoryNeurons": "IN",
+            "OPCsCOPs": "OPC",
             "Ast": "AST",
             "End": "END",
             "Exc": "EX",
             "Inh": "IN",
             "Mic": "MIC",
-            "Oli": "OLI"
+            "Oli": "OLI",
+            "Astrocyte": "AST",
+            "EndothelialCell": "END",
+            "Excitatory": "EX",
+            "Inhibitory": "IN",
+            "Oligodendrocyte": "OLI"
         }
 
     @staticmethod
@@ -223,6 +237,11 @@ class main():
                             help="")
         parser.add_argument("--allow_infer",
                             action='store_true',
+                            help="")
+        parser.add_argument("--rm_dupl",
+                            type=str,
+                            choices=["none", "all", "mismatched"],
+                            default="none",
                             help="")
         parser.add_argument("--alpha",
                             type=float,
@@ -307,7 +326,7 @@ class main():
             discovery_top_df = disc.get_top_effects(gene=self.gene, snp=self.snp)
             if self.save:
                 self.save_file(df=discovery_top_df, outpath=discovery_top_filepath, index=False)
-        discovery_top_df = disc.add_missing_info(df=discovery_top_df)
+        discovery_top_df = disc.postprocess(df=discovery_top_df)
         print(discovery_top_df)
         print("\n")
 
@@ -327,7 +346,7 @@ class main():
             replication_df = repl.get_specific_effects(effects=discovery_eqtls, gene=self.gene, snp=self.snp)
             if self.save:
                 self.save_file(df=replication_df, outpath=replication_filepath, index=False)
-        replication_df = repl.add_missing_info(df=replication_df)
+        replication_df = repl.postprocess(df=replication_df)
         print(replication_df)
         print("\n")
 
@@ -394,6 +413,7 @@ class main():
         print("  > P-value: {}".format(self.pvalue))
         print("  > Effect: {}".format(self.effect))
         print("  > Allow infer: {}".format(self.allow_infer))
+        print("  > Remove duplicates: {}".format(self.rm_dupl))
         print("  > Alpha: {}".format(self.alpha))
         print("  > FDR calc. method: {}".format(self.fdr_calc_method))
         print("  > Log modulus transform: {}".format(self.log_modulus))
@@ -422,8 +442,14 @@ class main():
             return eQTLgenPhase2
         elif method == "Bryois":
             return Bryois
+        elif method == "Bryois_REDUCED":
+            return Bryois_REDUCED
         elif method == "Fujita":
             return Fujita
+        elif method == "DeconQTL":
+            return DeconQTL
+        elif method == "PICALO":
+            return PICALO
         else:
             print("Error, unexpected method '{}'".format(method))
             exit()
@@ -484,27 +510,55 @@ class main():
 
     def overlap_summary_stats(self, disc_df, repl_df, disc_name, repl_name):
         print("Discovery dataframe '{}' has shape: {}".format(disc_name, disc_df.shape))
-        if disc_name + " alleles" in disc_df.columns:
+        print("Replication dataframe '{}' has shape: {}".format(repl_name, repl_df.shape))
+
+        # Make sure we have the EA for both datasets.
+        if not disc_name + " EA" in disc_df.columns:
+            print("Error, discovery is missing the effect allele column")
+            exit()
+        if not repl_name + " EA" in repl_df.columns:
+            print("Error, replication is missing the effect allele column")
+            exit()
+
+        # Set index, prefer to match on alphabetically sorted alleles as well to ensure we are looking at the same variant.
+        if disc_name + " alleles" in disc_df.columns and repl_name + " alleles" in repl_df.columns:
             disc_df.index = disc_df.index + "_" + self.reorder_alleles(df=disc_df, column=disc_name + " alleles")
+            repl_df.index = repl_df.index + "_" + self.reorder_alleles(df=repl_df, column=repl_name + " alleles")
+        else:
+            print("Warning, could not verify that the alleles match. Assuming it is fine; use with caution!")
+
+        # Duplicates in the discovery should never happen so stop if they exist.
         if len(set(disc_df.index)) != disc_df.shape[0]:
             print("\tError, discovery contains duplicate indices")
             self.print_duplicate_indices(df=disc_df)
             exit()
 
-        print("Replication dataframe '{}' has shape: {}".format(repl_name, repl_df.shape))
-        if repl_name + " alleles" in repl_df.columns:
-            repl_df.index = repl_df.index + "_" + self.reorder_alleles(df=repl_df, column=repl_name + " alleles")
+        # Duplicates in the replication data might be possible to resolve.
         if len(set(repl_df.index)) != repl_df.shape[0]:
-            print("\tError, replication contains duplicate indices")
-            self.print_duplicate_indices(df=repl_df)
-            exit()
+            if self.rm_dupl == "none":
+                print("\tError, replication contains duplicate indices")
+                self.print_duplicate_indices(df=repl_df)
+                exit()
 
-        if not disc_name + " EA" in disc_df.columns or not repl_name + " EA" in repl_df.columns:
-            print("Error, could not very effect allele!")
-            return None
+            if self.rm_dupl == "all":
+                print("\tWarning, replication contains duplicate indices. Resolving this by removing"
+                      "all duplicates. ")
+                repl_df = self.remove_duplicates(repl_df=repl_df)
+            elif self.rm_dupl == "mismatched":
+                print("\tWarning, replication contains duplicate indices. Attempting to resolve duplicates"
+                      " by removing effects that require flipping.")
+                repl_df = self.remove_mismatched_duplicates(disc_df=disc_df, disc_name=disc_name, repl_df=repl_df, repl_name=repl_name)
+            else:
+                print("Error, unexpected argument for --rm_dupl.")
+                exit()
 
-        if disc_name + " alleles" not in disc_df.columns or repl_name + " alleles" not in repl_df.columns:
-            print("Warning, could not verify that the alleles match. Assuming it is fine; use with caution!")
+            if len(set(repl_df.index)) != repl_df.shape[0]:
+                print("\tError, replication still contains duplicate indices.")
+                self.print_duplicate_indices(df=repl_df)
+                exit()
+
+        print(disc_df)
+        print(repl_df)
 
         n_overlap = len(set(disc_df.index).intersection(set(repl_df.index)))
         print("Number of effects overlapping: {:,}".format(n_overlap))
@@ -524,6 +578,8 @@ class main():
         for effect in EFFECTS:
             if repl_name + " " + effect in df.columns:
                 df[repl_name + " " + effect] = df[repl_name + " " + effect] * df[repl_name + " flip"].map({True: -1, False: 1})
+        if repl_name + " AF" in df.columns:
+            df.loc[df[repl_name + " flip"], repl_name + " AF"] = 1 - df.loc[df[repl_name + " flip"], repl_name + " AF"]
 
         # Fix the effect allee and other allele columns.
         if disc_name + " OA" in df.columns:
@@ -575,16 +631,30 @@ class main():
         return df[column].apply(lambda value: "/".join(sorted(value.split("/"))))
 
     @staticmethod
-    def print_duplicate_indices(df):
-        seen = set()
-        dups = set()
-        for index in df.index:
-            if index in seen:
-                dups.add(index)
-                print(df.loc[[index], :].T)
-            seen.add(index)
-        print("\tFound {:,} duplicates: {}".format(len(dups), ", ".join(dups)))
+    def remove_duplicates(repl_df):
+        return repl_df.loc[~repl_df.index.duplicated(keep=False), :]
 
+    @staticmethod
+    def remove_mismatched_duplicates(disc_df, disc_name, repl_df, repl_name):
+        # Create a set of effects just considering gene_snp_EA. We consider this the reference.
+        disc_effects = set(disc_df.index + "_" + disc_df[disc_name + " EA"])
+
+        # Construct a mask for the effects in the replication data frame that are duplicated.
+        # Also, construct a mask that checks if the gene_snp_EA is matching the reference set (discovery effects).
+        duplicated = repl_df.index.duplicated(keep=False)
+        matched_ea = (repl_df.index + "_" + repl_df[repl_name + " EA"]).isin(disc_effects)
+
+        # Only keep effects that are unique or are matching the discovery effects. Note that
+        # this can still contain duplicates if the gene_snp_EA combinations occurs more than once
+        # in the replication data frame. In that case I have no clue how to resolve this.
+        return repl_df.loc[~duplicated | matched_ea, :]
+
+    @staticmethod
+    def print_duplicate_indices(df):
+        dups = df.index[df.index.duplicated()]
+        for index in dups:
+            print(df.loc[[index], :].T)
+        print("\tFound {:,} duplicates: {}".format(len(dups), ", ".join(dups)))
 
     def calculate_replication_stats(self, df, disc_name, repl_name):
         repl_stats_df = df.copy()
@@ -751,13 +821,12 @@ class main():
         if nrows == 1:
             axes = axes[np.newaxis, ...]
 
-        prefix = ""
         if log_modulus:
             old_disc_effect = disc_effect
             old_repl_effect = repl_effect
 
-            disc_effect = "{}{} {}".format(disc_name, prefix, self.effect)
-            repl_effect = "{}{} {}".format(repl_name, prefix, self.effect)
+            disc_effect = "{} log {}".format(disc_name, self.effect)
+            repl_effect = "{} log {}".format(repl_name, self.effect)
 
             plot_df[disc_effect] = self.calc_log_modulus(df=plot_df, column=old_disc_effect)
             plot_df[repl_effect] = self.calc_log_modulus(df=plot_df, column=old_repl_effect)
@@ -1165,6 +1234,10 @@ class Dataset:
             if column is None:
                 continue
 
+            # Edge case where the index is renamed to 'Unnamed: 0' by pandas.
+            if column == '' and 'Unnamed: 0' in data:
+                column = 'Unnamed: 0'
+
             # Option 1: Skip if column does not exist.
             if isinstance(column, str) and column not in data:
                 continue
@@ -1303,9 +1376,21 @@ class Dataset:
                       " there is '{}' data available.".format(self.class_name, label))
                 exit()
 
-        # This function loads in specific gene-SNP combos from the 'all_effects_path' file.
+        try:
+            # This function loads in specific gene-SNP combos from the 'all_effects_path' file.
+            df = self.get_effects_wrapper(
+                inpath=self.get_all_effects_path(),
+                label_dict={"key": self.get_column(column=gene), "value": self.get_column(column=snp)},
+                func=self.extract_specific_effects,
+                effects=effects
+            )
+        except FileNotFoundError:
+            print("Warning, failed to load 'all_effects_path'. Selecting top effects from 'top_effects_path' instead.")
+            pass
+
+        # Using the top file instead.
         df = self.get_effects_wrapper(
-            inpath=self.get_all_effects_path(),
+            inpath=self.get_top_effects_path(),
             label_dict={"key": self.get_column(column=gene), "value": self.get_column(column=snp)},
             func=self.extract_specific_effects,
             effects=effects
@@ -1560,6 +1645,14 @@ class Dataset:
                 lines.append(values)
 
         return pd.DataFrame(lines, columns=columns, index=indices)
+
+    def postprocess(self, df):
+        df = self.update_df(df=df)
+        df = self.add_missing_info(df=df)
+        return df
+
+    def update_df(self, df):
+        return df
 
     def add_missing_info(self, df):
         if df is None:
@@ -2069,30 +2162,30 @@ class LIMIX_REDUCED(LIMIX):
 
     def set_all_effects_path(self, effects_path=None):
         if effects_path is None:
-            effects_path = self.find_effects_path(indir=self.path, prefix=self.cell_type, contains='all')
+            effects_path = self.find_effects_path(indir=self.path, prefix=self.cell_type, contains='all', notcontains='_cs')
         self.all_effects_path = self.get_fpath(fpath=effects_path)
 
     def set_top_effects_path(self, effects_path=None):
         if effects_path is None:
-            effects_path = self.find_effects_path(indir=self.path, prefix=self.cell_type, contains='top')
+            effects_path = self.find_effects_path(indir=self.path, prefix=self.cell_type, contains='top', notcontains='_cs')
         self.top_effects_path = self.get_fpath(fpath=effects_path)
 
     @staticmethod
-    def find_effects_path(indir, prefix=None, contains=None, prefer_unzipped=True):
+    def find_effects_path(indir, prefix=None, contains=None, notcontains=None, prefer_unzipped=True):
         effects_path = None
         for fpath in glob.glob(os.path.join(indir, "*")):
             basename = os.path.basename(fpath)
-            if (prefix is not None and basename.startswith(prefix)) and (contains is not None and contains in basename):
+            if (prefix is not None and basename.startswith(prefix)) and (contains is not None and contains in basename) and (notcontains is not None and notcontains not in basename):
                 if effects_path is None:
                     effects_path = fpath
                     continue
 
-                print("Warning, find_effects_path(indir={}, prefix={}, contains={}, prefer_unzipped={}) matches multiple files.".format(indir, prefix, contains, prefer_unzipped))
+                print("Warning, find_effects_path(indir={}, prefix={}, contains={}, notcontains={}, prefer_unzipped={}) matches multiple files.".format(indir, prefix, contains, notcontains, prefer_unzipped))
                 if prefer_unzipped and (effects_path.endswith(".gz") and not fpath.endswith(".gz")):
                     effects_path = fpath
 
         if effects_path is None:
-            print("Warning, find_effects_path(indir={}, prefix={}, contains={}) matches no file.".format(indir, prefix, contains))
+            print("Warning, find_effects_path(indir={}, prefix={}, contains={}, notcontains={}. prefer_unzipped={}) matches no file.".format(indir, prefix, contains, notcontains, prefer_unzipped))
         return effects_path
 
 
@@ -2137,7 +2230,7 @@ class mbQTL(Dataset):
 class mbQTL_MetaBrain(mbQTL):
     def __init__(self, *args, **kwargs):
         super(mbQTL, self).__init__(*args, **kwargs)
-        self.class_name = "mbQTL_WG3"
+        self.class_name = "mbQTL_MetaBrain"
 
         # Columns that are in the original file.
         self.columns.update({
@@ -2411,6 +2504,46 @@ class Bryois(Dataset):
 ##############################################################################################################
 
 
+class Bryois_REDUCED(Dataset):
+    def __init__(self, *args, **kwargs):
+        super(Bryois_REDUCED, self).__init__(*args, **kwargs)
+        self.class_name = "Bryois_REDUCED"
+
+        # Columns that are in the original file.
+        self.columns.update({
+            # "gene_hgnc": [(None, None, None)],
+            "gene_ensembl": [("", "(ENSG[0-9]+)_rs[0-9]+", None)],
+            "SNP_rsid": [("", "ENSG[0-9]+_(rs[0-9]+)", None)],
+            # "SNP_chr:pos": [(None, None, None)],
+            # "alleles": [(None, None, None)],
+            "EA": [("effect_allele", None, None)],
+            # "OA": [(None, None, None)],
+            "beta": [(self.cell_type + " beta", None, None)],
+            # "beta_se": [(None, None, None)],
+            # "n_tests": [(None, None, None)],
+            "nominal_pvalue": [(self.cell_type + " p-value", None, None)],
+            # "permuted_pvalue": [(None", None, None)],
+            # "bonferroni_pvalue": [(None, None, None)],
+            # "zscore": [(None, None, None)],
+            # "FDR": [(None, None, None)],
+            # "N": [(None, None, None)],
+            # "AF": [(None, None, None)],
+            # "MAF": [(None, None, None)],
+        })
+
+        # File paths.
+        # self.set_all_effects_path(effects_path=)
+        self.set_top_effects_path(effects_path=os.path.join(self.path, "JulienBryois2021SummaryStats.txt.gz"))
+
+    def update_df(self, df):
+        # Remove empty rows and unwanted columns.
+        df = df.loc[df[self.cell_type + " beta"] != "", [col for col in df.columns if (not col.endswith("p-value") and not col.endswith("beta")) or col.startswith(self.cell_type)]]
+
+        # TODO: Could still merge snp_pos file into this.
+        return df
+
+##############################################################################################################
+
 class Fujita(Dataset):
     def __init__(self, *args, **kwargs):
         super(Fujita, self).__init__(*args, **kwargs)
@@ -2442,6 +2575,169 @@ class Fujita(Dataset):
         self.set_all_effects_path(effects_path=os.path.join(self.path, "celltype-eqtl-sumstats." + self.cell_type + ".tsv"))
         # self.set_top_effects_path(effects_path=None)
         self.n = 424
+
+
+##############################################################################################################
+
+
+class DeconQTL(Dataset):
+    def __init__(self, *args, **kwargs):
+        super(DeconQTL, self).__init__(*args, **kwargs)
+        self.class_name = "DeconQTL"
+
+        # TODO: work in progress, untested code
+
+        # Columns that are in the original file.
+        self.columns.update({
+            # "gene_hgnc": [(None, None, None)],
+            "gene_ensembl": [("", "(ENSG[0-9]+).[0-9]+_(?:[0-9]{1,2}|X|Y|MT):[0-9]+:rs[0-9]+:[A-Z]+_[A-Z]+", None)],
+            "SNP_rsid": [("", "ENSG[0-9]+.[0-9]+_(?:[0-9]{1,2}|X|Y|MT):[0-9]+:(rs[0-9]+):[A-Z]+_[A-Z]+", None)],
+            "SNP_chr:pos": [("", "ENSG[0-9]+.[0-9]+_(([0-9]{1,2}|X|Y|MT):[0-9]+):rs[0-9]+:[A-Z]+_[A-Z]+", None)],
+            "alleles": [("", "ENSG[0-9]+.[0-9]+_(?:[0-9]{1,2}|X|Y|MT):[0-9]+:rs[0-9]+:([A-Z]+)_[A-Z]+", "/"), ("", "ENSG[0-9]+.[0-9]+_(?:[0-9]{1,2}|X|Y|MT):[0-9]+:rs[0-9]+:[A-Z]+_([A-Z]+)", None)],
+            "EA": [("EA", None, None)],
+            "OA": [("OA", None, None)],
+            # "beta": [(None, None, None)],
+            # "beta_se": [(None, None, None)],
+            # "n_tests": [(None, None, None)],
+            "nominal_pvalue": [(self.cell_type + "_pvalue", None, None)],
+            # "permuted_pvalue": [(None", None, None)],
+            # "bonferroni_pvalue": [(None, None, None)],
+            # "zscore": [(None, None, None)],
+            # "FDR": [(None, None, None)],
+            # "N": [("N", None, None)],
+            # "AF": [(None, None, None)],
+            # "MAF": [(None, None, None)],
+        })
+
+        # File paths.
+        # self.set_all_effects_path(effects_path=)
+        self.set_top_effects_path(effects_path=os.path.join(self.path, "deconvolutionResults.txt.gz"))
+        self.alleles_path = self.get_fpath(fpath="/groups/umcg-biogen/prm03/projects/2022-DeKleinEtAl/output/2020-10-12-deconvolution/deconvolution/matrix_preparation/2022-10-18-CortexEUR-cis-NegativeToZero-DatasetAndRAMCorrected/create_matrices/genotype_alleles.txt.gz") # TODO: this is hard-coded
+        self.genotypes_stats_path = self.get_fpath(fpath=os.path.join(self.path, "geno_stats.txt.gz"))
+
+        # Other variables.
+        self.beta_pattern = "Beta[0-9]+_<CT>:GT"
+        self.gene_pattern = [("Unnamed: 0", "(ENSG[0-9]+.[0-9]+)_(?:[0-9]{1,2}|X|Y|MT):[0-9]+:rs[0-9]+:[A-Z]+_[A-Z]+", None)]
+        self.snp_pattern = [("Unnamed: 0", "ENSG[0-9]+.[0-9]+_((?:[0-9]{1,2}|X|Y|MT):[0-9]+:rs[0-9]+:[A-Z]+_[A-Z]+)", None)]
+        self.columns["beta"] = self.get_beta_column()
+
+    def get_beta_column(self):
+        header = self.get_file_header(inpath=self.top_effects_path)
+
+        pattern = self.beta_pattern.replace("<CT>", self.cell_type)
+        column_of_interest = []
+        for column in header:
+            if re.match(pattern, column):
+                column_of_interest.append(column)
+
+        if len(column_of_interest) == 1:
+            return [(column_of_interest[0], None, None)]
+        elif len(column_of_interest) == 0:
+            print("Error, could not find any columns matching '{}'.".format(pattern))
+            exit()
+        else:
+            print("Error, found multiple columns matching '{}': {}.".format(pattern, ", ".join(column_of_interest)))
+            exit()
+
+    def update_df(self, df):
+        df["SNP"] = df.apply(lambda row: self.extract_info(data=row, query=self.snp_pattern), axis=1)
+
+        # Load the alleles path.
+        # We assume here that the alleles are encoded as 0/2 thus 2 is the effect allele (should be the case).
+        alleles_df = self.load_file(inpath=self.alleles_path)
+        alleles_df.rename(columns={"Unnamed: 0": "SNP"}, inplace=True)
+        alleles_df[["OA", "EA"]] = alleles_df["Alleles"].str.split("/", n=1, expand=True)
+        alleles_df.drop(["Alleles"], axis=1, inplace=True)
+
+        # Load the genototype stats.
+        genotype_stats_df = self.load_file(inpath=self.genotypes_stats_path)
+        genotype_stats_df.rename(columns={"Unnamed: 0": "SNP"}, inplace=True)
+
+        if not alleles_df["SNP"].equals(genotype_stats_df["SNP"]):
+            print("Error, the SNP column in the alleles dataframe and genotype stats dataframe do not match.")
+            exit()
+
+        # Merge the info stats.
+        genotype_stats_df.drop(["SNP"], axis=1, inplace=True)
+        info_df = alleles_df.merge(genotype_stats_df, left_index=True, right_index=True, how="left")
+        info_df = info_df.loc[info_df["mask"] == 1, [col for col in info_df.columns if col != "mask"]]
+        info_df.drop_duplicates(inplace=True)
+
+        if len(set(info_df["SNP"])) != info_df.shape[0]:
+            print("Error, the info data frame has duplicate SNP values. Unable to merge into the summary statistics dataframe.")
+            exit()
+
+        return info_df.merge(df, on="SNP", how="right")
+
+
+
+##############################################################################################################
+
+
+class PICALO(Dataset):
+    def __init__(self, *args, **kwargs):
+        super(PICALO, self).__init__(*args, **kwargs)
+        self.class_name = "PICALO"
+
+        # Columns that are in the original file.
+        self.columns.update({
+            # "gene_hgnc": [(None, None, None)],
+            "gene_ensembl": [("gene", "(ENSG[0-9]+).[0-9]+", None)],
+            "SNP_rsid": [("SNP", "(?:[0-9]{1,2}|X|Y|MT):[0-9]+:(rs[0-9]+):[A-Z]+_[A-Z]+", None)],
+            "SNP_chr:pos": [("SNP", "(([0-9]{1,2}|X|Y|MT):([0-9]+)):rs[0-9]+:[A-Z]+_[A-Z]+", None)],
+            "alleles": [("SNP", "(?:[0-9]{1,2}|X|Y|MT):[0-9]+:rs[0-9]+:([A-Z]+)_[A-Z]+", "/"), ("SNP", "(?:[0-9]{1,2}|X|Y|MT):[0-9]+:rs[0-9]+:[A-Z]+_([A-Z]+)", "")],
+            "EA": [("EA", None, None)],
+            "OA": [("OA", None, None)],
+            "beta": [("beta-interaction", None, None)],
+            "beta_se": [("std-interaction", None, None)],
+            # "n_tests": [(None, None, None)],
+            "nominal_pvalue": [("p-value", None, None)],
+            # "permuted_pvalue": [(None, None, None)],
+            # "bonferroni_pvalue": [(None, None, None)],
+            # "zscore": [(None, None, None)],
+            "FDR": [("FDR", None, None)],
+            "N": [("N", None, None)],
+            # "AF": [(None, None, None)],
+            "MAF": [("MAF", None, None)]
+        })
+
+        # File paths.
+        #self.set_all_effects_path(effects_path=)
+        self.set_top_effects_path(effects_path=os.path.join(self.path, self.cell_type + ".txt.gz"))
+        self.alleles_path = self.get_fpath(fpath="/groups/umcg-biogen/prm03/projects/2022-VochtelooEtAl-PICALO/preprocess_scripts/prepare_picalo_files/2022-03-24-MetaBrain_CortexEUR_NoENA_NoRNAseqAlignmentMetrics_GT1AvgExprFilter_PrimaryeQTLs_UncenteredPCA/genotype_alleles_table.txt.gz") # TODO: this is hard-coded
+        self.genotypes_stats_path = self.get_fpath(fpath=os.path.join(self.path, "genotype_stats.txt.gz"))
+
+    def update_df(self, df):
+        # Load the alleles path.
+        # We assume here that the alleles are encoded as 0/2 thus 2 is the effect allele (should be the case).
+        alleles_df = self.load_file(inpath=self.alleles_path)
+        alleles_df[["OA", "EA"]] = alleles_df["Alleles"].str.split("/", n=1, expand=True)
+        alleles_df.drop(["Alleles"], axis=1, inplace=True)
+
+        # Load the genototype stats.
+        genotype_stats_df = self.load_file(inpath=self.genotypes_stats_path)
+        genotype_stats_df.rename(columns={"N": "N_genotype"}, inplace=True)
+
+        if not alleles_df["SNP"].equals(genotype_stats_df["SNP"]):
+            print("Error, the SNP column in the alleles dataframe and genotype stats dataframe do not match.")
+            exit()
+
+        # Merge the info stats.
+        genotype_stats_df.drop(["SNP"], axis=1, inplace=True)
+        info_df = alleles_df.merge(genotype_stats_df, left_index=True, right_index=True, how="left")
+        info_df = info_df.loc[info_df["mask"] == 1, [col for col in info_df.columns if col != "mask"]]
+        info_df.reset_index(inplace=True, drop=True)
+
+        if not info_df["SNP"].equals(df["SNP"]):
+            print("Error, the SNP column in the info dataframe and summary statistics dataframe do not match.")
+            exit()
+
+        df.drop(["SNP"], axis=1, inplace=True)
+        return info_df.merge(df, left_index=True, right_index=True, how="right")
+
+
+##############################################################################################################
+
 
 
 if __name__ == '__main__':

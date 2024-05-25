@@ -126,7 +126,7 @@ def create_pivot_table(df, index_col, column_col, value_col, n_digits=2):
         value_df.loc[row[index_col], row[column_col]] = row[value_col]
         annot_df.loc[row[index_col], row[column_col]] = "{:,}\n{} = {:.{}f}".format(row["N"], value_col, row[value_col], n_digits)
 
-    # # TODO: this might not be the most relevant info to show.
+    # TODO: this might not be the most relevant info to show.
     # ss_df = df.loc[df[index_col] == df[column_col], [index_col, column_col, "N"]].copy()
     # if ss_df.shape[0] > 0:
     #     index_ss = list(zip(ss_df[index_col], ss_df["N"]))
@@ -158,7 +158,7 @@ def plot_heatmap(ax, df, annot_df, vmin=None, vmax=None, center=None, xlabel="",
                 square=True,
                 annot=annot_df,
                 fmt='',
-                annot_kws={"size": 1 * n, "color": "#000000"},
+                annot_kws={"size": 1 * n},
                 ax=ax)
 
     plt.setp(ax.set_yticklabels(ax.get_ymajorticklabels(), fontsize=10,

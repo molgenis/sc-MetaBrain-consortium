@@ -2,6 +2,8 @@
 ##### The following arguments need to be changed by the user to indicating file locations on your system #####
 ##############################################################################################################
 inputs:
+  singularity_image: /path/to/singularity/image.sif ### The complete path to the singularity image that has all the softwares
+  bind_path: /path/to/bind/to/mount ### List of paths to bind to Singularity. You can specify multiple directories by adding a "," between them. Eg. ${DIRECTORY1},${DIRECTORY2}
   repo_dir: /path/to/repo/dir/ ### Path to the github repository directory
   discovery_method: method
   discovery_path: /path/to/discovery/directory
@@ -46,6 +48,3 @@ rules:
 ##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####
 ############################################################################################################################################
 settings_extra:
-  python_module: "Python/3.10.4-GCCcore-11.3.0-bare"
-  r_module: "R"
-  python_env_activate: "~/env/bin/activate"
