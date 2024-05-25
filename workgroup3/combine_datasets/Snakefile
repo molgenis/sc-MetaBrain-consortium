@@ -1,0 +1,72 @@
+#!/usr/bin/env python
+import pandas as pd
+import hashlib
+import os
+
+# Add trailing /.
+if not config["inputs"]["repo_dir"].endswith("/"):
+    config["inputs"]["repo_dir"] += "/"
+if not config["outputs"]["output_dir"].endswith("/"):
+    config["outputs"]["output_dir"] += "/"
+
+# Check if the input files exist.
+if not os.path.exists(config["inputs"]["singularity_image"]):
+    logger.info("Error, the singularity image does not exist.\n\nExiting.")
+    exit("MissingSIFFile")
+if not os.path.exists(config["inputs"]["datasheet_path"]):
+    logger.info("Error, the datasheet file does not exist.\n\nExiting.")
+    exit("MissingDataSheetFile")
+
+
+logger.info("Loading the input datasheet")
+dataset_df = pd.read_csv(config["inputs"]["datasheet_path"], sep="\t", dtype=str)
+dataset_df.fillna("NA", inplace=True)
+
+if "Dataset" not in dataset_df.columns:
+    logger.info("\tError, missing 'Dataset' column in datasheet file")
+    exit("InvalidDataSheetFile")
+
+
+def md5_hash(s):
+    return hashlib.md5(s.encode()).hexdigest()
+
+
+VCF_INPUT_FILES = {}
+FILES = {}
+input_files = []
+for column, outfile in [("WG1-ImputedVCF", config["outputs"]["output_dir"] + "CombineVCF/imputed_hg38.vcf.gz"),
+                        ("WG1-HetVCF", config["outputs"]["output_dir"] + "CombineVCF/het_filtered.vcf.gz"),
+                        ("WG1-PSAM", config["outputs"]["output_dir"] + "CombineFiles/update_sex.psam"),
+                        ("WG1-metadata", config["outputs"]["output_dir"] + "CombineFiles/Final_Assignments_demultiplexing_doublets.tsv.gz"),
+                        ("WG2-metadata", config["outputs"]["output_dir"] + "CombineFiles/azimuth_all.metadata.tsv.gz"),
+                        ("CellAnnotation", config["outputs"]["output_dir"] + "CombineFiles/cell_annotation.tsv.gz"),
+                        ("PoolSheet", config["outputs"]["output_dir"] + "CombineFiles/wg0_file_directories.tsv")]:
+    files = list(set(dataset_df[column].values))
+    for file in files:
+        if not os.path.exists(file):
+            logger.info("\tError, '{}' does not exist.\n\nExiting.".format(file))
+            exit("InvalidDataSheetFile")
+
+        if file.endswith("vcf.gz"):
+            md5_hash_value = md5_hash(file)
+            VCF_INPUT_FILES[md5_hash_value] = file
+            logger.info("\tInput VCF file '{}' is hashed as '{}'".format(file, md5_hash_value))
+
+    FILES[column] = files
+    n_files = len(files)
+    if n_files == 0:
+        logger.info("\tWarning, no values in '{}' column.".format(column))
+    else:
+        logger.info("\tColumn '{}' has {:,} unique values.".format(column, n_files))
+        input_files.append(outfile)
+
+logger.info("Valid\n")
+
+
+rule all:
+    input:
+        input_files
+
+
+# Import individual rules
+include: "includes/combine_input.smk"
