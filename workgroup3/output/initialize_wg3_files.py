@@ -61,7 +61,6 @@ class main():
         self.down_analyses_config = getattr(arguments, 'down_analyses_config')
         self.bind_path = getattr(arguments, 'bind_path')
         self.sif_path = getattr(arguments, 'sif_path')
-        self.limix_sif_path = getattr(arguments, 'limix_sif_path')
         self.repo_dir = getattr(arguments, 'repo_dir')
         self.poolsheet_path = getattr(arguments, 'poolsheet_path')
         self.wg1_genotype_folder = getattr(arguments, 'wg1_genotype_folder')
@@ -83,9 +82,18 @@ class main():
         self.compress_ld = getattr(arguments, 'no_ld_compression')
         self.relative_wg1_imputed_genotype_vcf = getattr(arguments, 'relative_wg1_imputed_genotype_vcf')
         self.relative_wg1_psam = getattr(arguments, 'relative_wg1_psam')
+        self.relative_wg1_het_filtered = getattr(arguments, 'relative_wg1_het_filtered')
+        self.relative_wg1_kinship = getattr(arguments, 'relative_wg1_kinship')
+        self.relative_wg1_metadata = getattr(arguments, 'relative_wg1_metadata')
+        self.relative_wg2_metadata = getattr(arguments, 'relative_wg2_metadata')
         self.wg2_pairing = getattr(arguments, 'wg2_pairing')
+        self.individual_aggregate = getattr(arguments, 'individual_aggregate')
+        self.sample_aggregate = getattr(arguments, 'sample_aggregate')
         self.eqtl_chunks_n_genes = getattr(arguments, 'eqtl_chunks_n_genes')
-        self.n_expression_pcs = "[" + ".join(getattr(arguments, 'n_expression_pcs')" + "]"
+        self.n_expression_pcs = "[" + ", ".join([str(x) for x in getattr(arguments, 'n_expression_pcs')]) + "]"
+        self.maf = getattr(arguments, 'maf')
+        self.hwe = getattr(arguments, 'hwe')
+        self.call_rate = getattr(arguments, 'call_rate')
         self.exclude_temp_in_sbatch = getattr(arguments, 'exclude_temp_in_sbatch')
 
         # Pre-process the dataset output directory.
@@ -132,11 +140,6 @@ class main():
                             default=None,
                             help="List of paths to bind to Singularity.")
         parser.add_argument("--sif_path",
-                            type=str,
-                            required=True,
-                            default=None,
-                            help="")
-        parser.add_argument("--limix_sif_path",
                             type=str,
                             required=True,
                             default=None,
@@ -205,7 +208,7 @@ class main():
                             default="hg19",
                             help="")
         parser.add_argument("--filter_samples",
-                            action='store_false',
+                            action='store_true',
                             help="")
         parser.add_argument("--no_save_all_samples",
                             action='store_false',
@@ -235,21 +238,71 @@ class main():
                             required=False,
                             default="update_sex_ancestry/update_sex.psam",
                             help="")
+        parser.add_argument("--relative_wg1_het_filtered",
+                            type=str,
+                            required=False,
+                            default="het_filter/{ancestry}_het_filtered.vcf.gz",
+                            help="")
+        parser.add_argument("--relative_wg1_kinship",
+                            type=str,
+                            required=False,
+                            default="kinship/{ancestry}_subset_pruned.kinship",
+                            help="")
+        parser.add_argument("--relative_wg1_metadata",
+                            type=str,
+                            required=False,
+                            default="CombinedResults/Final_Assignments_demultiplexing_doublets.tsv.gz",
+                            help="")
+        parser.add_argument("--relative_wg2_metadata",
+                            type=str,
+                            required=False,
+                            default="map/azimuth_all.metadata.tsv.gz",
+                            help="")
         parser.add_argument("--wg2_pairing",
                             type=str,
                             required=False,
                             default="azimuth_l1_brain.csv",
                             help="")
+        parser.add_argument("--individual_aggregate",
+                            type=str,
+                            required=False,
+                            default="Assignment",
+                            help="")
+        parser.add_argument("--sample_aggregate",
+                            type=str,
+                            required=False,
+                            default="Assignment_Run_Lane",
+                            help="")
         parser.add_argument("--eqtl_chunks_n_genes",
                             type=int,
                             required=False,
-                            default=150,
+                            default=50,
                             help="")
         parser.add_argument("--n_expression_pcs",
                             nargs="*",
                             type=int,
                             required=False,
                             default=[0, 2, 4, 6, 8, 10],
+                            help="")
+        parser.add_argument("--maf",
+                            type=float,
+                            required=False,
+                            default=0.05,
+                            help="")
+        parser.add_argument("--hwe",
+                            type=float,
+                            required=False,
+                            default=0.0001,
+                            help="")
+        parser.add_argument("--call_rate",
+                            type=float,
+                            required=False,
+                            default=0.95,
+                            help="")
+        parser.add_argument("--n_permutations",
+                            type=int,
+                            required=False,
+                            default=100,
                             help="")
         parser.add_argument("--exclude_temp_in_sbatch",
                             action='store_true',
@@ -277,9 +330,6 @@ class main():
         config_arguments = (
             ("bind_path", self.bind_path),
             ("singularity_image", self.sif_path),
-            ("repo_dir", os.path.join(self.down_analyses_dir)),
-            ("singularity_image", self.sif_path),
-            ("limix_singularity_image", self.limix_sif_path),
             ("repo_dir", self.repo_dir),
             ("poolsheet_path", os.path.join(self.poolsheet_path)),
             ("wg1_genotype_folder", self.wg1_genotype_folder),
@@ -302,9 +352,18 @@ class main():
             ("compress_ld", self.compress_ld),
             ("relative_wg1_imputed_genotype_vcf", self.relative_wg1_imputed_genotype_vcf),
             ("relative_wg1_psam", self.relative_wg1_psam),
+            ("relative_wg1_het_filtered", self.relative_wg1_het_filtered),
+            ("relative_wg1_kinship", self.relative_wg1_kinship),
+            ("relative_wg1_metadata", self.relative_wg1_metadata),
+            ("relative_wg2_metadata", self.relative_wg2_metadata),
             ("wg2_pairing", self.wg2_pairing),
+            ("individual_aggregate", self.individual_aggregate),
+            ("sample_aggregate", self.sample_aggregate),
             ("eqtl_chunks_n_genes", self.eqtl_chunks_n_genes),
-            ("n_expression_pcs", self.n_expression_pcs)
+            ("n_expression_pcs", self.n_expression_pcs),
+            ("maf", self.maf),
+            ("hwe", self.hwe),
+            ("call_rate", self.call_rate)
         )
         self.write_configfile(
             template=os.path.join(self.down_analyses_dir, self.down_analyses_config),
@@ -509,7 +568,7 @@ class main():
             lines.remove('       --tmp=\$(({resources.disk_per_thread_gb} * {threads}))G \\')
 
         if until is not None:
-            lines.insert(6, '    --until {} \\'.format(until))
+            lines.insert(7, '    --until {} \\'.format(until))
 
         self.write_lines_to_file(
             lines=lines,
@@ -560,7 +619,6 @@ class main():
         print("  > Down. Analyses configuration:   {}".format(self.down_analyses_config))
         print("  > Bind path:                      {}".format(self.bind_path))
         print("  > Singularity path:               {}".format(self.sif_path))
-        print("  > Limix singularity path:         {}".format(self.limix_sif_path))
         print("  > Repository folder:              {}".format(self.repo_dir))
         print("  > Poolsheet path:                 {}".format(self.poolsheet_path))
         print("  > Workgroup 1 genotype folder:    {}".format(self.wg1_genotype_folder))
@@ -582,9 +640,18 @@ class main():
         print("  > Compress LD:                    {}".format(self.compress_ld))
         print("  > Relative WG1 imp. geno. VCF:    {}".format(self.relative_wg1_imputed_genotype_vcf))
         print("  > Relative WG1 PSAM:              {}".format(self.relative_wg1_psam))
+        print("  > Relative WG1 HET. filt. VCF:    {}".format(self.relative_wg1_het_filtered))
+        print("  > Relative WG1 kinship:           {}".format(self.relative_wg1_kinship))
+        print("  > Relative WG1 metadata:          {}".format(self.relative_wg1_metadata))
+        print("  > Relative WG2 metadata:          {}".format(self.relative_wg2_metadata))
         print("  > WG2 pairing:                    {}".format(self.wg2_pairing))
+        print("  > Individual aggregate:           {}".format(self.individual_aggregate))
+        print("  > Sample aggregate:               {}".format(self.sample_aggregate))
         print("  > eQTL chunks N genes:            {}".format(self.eqtl_chunks_n_genes))
         print("  > N expression PCs:               {}".format(self.n_expression_pcs))
+        print("  > MAF:                            {}".format(self.maf))
+        print("  > HWE:                            {}".format(self.hwe))
+        print("  > Call rate:                      {}".format(self.call_rate))
         print("  > Exclude TEMP in SBATCH:         {}".format(self.exclude_temp_in_sbatch))
         print("")
 
