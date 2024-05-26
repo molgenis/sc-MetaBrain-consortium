@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 """
-File:         prepare_Fujita2022_wg1_files.py
-Created:      2023/02/27
+File:         prepare_roche_wg1_files.py
+Created:      2024/03/06
 Last Changed:
 Author:       M.Vochteloo
 
@@ -25,7 +25,6 @@ root directory of this source tree. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import print_function
 import argparse
 import gzip
-import glob
 import re
 import os
 
@@ -35,7 +34,7 @@ import pandas as pd
 # Local application imports.
 
 # Metadata
-__program__ = "Prepare Fujita2022 Workgroup 1 Files"
+__program__ = "Prepare Roche Workgroup 1 Files"
 __author__ = "Martijn Vochteloo"
 __maintainer__ = "Martijn Vochteloo"
 __email__ = "m.vochteloo@rug.nl"
@@ -50,7 +49,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 """
 Syntax: 
-./prepare_Fujita2022_wg1_files.py -h
+./prepare_roche_wg1_files.py -h
 """
 
 
@@ -58,10 +57,9 @@ class main():
     def __init__(self):
         # Get the command line arguments.
         arguments = self.create_argument_parser()
-        self.metadata = getattr(arguments, 'metadata')
-        self.fastqdir = getattr(arguments, 'fastqdir')
-        self.cell_annotation = getattr(arguments, 'cell_annotation')
-        self.name = "Fujita2022"
+        self.indir = getattr(arguments, 'indir')
+        self.dataset = getattr(arguments, 'dataset')
+        self.name = getattr(arguments, 'name')
         self.vcf = getattr(arguments, 'vcf')
         self.outdir = getattr(arguments, 'outdir')
 
@@ -77,18 +75,18 @@ class main():
                             version="{} {}".format(__program__,
                                                    __version__),
                             help="show program's version number and exit")
-        parser.add_argument("--metadata",
+        parser.add_argument("--indir",
                             type=str,
                             required=True,
                             help="")
-        parser.add_argument("--fastqdir",
-                            type=str,
-                            required=True,
-                            help="")
-        parser.add_argument("--cell_annotation",
+        parser.add_argument("--dataset",
                             type=str,
                             default=None,
                             required=False,
+                            help="")
+        parser.add_argument("--name",
+                            type=str,
+                            required=True,
                             help="")
         parser.add_argument("--vcf",
                             type=str,
@@ -105,58 +103,53 @@ class main():
     def start(self):
         self.print_arguments()
 
-        print("Loading AMP-AD biospecimen metadata")
-        metadata_df = self.load_file(inpath=os.path.join(self.metadata, "ROSMAP_biospecimen_metadata.csv"))
-        print(metadata_df)
+        print("Loading 'Sample_File.map'")
+        sample_file_path = os.path.join(self.indir, "metadata", "delimited_maps", "Sample_File.map")
+        print(sample_file_path)
+        if not os.path.exists(sample_file_path):
+            print("\tError, file does not exist.")
+            exit()
 
-        # scRNA-seq metadata.
-        scrnaseq_metadata = metadata_df.loc[metadata_df["assay"] == "scrnaSeq", ["individualID", "specimenID"]].copy()
-        scrnaseq_metadata.drop_duplicates(inplace=True)
-        scrnaseq_metadata.columns = ["individualID", "scrnaSeqID"]
-        scrnaseq_metadata["PartialscrnaSeqID"] = [scrnaseq_id.split("_")[0] for scrnaseq_id in scrnaseq_metadata["scrnaSeqID"]]
-        print(scrnaseq_metadata)
+        sample_file_df = self.load_file(inpath=sample_file_path, header=None)
+        sample_file_df.columns = ["Ind_Sample", "SampleID", "fastqPath", "fileID"]
+        sample_file_df.insert(0, "individual_id_anon", ["Ind" + id_value.split("_")[0] for id_value in sample_file_df["Ind_Sample"]])
+        sample_file_df["fastqPath"] = [os.path.basename(fpath).rstrip(".cip") for fpath in sample_file_df["fastqPath"]]
+        print(sample_file_df)
 
-        # WGS metadata.
-        wholegenomeseq_metadata = metadata_df.loc[metadata_df["assay"] == "wholeGenomeSeq", ["individualID", "specimenID"]].copy()
-        wholegenomeseq_metadata.drop_duplicates(inplace=True)
-        wholegenomeseq_metadata.columns = ["individualID", "wholeGenomeSeqID"]
-        print(wholegenomeseq_metadata)
+        print("Loading fastQ samples")
+        fastq_df = self.load_fastq_files(inpath=self.indir)
+        print(fastq_df)
 
-        vcf_samples = None
+        df = sample_file_df.merge(fastq_df, on="fastqPath", how="right")
+        print(df)
+
+        vcf_id_col = "individual_id_anon"
+        if self.dataset is not None:
+            print("Loading dataset biospecimen metadata")
+            dataset_df = self.load_file(inpath=self.dataset)
+            df = dataset_df.merge(df, how="right")
+            df = df[["individual_id_anon", "individual_id", "SampleID", "sample_id_anon"]].drop_duplicates()
+            vcf_id_col = "individual_id"
+        else:
+            df = df[["individual_id_anon", "SampleID", "sample_id_anon"]].drop_duplicates()
+        print(df)
+
         if self.vcf is not None:
             print("Checking overlap with VCF")
             vcf_samples = self.load_vcf_samples(inpath=self.vcf)
-            wholegenomeseq_metadata = wholegenomeseq_metadata.loc[wholegenomeseq_metadata["wholeGenomeSeqID"].isin(vcf_samples), :]
+            print(vcf_samples)
+            df["FoundInVCF"] = [sample in vcf_samples for sample in df[vcf_id_col]]
 
-        metadata = scrnaseq_metadata.merge(wholegenomeseq_metadata, how="left")
-        print(metadata)
-        del scrnaseq_metadata, wholegenomeseq_metadata
+            mask = []
+            for index, row in df.iterrows():
+                found = True
+                if str(row[vcf_id_col]) != "nan" and not row["FoundInVCF"]:
+                    print("  Error, {} not found in the VCF file.".format(row[vcf_id_col]))
+                    found = False
+                mask.append(found)
 
-        print("Loading fastQ samples")
-        fastq_df = self.load_fastq_files(inpath=self.fastqdir)
-        fastq_df["PartialscrnaSeqID"] = [id_value.split("_")[0] for id_value in fastq_df["id"]]
-        print(fastq_df)
-
-        individuals_list_path = os.path.join(self.outdir, "Fujita2022", "individuals_list_dir")
-        if not os.path.exists(individuals_list_path):
-            os.makedirs(individuals_list_path)
-
-        print("Creating individual list files")
-        subset_list = []
-        ids = set()
-        for _, row in fastq_df.iterrows():
-            if row["id"] in ids:
-                continue
-            print("  Pool: {}".format(row["id"]))
-            subset = metadata.loc[metadata["PartialscrnaSeqID"] == row["PartialscrnaSeqID"], :].copy()
-            subset["id"] = row["id"]
-            subset["N"] = subset.shape[0]
-            subset_list.append(subset)
-
-            self.save_file(pd.DataFrame(subset["wholeGenomeSeqID"]), outpath=os.path.join(individuals_list_path, row["PartialscrnaSeqID"] + ".txt"), header=False, index=False)
-
-            ids.add(row["id"])
-        df = pd.concat(subset_list, axis=0)
+            # print("  Removed {:,} samples due to missing in VCF file.".format(len(mask) - sum(mask)))
+            # df = df.loc[mask, : ]
 
         print("Merged data:")
         print(df)
@@ -165,23 +158,34 @@ class main():
                        sep="\t")
 
         print("Link table:")
-        link_table = df[["id", "id"]].copy()
-        link_table.columns = ["fastqID", "specimenID"]
+        link_table = df[["sample_id_anon", "SampleID"]].copy()
+        link_table.columns = ["fastqID", "SampleID"]
         print(link_table)
         self.save_file(df=link_table,
                        outpath=os.path.join(self.outdir, self.name, "{}_link_table.csv".format(self.name)),
                        sep=",")
 
-        print("Genotype samples:")
-        genotype_samples = df[["wholeGenomeSeqID"]].copy()
-        genotype_samples.drop_duplicates(inplace=True)
-        print(genotype_samples)
-        self.save_file(df=genotype_samples,
+        print("Individual coupling:")
+        ind_coupling = df[["SampleID", vcf_id_col]].copy()
+        ind_coupling.columns = ["Pool", "Assignment"]
+        ind_coupling.dropna(inplace=True)
+        print(ind_coupling)
+        self.save_file(df=ind_coupling,
+                       outpath=os.path.join(self.outdir, self.name, "{}_individual_coupling.tsv".format(self.name)))
+        self.save_file(df=ind_coupling[["Assignment"]],
                        header=False,
                        outpath=os.path.join(self.outdir, self.name, "{}_genotype_samples.txt".format(self.name)))
 
+        print("GTE:")
+        gte = df[[vcf_id_col, "SampleID"]].copy()
+        print(gte)
+        self.save_file(df=gte,
+                       outpath=os.path.join(self.outdir, self.name, "{}_GTE.tsv".format(self.name)),
+                       header=False)
+
+
     @staticmethod
-    def load_file(inpath, header=0, index_col=None, sep=",", skiprows=None,
+    def load_file(inpath, header=0, index_col=None, sep="\t", skiprows=None,
                   nrows=None):
         df = pd.read_csv(inpath, sep=sep, header=header, index_col=index_col,
                          skiprows=skiprows, nrows=nrows)
@@ -192,16 +196,15 @@ class main():
 
     @staticmethod
     def load_fastq_files(inpath):
-        fpaths = glob.glob(inpath + "*.fastq.gz")
-
         samples = []
-        for fpath in fpaths:
-            match = re.match("(.+)_(S[0-9]+)_(L00[0-9])_(R[12])_001\.fastq\.gz$", os.path.basename(fpath))
-            if match is None:
-                continue
-            samples.append([match.group(1), match.group(2), match.group(3), match.group(4)])
+        for root, dirs, files in os.walk(inpath):
+            for file in files:
+                match = re.match("(.+)_(S[0-9]+)_(L00[0-9])_(R[12])_001\.fastq\.gz$", file)
+                if match is None:
+                    continue
+                samples.append([file, match.group(1), match.group(2), match.group(3), match.group(4)])
 
-        return pd.DataFrame(samples, columns=["id", "sample", "lane", "read_type"])
+        return pd.DataFrame(samples, columns=["fastqPath", "sample_id_anon", "sample", "lane", "read_type"])
 
     @staticmethod
     def load_vcf_samples(inpath):
@@ -214,28 +217,6 @@ class main():
                 break
         f.close()
         return set([col for col in header if col not in ["#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT"]])
-
-    @staticmethod
-    def parse_fujita_cell_annotation(inpath):
-        individual_list_dict = {}
-        with open(inpath, 'r') as f:
-            for i, line in enumerate(f):
-                if i == 0:
-                    continue
-                values = line.rstrip("\n").split(",")
-                partial_scrna_seq_id = values[0].split("_")[0]
-                individual_id = values[1]
-                if partial_scrna_seq_id not in individual_list_dict:
-                    individual_list_dict[partial_scrna_seq_id] = {individual_id}
-                else:
-                    individual_list_dict[partial_scrna_seq_id].add(individual_id)
-        f.close()
-
-        data = []
-        for key, value in individual_list_dict.items():
-            data.append([key, len(value)])
-
-        return individual_list_dict, pd.DataFrame(data, columns=["PartialscrnaSeqID", "N"])
 
     @staticmethod
     def save_file(df, outpath, header=True, index=False, sep="\t"):
@@ -251,9 +232,8 @@ class main():
 
     def print_arguments(self):
         print("Arguments:")
-        print("  > Metadata directory: {}".format(self.metadata))
-        print("  > FastQ directory: {}".format(self.fastqdir))
-        print("  > Cell annotation file: {}".format(self.cell_annotation))
+        print("  > Input directory: {}".format(self.indir))
+        print("  > Dataset metadata file: {}".format(self.dataset))
         print("  > Name: {}".format(self.name))
         print("  > VCF: {}".format(self.vcf))
         print("  > Output directory: {}".format(self.outdir))

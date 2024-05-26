@@ -55,6 +55,7 @@ class main():
         # Get the command line arguments.
         arguments = self.create_argument_parser()
         self.input_dir = getattr(arguments, 'input_dir')
+        self.vcf_path = getattr(arguments, 'vcf')
         self.output_dir = getattr(arguments, 'output_dir')
 
     @staticmethod
@@ -69,13 +70,16 @@ class main():
                             version="{} {}".format(__program__,
                                                    __version__),
                             help="show program's version number and exit.")
-        parser.add_argument("-i",
-                            "--input_dir",
+        parser.add_argument("--input_dir",
                             type=str,
                             required=True,
                             help="")
-        parser.add_argument("-o",
-                            "--output_dir",
+        parser.add_argument("--vcf",
+                            type=str,
+                            required=False,
+                            default="",
+                            help="")
+        parser.add_argument("--output_dir",
                             type=str,
                             required=True,
                             help="")
@@ -100,13 +104,12 @@ class main():
             sample_file_df.sort_values(by="individualID", inplace=True)
             print(sample_file_df)
             ms_samples = [x.split("-")[0] for x in sample_file_df["fastqID"]]
-        #     # for index, row in sample_file_df.iterrows():
-        #     #     print("{},{}".format(row[0], row[1]))
-        #     self.save_file(df=sample_file_df, outpath=os.path.join(self.output_dir, "link_table.csv"))
+            # for index, row in sample_file_df.iterrows():
+            #     print("{},{}".format(row[0], row[1]))
+            # self.save_file(df=sample_file_df, outpath=os.path.join(self.output_dir, "link_table.csv"))
 
         sample_meta_info_path = os.path.join(self.input_dir, "metadata", "delimited_maps", "Analysis_Sample_meta_info.map")
-        vcf_path = os.path.join(self.input_dir, "genotypes", "RES0103_GSAv3+_anon.vcf.gz")
-        if os.path.exists(sample_meta_info_path) and os.path.exists(vcf_path):
+        if os.path.exists(sample_meta_info_path) and os.path.exists(self.vcf_path):
             sample_meta_info_df = self.load_file(sample_meta_info_path)
             info_df = self.split_info(sample_meta_info_df[2])
             del sample_meta_info_df
@@ -115,7 +118,7 @@ class main():
             info_df.reset_index(drop=False, inplace=True)
             print(info_df)
 
-            vcf_df = self.load_file(vcf_path, header=0, skiprows=31, nrows=2)
+            vcf_df = self.load_file(self.vcf_path, header=0, skiprows=31, nrows=2)
             vcf_sampels = [col for col in vcf_df.columns if col not in ["#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT"]]
 
             info_df = info_df[["subject_id", "gender", "region"]].copy()
@@ -125,7 +128,7 @@ class main():
             info_df.insert(3, "MAT", 0)
             info_df["SEX"] = info_df["SEX"].map({"male": "1", "female": "2"})
             info_df["Provided_Ancestry"] = info_df["Provided_Ancestry"].map({"Europe": "EUR"})
-            info_df["genotyping_platform"] = "GSAv3 Illumina ChIP"
+            info_df["genotyping_platform"] = "GSAv3IlluminaChIP"
             info_df["array_available"] = "Y"
             info_df["wgs_available"] = "N"
             info_df["wes_available"] = "N"
@@ -190,6 +193,7 @@ class main():
     def print_arguments(self):
         print("Arguments:")
         print("  > Input directory: {}".format(self.input_dir))
+        print("  > VCF path: {}".format(self.vcf_path))
         print("  > Output directory: {}".format(self.output_dir))
         print("")
 
