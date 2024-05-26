@@ -5,12 +5,12 @@ import argparse
 
 """
 Syntax: 
-./create_wg0_flle_directories.py -h
+./create_wg0_file_directories.py -h
 """
 
 parser = argparse.ArgumentParser(
     description="wrapper for DoubletDetection for doublet detection from transcriptomic data.")
-parser.add_argument("--link_table", type=str, required=True, help="")
+parser.add_argument("--ind_coupling", type=str, required=True, help="")
 parser.add_argument("--cellranger_dir", type=str, required=True, help="")
 parser.add_argument("--cellbender_dir", type=str, required=True, help="")
 parser.add_argument("--out", type=str, required=True, help="")
@@ -24,10 +24,10 @@ print("")
 import pandas as pd
 import os
 
-link_table_df = pd.read_csv(args.link_table, sep=",", header=0, index_col=None)
+ind_coupling_df = pd.read_csv(args.ind_coupling, sep="\t", header=0, index_col=None)
 data = []
-for _, row in link_table_df.iterrows():
-    pool = row[1]
+for _, row in ind_coupling_df.iterrows():
+    pool = row[0]
     counts = args.cellbender_dir + str(pool) + "/cellbender_remove_background_output_filtered.h5"
     barcodes = args.cellbender_dir + str(pool) + "/cellbender_remove_background_output_cell_barcodes.csv"
     bam = args.cellranger_dir + str(pool) + "/outs/possorted_genome_bam.bam"

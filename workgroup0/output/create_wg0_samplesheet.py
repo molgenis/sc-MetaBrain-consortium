@@ -4,7 +4,8 @@ import argparse
 
 
 """
-Syntax: 
+Syntax:
+./create_wg0_samplesheet.py -h 
 """
 
 parser = argparse.ArgumentParser(
