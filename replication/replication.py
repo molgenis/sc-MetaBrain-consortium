@@ -1386,15 +1386,15 @@ class Dataset:
             )
         except FileNotFoundError:
             print("Warning, failed to load 'all_effects_path'. Selecting top effects from 'top_effects_path' instead.")
-            pass
 
-        # Using the top file instead.
-        df = self.get_effects_wrapper(
-            inpath=self.get_top_effects_path(),
-            label_dict={"key": self.get_column(column=gene), "value": self.get_column(column=snp)},
-            func=self.extract_specific_effects,
-            effects=effects
-        )
+            # Using the top file instead.
+            df = self.get_effects_wrapper(
+                inpath=self.get_top_effects_path(),
+                label_dict={"key": self.get_column(column=gene), "value": self.get_column(column=snp)},
+                func=self.extract_specific_effects,
+                effects=effects
+            )
+
         return df
 
     def extract_specific_effects(self, inpath, label_dict, effects=None):
@@ -2554,7 +2554,7 @@ class Fujita(Dataset):
             "gene_hgnc": [("gene_symbol", None, None)],
             "gene_ensembl": [("gene_id", None, None)],
             "SNP_rsid": [("snps", None, None)],
-            "SNP_chr:pos": [("chr38", "chr([0-9]{1,2}|X|Y|MT)", None), ("pos38", None, None)],
+            "SNP_chr:pos": [("chr38", "chr([0-9]{1,2}|X|Y|MT)", ":"), ("pos38", None, None)],
             "alleles": [("ALT", None, "/"), ("REF", None, None)],
             "EA": [("ALT", None, None)],  # Don't ask me why but for some reason the alternative allele is the effect allele
             "OA": [("REF", None, None)],
