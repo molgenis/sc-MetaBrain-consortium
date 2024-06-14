@@ -24,7 +24,6 @@ ADD . /tmp/repo
 WORKDIR /tmp/repo
 
 ENV PATH=/opt:/usr/games:/opt/conda/envs/py37/bin:/opt/conda/bin:$PATH
-ENV BCFTOOLS_PLUGINS=/opt/bcftools-1.18/plugins
 ENV SHELL=/bin/bash
 ENV LC_ALL=C
 ENV LANG=C.UTF-8

@@ -180,115 +180,113 @@ class main():
                             type=str,
                             required=True,
                             choices=METHODS,
-                            help="")
+                            help="Method of the discovery summary statistics.")
         parser.add_argument("--discovery_path",
                             type=str,
                             required=True,
                             default=None,
-                            help="")
+                            help="Basedir of the discovery summary statistics.")
         parser.add_argument("--discovery_name",
                             type=str,
                             required=True,
                             default=None,
-                            help="")
+                            help="Name of the discovery summary statistics.")
         parser.add_argument("--discovery_cell_type",
                             type=str,
                             required=False,
                             default=None,
-                            help="")
+                            help="Cell type of the discovery summary statistics. Default: None.")
         parser.add_argument("--replication_method",
                             type=str,
                             required=True,
                             choices=METHODS,
-                            help="")
+                            help="Method of the replication summary statistics.")
         parser.add_argument("--replication_path",
                             required=True,
                             default=None,
-                            help="")
+                            help="Basedir of the replication summary statistics.")
         parser.add_argument("--replication_name",
                             type=str,
                             required=True,
                             default=None,
-                            help="")
+                            help="Name of the replication summary statistics.")
         parser.add_argument("--replication_cell_type",
                             type=str,
                             required=False,
                             default=None,
-                            help="")
+                            help="Cell type of the replication summary statistics. Default: None.")
         parser.add_argument("--gene",
                             type=str,
                             choices=["ensembl", "hgnc"],
                             default="ensembl",
-                            help="")
+                            help="Which gene format to select on. Default: ensembl.")
         parser.add_argument("--snp",
                             type=str,
                             choices=["chr:pos", "rsid"],
                             default="chr:pos",
-                            help="")
+                            help="Which variant format to select on. Default: chr:pos.")
         parser.add_argument("--pvalue",
                             type=str,
                             choices=["permuted", "bonferroni", "nominal"],
                             default="permuted",
-                            help="")
+                            help="Which pvalue to use. Default: permuted.")
         parser.add_argument("--effect",
                             type=str,
                             choices=EFFECTS,
                             default="zscore",
-                            help="")
+                            help="What to consider as the effect column. Default: zscore.")
         parser.add_argument("--allow_infer",
                             action='store_true',
-                            help="")
+                            help="Allow for inferring summary stats information. Note that inferred info are approximations and not exact. Default: False.")
         parser.add_argument("--rm_dupl",
                             type=str,
                             choices=["none", "all", "mismatched"],
                             default="none",
-                            help="")
+                            help="How to deal with duplicates in the replication summary statistics. Options: none) throw error and exit, all) remove all duplicates, mismatches) removed duplicates for which the effect allele does not match. Default: none.")
         parser.add_argument("--alpha",
                             type=float,
                             required=False,
                             default=0.05,
-                            help="")
+                            help="The significance threshold to use. Default: 0.05.")
         parser.add_argument("--fdr_calc_method",
                             type=str,
                             choices=["qvalues", "bh_fdr", "none"],
                             default="qvalues",
-                            help="The multiple testing correction method "
-                                 "to use. Default: 'qvalues'.")
+                            help="The multiple testing correction method to use. Default: 'qvalues'.")
         parser.add_argument("--log_modulus",
                             action='store_true',
-                            help="")
+                            help="Transfer the effect column into log space while maintaining effect direction. Default: False.")
         parser.add_argument("--palette",
                             type=str,
                             required=False,
                             default=None,
-                            help="A color palette file.")
+                            help="A color palette file. Default: None.")
         parser.add_argument("--extensions",
                             nargs="+",
                             type=str,
                             choices=["png", "pdf", "eps"],
                             default=["png"],
-                            help="The figure file extension. "
-                                 "Default: 'png'.")
+                            help="The figure file extension. Default: 'png'.")
         parser.add_argument("--outdir",
                             type=str,
                             default=None,
-                            help="")
+                            help="The output directory. Default: current work directory.")
         parser.add_argument("--force",
                             action='store_true',
-                            help="")
+                            help="Whether to ignore previously loaded summary statistics. Default: False.")
         parser.add_argument("--save",
                             action='store_true',
-                            help="")
+                            help="Whether to store loaded summary statistics. Default: False.")
 
         # Required external scripts.
         parser.add_argument("--qvalue_truncp",
                             type=str,
                             default="qvalue_truncp.R",
-                            help="The path to the qvalues script")
+                            help="The path to the qvalues script. Default: qvalue_truncp.R.")
         parser.add_argument("--rb",
                             type=str,
                             default="Rb.R",
-                            help="The path to the Rb script")
+                            help="The path to the Rb script. Default: Rb.R.")
 
         return parser.parse_args()
 
