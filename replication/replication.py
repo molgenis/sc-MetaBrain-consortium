@@ -73,7 +73,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
                                         __license__)
 
 CHROMOSOMES = [str(chr) for chr in range(1, 23)]
-METHODS = ["LIMIX", "LIMIX_REDUCED", "mbQTL", "mbQTL_MetaBrain", "eQTLMappingPipeline", "eQTLgenPhase2", "Bryois", "Bryois_REDUCED", "Fujita", "DeconQTL", "PICALO"]
+METHODS = ["LIMIX", "LIMIX_REDUCED", "mbQTL", "mbQTL_Joost", "mbQTL_MetaBrain", "eQTLMappingPipeline", "eQTLgenPhase2", "Bryois", "Bryois_REDUCED", "Fujita", "DeconQTL", "PICALO"]
 EFFECTS = ["zscore", "beta"]
 
 
@@ -432,6 +432,8 @@ class main():
             return LIMIX_REDUCED
         elif method == "mbQTL":
             return mbQTL
+        elif method == "mbQTL_Joost":
+            return mbQTL_Joost
         elif method == "mbQTL_MetaBrain":
             return mbQTL_MetaBrain
         elif method == "eQTLMappingPipeline":
@@ -2220,6 +2222,41 @@ class mbQTL(Dataset):
         # File paths.
         self.set_all_effects_path(effects_path=os.path.join(self.path.replace("<CT>", self.cell_type), self.cell_type + "-AllEffects.txt"))
         self.set_top_effects_path(effects_path=os.path.join(self.path.replace("<CT>", self.cell_type), self.cell_type + "-TopEffects.txt"))
+
+
+##############################################################################################################
+
+
+class mbQTL_Joost(Dataset):
+    def __init__(self, *args, **kwargs):
+        super(mbQTL_Joost, self).__init__(*args, **kwargs)
+        self.class_name = "mbQTL_Joost"
+
+        # Columns that are in the original file.
+        self.columns.update({
+            "gene_hgnc": [("GeneSymbol", None, None)],
+            "gene_ensembl": [("Gene", "(ENSG[0-9]+).[0-9]+", None)],
+            "SNP_rsid": [("SNP", None, None)],
+            "SNP_chr:pos": [("SNPChr", None, ":"), ("SNPPos", None, None)],
+            "alleles": [("SNPAlleles", None, None)],
+            "EA": [("SNPEffectAllele", None, None)],
+            # "OA": [(None, None, None)],
+            "beta": [("MetaBeta", None, None)],
+            "beta_se": [("MetaSE", None, None)],
+            "n_tests": [("NrTestedSNPs", None, None)],
+            "nominal_pvalue": [("MetaP", None, None)],
+            "permuted_pvalue": [("BetaAdjustedMetaP", None, None)],
+            # "bonferroni_pvalue": [(None, None, None)],
+            "zscore": [("MetaPZ", None, None)],
+            "FDR": [("qval", None, None)],
+            "N": [("MetaPN", None, None)],
+            "AF": [("SNPEffectAlleleFreq", None, None)],
+            # "MAF": [(None, None, None)]
+        })
+
+        # File paths.
+        # self.set_all_effects_path(effects_path)
+        self.set_top_effects_path(effects_path=os.path.join(self.path, "merged-withqval.txt"))
 
 
 ##############################################################################################################
