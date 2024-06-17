@@ -2241,7 +2241,7 @@ class mbQTL_Joost(Dataset):
             "alleles": [("SNPAlleles", None, None)],
             "EA": [("SNPEffectAllele", None, None)],
             # "OA": [(None, None, None)],
-            "beta": [("MetaBeta", None, None)],
+            "beta": [("MetaR", None, None)],
             "beta_se": [("MetaSE", None, None)],
             "n_tests": [("NrTestedSNPs", None, None)],
             "nominal_pvalue": [("MetaP", None, None)],
