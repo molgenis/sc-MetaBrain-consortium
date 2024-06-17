@@ -98,6 +98,7 @@ rule replication_plot:
         rm_dupl = config["settings"]["rm_dupl"],
         alpha = config["settings"]["alpha"],
         fdr_calc_method = config["settings"]["fdr_calc_method"],
+        log_modulus = "--log_modulus" if config["settings"]["log_modulus"] else "",
         palette = "--palette " + config["inputs"]["palette"] if config["inputs"]["palette"] is not None else "",
         extensions = " ".join(config["settings"]["extensions"]),
         outdir = config["outputs"]["output_dir"],
@@ -125,6 +126,7 @@ rule replication_plot:
             --rm_dupl {params.rm_dupl} \
             --alpha {params.alpha} \
             --fdr_calc_method {params.fdr_calc_method} \
+            {params.log_modulus} \
             {params.palette} \
             --extensions {params.extensions} \
             --outdir {params.outdir} \

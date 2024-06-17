@@ -18,17 +18,20 @@ outputs:
 
 settings:
   only_matching: False
-  cell_types: ['AST', 'EX', 'IN', 'MIC', 'OLI', 'OPC', 'PER']
+  disc_cell_types: ['AST', 'EX', 'IN', 'MIC', 'OLI', 'OPC', 'PER']
+  repl_cell_types: ['AST', 'EX', 'IN', 'MIC', 'OLI', 'OPC', 'PER']
   gene: "ensembl"
   snp: "chr:pos"
+  pvalue: "permuted"
   effect: "zscore"
   allow_infer: False
-  pvalue: "permuted"
+  rm_dupl: "none"
   alpha: 0.05
   fdr_calc_method: "qvalues"
+  log_modulus: False
+  extensions: ['png']
   force: False
   save: False
-  extensions: ['png']
 
 cluster_time: {0: "05:59:00", 1: "23:59:00", 2: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
 
