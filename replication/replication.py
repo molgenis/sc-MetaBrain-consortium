@@ -3,7 +3,7 @@
 """
 File:         replication.py
 Created:      2024/02/28
-Last Changed: 2024/05/08
+Last Changed: 2024/06/19
 Author:       M.Vochteloo
 
 Copyright (C) 2024 M.Vochteloo
@@ -1515,6 +1515,8 @@ class Dataset:
         top_entries = {}
         n_effects = len(effects)
         i = 0
+        gene_found = 0
+        snp_found = 0
         for i, snp in enumerate(effects.values()):
             if i % 10 == 0:
                 print("\tParsed {:,} / {:,} effects".format(i, n_effects), end='\r')
@@ -1558,6 +1560,10 @@ class Dataset:
                         pass
         print("\tParsed {:,} / {:,} effects".format(i, n_effects))
 
+        if specific_entries_cols is not None and isinstance(effects, dict):
+            n_effect_genes = len(set(effects.keys()))
+            print("\t{:,} / {:,} genes found of which {:,} / {:,} the corresponding variant was found".format(gene_found, n_effect_genes, snp_found, gene_found))
+
         if top_entries_cols is not None:
             for _, (_, values) in top_entries.items():
                 lines.append(values)
@@ -1583,6 +1589,8 @@ class Dataset:
         if skiprows is not None and max_rows is not None:
             max_rows += skiprows
         i = 0
+        gene_found = 0
+        snp_found = 0
         for i, line in enumerate(fhi):
             if i % 1e6 == 0:
                 print("\tParsed {:,} lines".format(i), end='\r')
@@ -1613,11 +1621,13 @@ class Dataset:
                 key = self.extract_info(data=values, query=specific_entries_cols["key"])
                 if key is None or key not in effects:
                     continue
+                gene_found += 1
 
                 if "value" in specific_entries_cols.keys():
                     value = self.extract_info(data=values, query=specific_entries_cols["value"])
                     if value is None or value not in effects[key]:
                         continue
+                    snp_found += 1
 
             if top_entries_cols is None:
                 lines.append(values)
@@ -1638,6 +1648,10 @@ class Dataset:
         fhi.close()
         print("\tParsed {:,} lines".format(i))
 
+        if specific_entries_cols is not None and isinstance(effects, dict):
+            n_effect_genes = len(set(effects.keys()))
+            print("\t{:,} / {:,} genes found of which {:,} / {:,} the corresponding variant was found".format(gene_found, n_effect_genes, snp_found, gene_found))
+
         if top_entries_cols is not None:
             columns += ["NEntries"]
             for _, (_, values, nentries) in top_entries.items():
@@ -1647,6 +1661,8 @@ class Dataset:
         return pd.DataFrame(lines, columns=columns, index=indices)
 
     def postprocess(self, df):
+        if df.shape[0] == 0:
+            df = None
         df = self.update_df(df=df)
         df = self.add_missing_info(df=df)
         return df
