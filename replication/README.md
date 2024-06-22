@@ -106,6 +106,14 @@ The `self.columns` variable defines how the standard columns are named in your s
 
 ### Autofill of columns
 
+Required columns are:
+ * `gene_hgnc` or `gene_ensembl` depending on **--gene**: setting.
+ * `SNP_rsid` or `SNP_chr:pos` depending on **--snp**: setting.
+ * `beta` or `zscore` depending on **--effect**: setting.
+ * `EA`
+ * discovery: `nominal_pvalue`, `permuted_pvalue` or `bonferroni_pvalue` depending on **--pvalue**: setting.
+ * replication: `nominal_pvalue`
+
 Certain columns will be automatically decuced from other columns if they are unavailable:
  * `OA` can be deduced if `EA` and `alleles` are available
  * `bonferroni_pvalue` can be deduced if `nominal_pvalue` and `n_tests` are available
@@ -180,6 +188,7 @@ Note that a [Dockerfile](Dockerfile) is available will all required software.
 
 ### Visualise arguments:
  * **--log_modulus**: Transfer the effect column into log space while maintaining effect direction. Default: False.
+ * **--cell_type_names**: A JSON file containing method specific to normalised cell type names. Default: None.
  * **--palette**: A color palette file. Default: None.
  * **--extensions**: The figure file extension. Default: 'png'.
 

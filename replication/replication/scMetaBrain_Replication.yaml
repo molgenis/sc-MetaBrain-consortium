@@ -7,10 +7,17 @@ inputs:
   repo_dir: /path/to/repo/dir/ ### Path to the github repository directory
   discovery_method: method
   discovery_path: /path/to/discovery/directory
+  discovery_all_filename: null
+  discovery_top_filename: null
   discovery_name: discovery
+  discovery_class_settings: null
   replication_method: method
   replication_path: /path/to/replication/directory
+  replication_all_filename: null
+  replication_top_filename: null
   replication_name: replication
+  replication_class_settings: null
+  cell_type_names: /path/to/cell_type_names
   palette: /path/to/palette/file
 
 outputs:
@@ -34,6 +41,7 @@ settings:
   extensions: ['png']
   force: False
   save: False
+  verbose: False
 
 cluster_time: {0: "05:59:00", 1: "23:59:00", 2: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
 

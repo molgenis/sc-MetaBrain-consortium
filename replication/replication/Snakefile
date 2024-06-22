@@ -96,10 +96,16 @@ rule replication_plot:
         script = config["inputs"]["repo_dir"] + "replication.py",
         discovery_method = config["inputs"]["discovery_method"],
         discovery_path = lambda wildcards: config["inputs"]["discovery_path"].replace("<CT>", wildcards.disc_ct.replace("EUR-", "EUR/")).replace("<FOLDER>", wildcards.disc_folder),
+        discovery_all_filename = config["inputs"]["discovery_all_filename"],
+        discovery_top_filename = config["inputs"]["discovery_top_filename"],
         discovery_name = config["inputs"]["discovery_name"],
+        discovery_class_settings = config["inputs"]["discovery_class_settings"],
         replication_method = config["inputs"]["replication_method"],
         replication_path = lambda wildcards: config["inputs"]["replication_path"].replace("<CT>", wildcards.repl_ct.replace("EUR-", "EUR/")).replace("<FOLDER>", wildcards.repl_folder),
+        replication_all_filename = config["inputs"]["replication_all_filename"],
+        replication_top_filename = config["inputs"]["replication_top_filename"],
         replication_name = config["inputs"]["replication_name"],
+        replication_class_settings = config["inputs"]["replication_class_settings"],
         gene = config["settings"]["gene"],
         snp = config["settings"]["snp"],
         pvalue = config["settings"]["pvalue"],
@@ -109,11 +115,13 @@ rule replication_plot:
         alpha = config["settings"]["alpha"],
         fdr_calc_method = config["settings"]["fdr_calc_method"],
         log_modulus = "--log_modulus" if config["settings"]["log_modulus"] else "",
+        cell_type_names =  "--cell_type_names" if config["inputs"]["cell_type_names"] else "",
         palette = "--palette " + config["inputs"]["palette"] if config["inputs"]["palette"] is not None else "",
         extensions = " ".join(config["settings"]["extensions"]),
         outdir = config["outputs"]["output_dir"],
         force = "--force" if config["settings"]["force"] else "",
         save = "--save" if config["settings"]["save"] else "",
+        verbose = "--verbose" if config["settings"]["verbose"] else "",
         qvalue_truncp_script = config["inputs"]["repo_dir"] + "qvalue_truncp.R",
         rb_script = config["inputs"]["repo_dir"] + "Rb.R",
     log: config["outputs"]["output_dir"] + "log/replication_plot." + config["inputs"]["discovery_name"] + "{disc_folder}_{disc_ct}_discovery." + config["inputs"]["replication_name"] + "{repl_folder}_{repl_ct}_replication.log"
@@ -122,12 +130,18 @@ rule replication_plot:
         singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --discovery_method {params.discovery_method} \
             --discovery_path {params.discovery_path} \
+            --discovery_all_filename {params.discovery_all_filename} \
+            --discovery_top_filename {params.discovery_top_filename} \
             --discovery_name {params.discovery_name}{wildcards.disc_folder} \
             --discovery_cell_type {wildcards.disc_ct} \
+            --discovery_class_settings {params.discovery_class_settings} \
             --replication_method {params.replication_method} \
             --replication_path {params.replication_path} \
+            --replication_all_filename {params.replication_all_filename} \
+            --replication_top_filename {params.replication_top_filename} \
             --replication_name {params.replication_name}{wildcards.repl_folder} \
             --replication_cell_type {wildcards.repl_ct} \
+            --replication_class_settings {params.replication_class_settings} \
             --gene {params.gene} \
             --snp {params.snp} \
             --pvalue {params.pvalue} \
@@ -137,11 +151,13 @@ rule replication_plot:
             --alpha {params.alpha} \
             --fdr_calc_method {params.fdr_calc_method} \
             {params.log_modulus} \
+            {params.cell_type_names} \
             {params.palette} \
             --extensions {params.extensions} \
             --outdir {params.outdir} \
             {params.force} \
             {params.save} \
+            {params.verbose} \
             --qvalue_truncp {params.qvalue_truncp_script} \
             --rb {params.rb_script} > {log} 2>&1
         """
