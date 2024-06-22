@@ -39,9 +39,9 @@ New summary statistics can easily be added by following these steps:
 2. Fill in the top fields. Note that these are optional and can also be set using **--[discovery/replication]_all_filename** and **--[discovery/replication]_top_filename**.
    * **class_name**: the name of your custom class.
    * **n**: default sample size equal for all effects. Note: leave empty and use `columns - N` if your files have a sample size per effect.
-   * **all_effects_filename**: the default filename for all the effects file. The field `<CHR>` will be replaced with 1 to 22 on the fly. The field `<CT>` will be replaced with **--[discovery/replication]_cell_type**.
+   * **all_effects_filename**: the default filename for the file containg all gene - variant combinations.
    * **top_effects_filename**: same as **all_effects_filename** but then the file containing the top variant per gene.
-3. Fill in the columns info denoting which column in your **[all/top]_effects_filename** represents which type of information. Some examples on how to define this:
+4. Fill in the columns info denoting which column in your **[all/top]_effects_filename** represents which type of information. Some examples on how to define this:
  * Option 0: data does not exist `[(null, null, null)]` or delete the line
  * Option 1: data is a full singular column `"A"` or `[("A", null, null)]`
  * Option 2: data is part of a singular column `[("A", "(a-zA-Z]+)_", null)]`, make sure that group 1 of the regex captures the info of interest
@@ -50,6 +50,13 @@ New summary statistics can easily be added by following these steps:
  * Option 5: data is a combination of option 2 and option 3 `[("A", "(a-zA-Z]+)_", null), ("B", null, null)]`
  * Option 6: data needs info from other file `[("A", {"A": "a"}, null)]`, prepare info as a translate dictionary
 4. Run [replication.py](replication.py) with your custom class using **--[discovery/replication]_class_settings**
+
+
+Note that if you do not have a `top_effects_path` file you can leave this empty and the program will automatically select the top effects from the `all_effects_path` file. Similarly, if you do not have a `all_effects_path` you can leave this empty and the `top_effects_path` will be used instead; note that you might get very low overlap between two datasets because of this. Furthermore, you can use `<.+>` fields to use dynamic input for the **--[discovery/replication]_[all/top]_filename**:
+* the field `<CT>` will be replaced with **--[discovery/replication]_cell_type**
+* The field `<CHR>` will be replaced with a chromosome
+* The field `<BATCH>` will be replaced with 0 to 1000 on the fly
+* Other `<.+>` fields can be used to define wildcards, the program will use `glob` to find a singular file that matches. If nothing matches, the wildcard is kept.
 
 ### Implementing custom summary statistics (coding required)
 
@@ -104,14 +111,14 @@ The `self.columns` variable defines how the standard columns are named in your s
  * Option 5: data is a combination of option 2 and option 3 `[("A", "(a-zA-Z]+)_", None), ("B", None, None)]`
  * Option 6: data needs info from other file `[("A", {"A": "a"}, None)]`, prepare info as a translate dictionary
 
-### Autofill of columns
+### Required and outfilled columns
 
 Required columns are:
- * `gene_hgnc` or `gene_ensembl` depending on **--gene**: setting.
- * `SNP_rsid` or `SNP_chr:pos` depending on **--snp**: setting.
- * `beta` or `zscore` depending on **--effect**: setting.
+ * `gene_hgnc` or `gene_ensembl` depending on **--gene** setting.
+ * `SNP_rsid` or `SNP_chr:pos` depending on **--snp** setting.
+ * `beta` or `zscore` depending on **--effect** setting.
  * `EA`
- * discovery: `nominal_pvalue`, `permuted_pvalue` or `bonferroni_pvalue` depending on **--pvalue**: setting.
+ * discovery: `nominal_pvalue`, `permuted_pvalue` or `bonferroni_pvalue` depending on **--pvalue** setting.
  * replication: `nominal_pvalue`
 
 Certain columns will be automatically decuced from other columns if they are unavailable:
@@ -125,8 +132,6 @@ Furthermore, if `N` is unavailable in the summary statistics file you can define
 Moreover, some columns can be approximated if allowed (**--allow_infer**, default `False`):
  * `zscore` can be approximated if `beta`, `MAF`, and `N` are available
  * `beta_se` can be approximated if `zscore`, `MAF`, and `N` are available
-
-Next, you need to define the path where all gene - variant combinations are stored in `all_effects_path` and where the top variant per gene are stored in `top_effects_path`. Note that if you do not have a `top_effects_path` file you can leave this empty and the program will automatically select the top effects from the `all_effects_path` file. Similarly, if you do not have a `all_effects_path` you can leave this empty and the `top_effects_path` will be used instead; note that you might get very low overlap between two datasets because of this. Finally, if you are using single-cell eQTL summary stats you can use the `self.cell_type` argument to differentiate between these.
 
 ## Prerequisites  
 
@@ -197,7 +202,6 @@ Note that a [Dockerfile](Dockerfile) is available will all required software.
  * **--force**: Whether to ignore previously loaded summary statistics. Default: False.
  * **--save**: Whether to store loaded summary statistics. Default: False.
  * **--verbose**: Print additional log messages. Default: False.
-
  * **--qvalue_truncp**: The path to the qvalues script. Default: qvalue_truncp.R.
  * **--rb**: The path to the Rb script. Default: Rb.R.
 
