@@ -72,8 +72,9 @@ __description__ = "{} is a program developed and maintained by {}. " \
                                         __author__,
                                         __license__)
 
-CHROMOSOMES = [str(chr) for chr in range(1, 23)]
-METHODS = ["LIMIX", "LIMIX_REDUCED", "mbQTL", "mbQTL_Joost", "mbQTL_MetaBrain", "eQTLMappingPipeline", "eQTLgenPhase2", "Bryois", "Bryois_REDUCED", "Fujita", "DeconQTL", "PICALO"]
+CHROMOSOMES = [str(chr) for chr in range(1, 23)] + ["X", "Y", "MT"]
+BATCHES = [str(batch) for batch in range(0, 1000)]
+METHODS = ["CUSTOM", "LIMIX", "LIMIX_REDUCED", "mbQTL", "eQTLMappingPipeline", "eQTLgenPhase2", "Bryois", "Bryois_REDUCED", "Fujita", "DeconQTL", "PICALO"]
 EFFECTS = ["zscore", "beta"]
 
 
@@ -83,12 +84,18 @@ class main():
         arguments = self.create_argument_parser()
         self.discovery_method = getattr(arguments, 'discovery_method')
         self.discovery_path = getattr(arguments, 'discovery_path')
+        self.discovery_all_filename = getattr(arguments, 'discovery_all_filename')
+        self.discovery_top_filename = getattr(arguments, 'discovery_top_filename')
         self.discovery_name = getattr(arguments, 'discovery_name')
         self.discovery_cell_type = getattr(arguments, 'discovery_cell_type')
+        self.discovery_class_settings = getattr(arguments, 'discovery_class_settings')
         self.replication_method = getattr(arguments, 'replication_method')
         self.replication_path = getattr(arguments, 'replication_path')
+        self.replication_all_filename = getattr(arguments, 'replication_all_filename')
+        self.replication_top_filename = getattr(arguments, 'replication_top_filename')
         self.replication_name = getattr(arguments, 'replication_name')
         self.replication_cell_type = getattr(arguments, 'replication_cell_type')
+        self.replication_class_settings = getattr(arguments, 'replication_class_settings')
         self.gene = "gene_" + getattr(arguments, 'gene')
         self.snp = "SNP_" + getattr(arguments, 'snp')
         self.pvalue = getattr(arguments, 'pvalue') + "_pvalue"
@@ -105,6 +112,18 @@ class main():
         self.save = getattr(arguments, 'save')
         self.qvalue_truncp_script = getattr(arguments, 'qvalue_truncp')
         self.rb_script = getattr(arguments, 'rb')
+
+        if self.discovery_method == "CUSTOM" and (self.discovery_class_settings is None or not os.path.exists(self.discovery_class_settings)):
+            print("Error, --discovery_class_settings needs to exist if --discovery_method is CUSTOM.")
+            exit()
+        if self.discovery_method != "CUSTOM" and self.discovery_class_settings is not None and os.path.exists(self.discovery_class_settings):
+            print("Warning, ignoring --discovery_class_settings if --discovery_method is not CUSTOM.")
+
+        if self.replication_method == "CUSTOM" and (self.replication_class_settings is None or not os.path.exists(self.replication_class_settings)):
+            print("Error, --replication_class_settings needs to exist if --replication_method is CUSTOM.")
+            exit()
+        if self.replication_method != "CUSTOM" and self.replication_class_settings is not None and os.path.exists(self.replication_class_settings):
+            print("Warning, ignoring --replication_class_settings if --replication_method is not CUSTOM.")
 
         if self.log_modulus:
             print("Warning, applying log modulus changes how to plot looks but not how the"
@@ -186,6 +205,16 @@ class main():
                             required=True,
                             default=None,
                             help="Basedir of the discovery summary statistics.")
+        parser.add_argument("--discovery_all_filename",
+                            type=str,
+                            required=False,
+                            default=None,
+                            help="Update the default all effects filename of the discovery class.")
+        parser.add_argument("--discovery_top_filename",
+                            type=str,
+                            required=False,
+                            default=None,
+                            help="Update the default top effects filename of the discovery class.")
         parser.add_argument("--discovery_name",
                             type=str,
                             required=True,
@@ -194,8 +223,12 @@ class main():
         parser.add_argument("--discovery_cell_type",
                             type=str,
                             required=False,
-                            default=None,
+                            default="",
                             help="Cell type of the discovery summary statistics. Default: None.")
+        parser.add_argument("--discovery_class_settings",
+                            required=False,
+                            default=None,
+                            help="JSON file containing custom discovery class settings.")
         parser.add_argument("--replication_method",
                             type=str,
                             required=True,
@@ -205,6 +238,16 @@ class main():
                             required=True,
                             default=None,
                             help="Basedir of the replication summary statistics.")
+        parser.add_argument("--replication_all_filename",
+                            type=str,
+                            required=False,
+                            default=None,
+                            help="Update the default all effects filename of the replication class.")
+        parser.add_argument("--replication_top_filename",
+                            type=str,
+                            required=False,
+                            default=None,
+                            help="Update the default top effects filename of the replication class.")
         parser.add_argument("--replication_name",
                             type=str,
                             required=True,
@@ -213,8 +256,12 @@ class main():
         parser.add_argument("--replication_cell_type",
                             type=str,
                             required=False,
-                            default=None,
+                            default="",
                             help="Cell type of the replication summary statistics. Default: None.")
+        parser.add_argument("--replication_class_settings",
+                            required=False,
+                            default=None,
+                            help="JSON file containing custom discovery class settings.")
         parser.add_argument("--gene",
                             type=str,
                             choices=["ensembl", "hgnc"],
@@ -298,7 +345,10 @@ class main():
             type="discovery",
             name=self.discovery_name,
             path=self.discovery_path,
+            all_filename=self.discovery_all_filename,
+            top_filename=self.discovery_top_filename,
             cell_type=self.discovery_cell_type,
+            class_settings=self.discovery_class_settings,
             allow_infer=self.allow_infer
         )
         print(disc)
@@ -307,7 +357,10 @@ class main():
             type="replication",
             name=self.replication_name,
             path=self.replication_path,
+            all_filename=self.replication_all_filename,
+            top_filename=self.replication_top_filename,
             cell_type=self.replication_cell_type,
+            class_settings=self.replication_class_settings,
             allow_infer=self.allow_infer
         )
         print(repl)
@@ -399,12 +452,18 @@ class main():
         print("Arguments:")
         print("  > Discovery method: {}".format(self.discovery_method))
         print("  > Discovery path: {}".format(self.discovery_path))
+        print("  > Discovery all filename: {}".format(self.discovery_all_filename))
+        print("  > Discovery top filename: {}".format(self.discovery_top_filename))
         print("  > Discovery name: {}".format(self.discovery_name))
         print("  > Discovery cell type: {}".format(self.discovery_cell_type))
+        print("  > Discovery class settings: {}".format(self.discovery_class_settings))
         print("  > Replication method: {}".format(self.replication_method))
         print("  > Replication path: {}".format(self.replication_path))
+        print("  > Replication all filename: {}".format(self.replication_all_filename))
+        print("  > Replication top filename: {}".format(self.replication_top_filename))
         print("  > Replication name: {}".format(self.replication_name))
         print("  > Replication cell type: {}".format(self.replication_cell_type))
+        print("  > Replication class settings: {}".format(self.replication_class_settings))
         print("  > Palette path: {}".format(self.palette_path))
         print("  > Gene: {}".format(self.gene))
         print("  > SNP: {}".format(self.snp))
@@ -426,16 +485,14 @@ class main():
 
     @staticmethod
     def get_method_class(method):
-        if method == "LIMIX":
+        if method == "CUSTOM":
+            return CUSTOM
+        elif method == "LIMIX":
             return LIMIX
         elif method == "LIMIX_REDUCED":
             return LIMIX_REDUCED
         elif method == "mbQTL":
             return mbQTL
-        elif method == "mbQTL_Joost":
-            return mbQTL_Joost
-        elif method == "mbQTL_MetaBrain":
-            return mbQTL_MetaBrain
         elif method == "eQTLMappingPipeline":
             return eQTLMappingPipeline
         elif method == "eQTLgenPhase2":
@@ -757,7 +814,16 @@ class main():
         return min(pi1, 1)
 
     def rb(self, df, b1, se1, b2, se2, theta=0):
-        if False in [column in df.columns for column in [b1, se1, b2, se2]]:
+        valid = True
+        for column in [b1, se1, b2, se2]:
+            if column not in df.columns:
+                print("Warning, could not calculate Rb due to missing column '{}'.".format(column))
+                valid = False
+
+            if df[column].std() == 0:
+                print("Warning, could not calculate Rb due to zero variance in column '{}'.".format(column))
+                valid = False
+        if not valid:
             return np.nan, np.nan, np.nan
 
         robjects.r("source('{}')".format(self.rb_script))
@@ -1025,13 +1091,26 @@ class main():
 ##############################################################################################################
 
 class Dataset:
-    def __init__(self, type, name, path, cell_type, allow_infer):
+    def __init__(self, type, name, path, all_filename, top_filename, cell_type, class_settings, allow_infer):
         self.class_name = None
         self.type = type
         self.name = name
         self.path = path
+        self.all_filename = all_filename
+        self.top_filename = top_filename
         self.cell_type = cell_type
+        self.class_settings = class_settings
         self.allow_infer = allow_infer
+
+        # Default input files.
+        self.all_effects_path = None
+        self.top_effects_path = None
+
+        # Default sample size, assume equal for all effects.
+        self.n = None
+
+        # Default settings.
+        self.ignore_tabix = True
 
         # Option 0: data does not exist [(None, None, sep)]
         # Option 1: data is a full singular column [("A", None, sep)]
@@ -1063,16 +1142,6 @@ class Dataset:
             "MAF": self.na
         }
 
-        # Default input files.
-        self.all_effects_path = None
-        self.top_effects_path = None
-
-        # Default sample size, equal for all effects.
-        self.n = None
-
-        # Default settings.
-        self.ignore_tabix = True
-
     def get_class_name(self):
         return self.class_name
 
@@ -1085,16 +1154,48 @@ class Dataset:
     def get_path(self):
         return self.path
 
+    def get_all_filename(self):
+        return self.all_filename
+
+    def get_top_filename(self):
+        return self.top_filename
+
+    def set_all_effects_path(self, filename):
+        if self.all_filename is not None:
+            filename = self.all_filename
+        if filename is None:
+            return
+        self.all_effects_path = self.get_fpath(fpath=os.path.join(self.path, filename))
+
+    def get_all_effects_path(self):
+        return self.all_effects_path
+
+    def set_top_effects_path(self, filename):
+        if self.top_filename is not None:
+            filename = self.top_filename
+        if filename is None:
+            return
+        self.top_effects_path = self.get_fpath(fpath=os.path.join(self.path, filename))
+
+    def get_top_effects_path(self):
+        return self.top_effects_path
+
     def get_cell_type(self):
         return self.cell_type
 
     def get_id(self):
-        if self.cell_type is None:
+        if self.cell_type is None or self.cell_type == "":
             return self.get_name()
         return self.name + "_" + self.cell_type
 
     def get_allow_infer(self):
         return self.allow_infer
+
+    def get_n(self):
+        return self.n
+
+    def get_ignore_tabix(self):
+        return self.ignore_tabix
 
     def get_na(self):
         return self.na
@@ -1144,23 +1245,44 @@ class Dataset:
 
         return False
 
-    def set_all_effects_path(self, effects_path):
-        self.all_effects_path = self.get_fpath(fpath=effects_path)
+    def get_fpath(self, fpath):
+        existing_fpath = self.search_for_fpath(fpath=fpath)
+        if existing_fpath is None:
+            return None
 
-    def get_all_effects_path(self):
-        return self.all_effects_path
+        return fpath
 
-    def set_top_effects_path(self, effects_path):
-        self.top_effects_path = self.get_fpath(fpath=effects_path)
-
-    def get_top_effects_path(self):
-        return self.top_effects_path
-
-    @staticmethod
-    def get_fpath(fpath):
+    def search_for_fpath(self, fpath):
         if fpath is None:
             return None
 
+        ct_fpath = fpath
+        if "<CT>" in fpath:
+            ct_fpath = fpath.replace("<CT>", self.cell_type)
+
+        if "<CHR>" in ct_fpath and "<BATCH>" in ct_fpath:
+            for chromosome in CHROMOSOMES:
+                for batch in BATCHES:
+                    existing_fpath = self.get_existing_fpath(fpath=ct_fpath.replace("<CHR>", chromosome).replace("<BATCH>", batch))
+                    if existing_fpath is not None:
+                        return existing_fpath
+
+        if "<CHR>" in ct_fpath:
+            for chromosome in CHROMOSOMES:
+                existing_fpath = self.get_existing_fpath(fpath=ct_fpath.replace("<CHR>", chromosome))
+                if existing_fpath is not None:
+                    return existing_fpath
+
+        if "<BATCH>" in ct_fpath:
+            for batch in BATCHES:
+                existing_fpath = self.get_existing_fpath(fpath=ct_fpath.replace("<BATCH>", batch))
+                if existing_fpath is not None:
+                    return existing_fpath
+
+        return self.get_existing_fpath(fpath)
+
+    @staticmethod
+    def get_existing_fpath(fpath):
         if os.path.exists(fpath):
             return fpath
 
@@ -1170,21 +1292,7 @@ class Dataset:
         if os.path.exists(fpath.rstrip(".gz")):
             return fpath.rstrip(".gz")
 
-        if "<CHR>" in fpath:
-            for chromosome in CHROMOSOMES:
-                chr_effects_path = fpath.replace("<CHR>", chromosome)
-                if not os.path.exists(chr_effects_path) and not os.path.exists(chr_effects_path + ".gz"):
-                    return None
-
-            return fpath
-
         return None
-
-    def get_n(self):
-        return self.n
-
-    def get_ignore_tabix(self):
-        return self.ignore_tabix
 
     def get_eqtl_effects(self, df, gene, snp):
         genes = df.apply(lambda row: self.extract_info(data=row, query=self.get_column(gene)), axis=1)
@@ -1282,7 +1390,7 @@ class Dataset:
         return dict(zip(colnames, range(len(colnames))))
 
     @staticmethod
-    def get_file_header(inpath, header=0, sep="\t"):
+    def get_file_head(inpath, header=0, nrows=0, sep="\t"):
         if inpath is None or not os.path.exists(inpath):
             raise FileNotFoundError("Warning, '{}' file not found".format(inpath))
 
@@ -1292,15 +1400,32 @@ class Dataset:
             fhin = open(inpath, 'r')
 
         colnames = None
+        data = []
         for i, line in enumerate(fhin):
-            if i != header:
+            if (i > header) and (i > nrows):
+                break
+            values = line.rstrip("\n").split(sep)
+
+            if i == header:
+                colnames = values
                 continue
 
-            colnames = line.rstrip("\n").split(sep)
-            break
+            data.append(values)
         fhin.close()
 
-        return colnames
+        return colnames, data
+
+    def get_file_header(self, inpath, header=0, sep="\t"):
+        header, _ = self.get_file_head(inpath=inpath, header=header, sep=sep)
+        return header
+
+    def get_first_line(self, inpath, header=0, sep="\t"):
+        header, line = self.get_file_head(inpath=inpath, header=header, nrows=1, sep=sep)
+        return dict(zip(header, line[0]))
+
+    def get_file_header_and_first_line(self, inpath, header=0, sep="\t"):
+        header, line = self.get_file_head(inpath=inpath, header=header, nrows=1, sep=sep)
+        return header, dict(zip(header, line[0]))
 
     @staticmethod
     def update_label_dict(label_dict, colname_to_index_dict):
@@ -1419,15 +1544,29 @@ class Dataset:
         if inpath is None:
             raise FileNotFoundError("Warning, '{}' file not found".format(inpath))
 
-        if "<CHR>" not in inpath:
+        if "<CHR>" not in inpath and "<BATCH>" not in inpath:
             return func(inpath=inpath, *args, **kwargs)
 
         df_list = []
         for chromosome in CHROMOSOMES:
-            chr_inpath = os.path.join(self.path, inpath.replace("<CHR>", chromosome))
-            if not os.path.exists(chr_inpath):
-                chr_inpath += ".gz"
-            df_list.append(func(inpath=chr_inpath, *args, **kwargs))
+            subset_inpath = inpath
+
+            batch_start = False
+            if "<CHR>" in subset_inpath:
+                chr_inpath = subset_inpath.replace("<CHR>", chromosome)
+                for batch in BATCHES:
+                    chr_batch_inpath = chr_inpath
+                    if "<BATCH>" in subset_inpath:
+                        chr_batch_inpath = chr_batch_inpath.replace("<BATCH>", batch)
+
+                    full_inpath = self.get_existing_fpath(os.path.join(self.path, chr_batch_inpath))
+                    if full_inpath is None:
+                        if not batch_start:
+                            continue
+                        else:
+                            break
+                    batch_start = True
+                    df_list.append(func(inpath=full_inpath, *args, **kwargs))
 
         if len(df_list) == 0:
             return None
@@ -1516,7 +1655,7 @@ class Dataset:
         n_effects = len(effects)
         i = 0
         keys_found = set()
-        key_values_found = set()
+        pairs_found = set()
         for i, snp in enumerate(effects.values()):
             if i % 10 == 0:
                 print("\tParsed {:,} / {:,} effects".format(i, n_effects), end='\r')
@@ -1544,7 +1683,7 @@ class Dataset:
                         value = self.extract_info(data=values, query=specific_entries_cols["value"])
                         if value is None or value not in effects[key]:
                             continue
-                        key_values_found.add(key + "_" + value)
+                        pairs_found.add(key + "_" + value)
 
                 if top_entries_cols is None:
                     lines.append(values)
@@ -1563,10 +1702,13 @@ class Dataset:
         print("\tParsed {:,} / {:,} effects".format(i, n_effects))
 
         if specific_entries_cols is not None and isinstance(effects, dict):
-            n_query_keys = len(set(effects.keys()))
+            n_pairs_found = len(pairs_found)
+            n_query_pairs = sum([len(value) for value in effects.values()])
+            pairs_missing = n_query_pairs - n_pairs_found
             n_keys_found = len(keys_found)
-            n_key_values_found = len(key_values_found)
-            print("\t{:,} / {:,} keys found of which {:,} / {:,} the corresponding variant was found".format(n_keys_found, n_query_keys, n_key_values_found, n_keys_found))
+            keys_missing = len(effects) - n_keys_found
+            values_missing = pairs_missing - keys_missing
+            print("\tFound {:,} / {:,} key-value pairs. Of the {:,} missing pairs {:,} did not match on key and {:,} did not match on key-value".format(n_pairs_found, n_query_pairs, pairs_missing, keys_missing, values_missing))
 
         if top_entries_cols is not None:
             for _, (_, values) in top_entries.items():
@@ -1594,7 +1736,7 @@ class Dataset:
             max_rows += skiprows
         i = 0
         keys_found = set()
-        key_values_found = set()
+        pairs_found = set()
         for i, line in enumerate(fhi):
             if i % 1e6 == 0:
                 print("\tParsed {:,} lines".format(i), end='\r')
@@ -1631,7 +1773,7 @@ class Dataset:
                     value = self.extract_info(data=values, query=specific_entries_cols["value"])
                     if value is None or value not in effects[key]:
                         continue
-                    key_values_found.add(key + "_" + value)
+                    pairs_found.add(key + "_" + value)
 
             if top_entries_cols is None:
                 lines.append(values)
@@ -1653,10 +1795,13 @@ class Dataset:
         print("\tParsed {:,} lines".format(i))
 
         if specific_entries_cols is not None and isinstance(effects, dict):
-            n_query_keys = len(set(effects.keys()))
+            n_pairs_found = len(pairs_found)
+            n_query_pairs = sum([len(value) for value in effects.values()])
+            pairs_missing = n_query_pairs - n_pairs_found
             n_keys_found = len(keys_found)
-            n_key_values_found = len(key_values_found)
-            print("\t{:,} / {:,} keys found of which {:,} / {:,} the corresponding variant was found".format(n_keys_found, n_query_keys, n_key_values_found, n_keys_found))
+            keys_missing = len(effects) - n_keys_found
+            values_missing = pairs_missing - keys_missing
+            print("\tFound {:,} / {:,} key-value pairs. Of the {:,} missing pairs {:,} did not match on key and {:,} did not match on key-value".format(n_pairs_found, n_query_pairs, pairs_missing, keys_missing, values_missing))
 
         if top_entries_cols is not None:
             columns += ["NEntries"]
@@ -1875,22 +2020,95 @@ class Dataset:
 
     def __str__(self):
         return "{} dataset:\n  class_name = {}\n  name = {}\n  path = {}\n  " \
-               "cell_type = {}\n  allow_infer = {}\n  na = {}\n  columns = {}\n  " \
-               "all_effects_path = {}\n  top_effects_path = {}\n  n = {}\n  " \
-               "ignore_tabix = {}\n".format(
+               "all_effects_path = {}\n  top_effects_path = {}\n  cell_type = {}\n  " \
+               "class_settings = {}\n  allow_infer = {}\n  n = {}\n  ignore_tabix = {}\n  " \
+               "na = {}\n  columns = {}\n".format(
             self.type.title(),
             self.class_name,
             self.name,
             self.path,
-            self.cell_type,
-            self.allow_infer,
-            self.na,
-            "\n    " + "\n    ".join(["{} = {}".format(key, value) for key, value in self.columns.items() if value != self.na]),
             self.all_effects_path,
             self.top_effects_path,
+            self.cell_type,
+            self.class_settings,
+            self.allow_infer,
             self.n,
-            self.ignore_tabix
+            self.ignore_tabix,
+            self.na,
+            "\n    " + "\n    ".join(["{} = {}".format(key, value) for key, value in self.columns.items() if value != self.na]),
         )
+
+##############################################################################################################
+
+class CUSTOM(Dataset):
+    def __init__(self, *args, **kwargs):
+        super(CUSTOM, self).__init__(*args, **kwargs)
+        class_settings = self.load_json()
+        self.class_name = class_settings["class_name"]
+
+        # Default sample size.
+        self.n = class_settings["n"]
+
+        # File paths.
+        self.set_all_effects_path(filename=class_settings["all_effects_filename"].replace("<CT>", self.cell_type))
+        self.set_top_effects_path(filename=class_settings["top_effects_filename"].replace("<CT>", self.cell_type))
+
+        # Columns that are in the original file.
+        self.columns.update(class_settings["columns"])
+
+    def load_json(self):
+        if not os.path.exists(self.class_settings):
+            print("Error in {}, {} does not exist.".format(self.name, self.class_settings))
+            exit()
+
+        with open(self.class_settings) as f:
+            class_settings = json.load(f)
+        f.close()
+
+        if "class_name" not in class_settings:
+            class_settings["class_name"] = "CUSTOM"
+
+        if "n" not in class_settings:
+            class_settings["n"] = None
+
+        for filenames in ["all_effects_filename", "top_effects_filename"]:
+            if filenames not in class_settings:
+                class_settings[filenames] = ""
+
+        if "columns" not in class_settings:
+            class_settings["columns"] = {}
+
+        valid = True
+        for column_name in class_settings["columns"].keys():
+            column_value = class_settings["columns"][column_name]
+            if isinstance(column_value, str):
+                class_settings["columns"][column_name] = [(column_value, None, None)]
+            elif isinstance(column_value, list):
+                for part_column_value in column_value:
+                    if len(part_column_value) != 3:
+                        print("Error in {}, part CUSTOM class setting {} is invalid. Expecting list with length 3 but '{}' has length '{}'.".format(self.name,str(column_value), str(part_column_value), len(part_column_value)))
+                        valid = False
+
+                    if not isinstance(part_column_value[0], str):
+                        print("Error in {}, part of CUSTOM class setting '{}' is invalid. Expecting string on the first index but '{}' has value '{}'.".format(self.name,str(column_value), str(part_column_value), str(part_column_value[0])))
+                        valid = False
+
+                    if not part_column_value[1] is None and not isinstance(part_column_value[1], str) and not isinstance(part_column_value[1], dict):
+                        print("Error in {}, part of CUSTOM class setting '{}' is invalid. Expecting null or a string on the second index but '{}' has value '{}'.".format(self.name,str(column_value), str(part_column_value), str(part_column_value[1])))
+                        valid = False
+
+                    if not part_column_value[2] is None and not isinstance(part_column_value[2], str):
+                        print("Error in {}, part of CUSTOM class setting '{}' is invalid. Expecting null or a string on the third index but '{}' has value '{}'.".format(self.name, str(column_value), str(part_column_value), str(part_column_value[2])))
+                        valid = False
+            else:
+                print("Error in {}, CUSTOM class setting {} is invalid. Expecting string or list with length 3.".format(self.name, str(column_value)))
+                valid = False
+
+        if not valid:
+            exit()
+
+        return class_settings
+
 
 ##############################################################################################################
 
@@ -1899,6 +2117,20 @@ class LIMIX(Dataset):
     def __init__(self, *args, **kwargs):
         super(LIMIX, self).__init__(*args, **kwargs)
         self.class_name = "LIMIX"
+
+        # File paths.
+        self.set_all_effects_path(filename="qtl_results_all.txt")
+        self.set_top_effects_path(filename="top_qtl_results_all.txt")
+
+        # Other file paths.
+        self.feature_metadata_file = self.get_fpath(os.path.join(self.path, "qtl", "feature_metadata_<CHUNK>.txt"))
+        self.snp_metadata_file = self.get_fpath(os.path.join(self.path, "qtl", "snp_metadata_<CHUNK>.txt"))
+        self.qtl_results_file = self.get_fpath(os.path.join(self.path, "qtl", "qtl_results_<CHUNK>.h5"))
+        self.snp_qc_metrics = self.get_fpath(os.path.join(self.path, "qtl", "snp_qc_metrics_naContaining_feature_<FEATURE>.txt"))
+
+        # Other class variables.
+        self.chunk_pattern = "(([0-9]{1,2}|X|Y|MT)_([0-9]+)_([0-9]+))"
+        self.qtl_chunks = None
 
         # Columns that are in the original file.
         self.columns.update({
@@ -1921,20 +2153,6 @@ class LIMIX(Dataset):
             # "AF": [(None, None, None)],
             "MAF": [("maf", None, None)]
         })
-
-        # File paths.
-        self.set_all_effects_path(effects_path=os.path.join(self.path.replace("<CT>", self.cell_type), "qtl_results_all.txt"))
-        self.set_top_effects_path(effects_path=os.path.join(self.path.replace("<CT>", self.cell_type), "top_qtl_results_all.txt"))
-
-        # Other file paths.
-        self.feature_metadata_file = os.path.join(self.path.replace("<CT>", self.cell_type), "qtl", "feature_metadata_<CHUNK>.txt")
-        self.snp_metadata_file = os.path.join(self.path.replace("<CT>", self.cell_type), "qtl", "snp_metadata_<CHUNK>.txt")
-        self.qtl_results_file = os.path.join(self.path.replace("<CT>", self.cell_type), "qtl", "qtl_results_<CHUNK>.h5")
-        self.snp_qc_metrics = os.path.join(self.path.replace("<CT>", self.cell_type), "qtl", "snp_qc_metrics_naContaining_feature_<FEATURE>.txt")
-
-        # Other class variables.
-        self.chunk_pattern = "(([0-9]{1,2}|X|Y|MT)_([0-9]+)_([0-9]+))"
-        self.qtl_chunks = None
 
     def get_top_effects(self, gene=None, snp=None):
         try:
@@ -2146,6 +2364,20 @@ class LIMIX_REDUCED(LIMIX):
         super(LIMIX, self).__init__(*args, **kwargs)
         self.class_name = "LIMIX_REDUCED"
 
+        # File paths.
+        self.set_all_effects_path()
+        self.set_top_effects_path()
+
+        # Other file paths.
+        self.qtl_results_file = None
+        self.feature_metadata_file = None
+        self.snp_metadata_file = None
+        self.snp_qc_metrics = None
+
+        # Other class variables.
+        self.chunk_pattern = None
+        self.qtl_chunks = None
+
         # Columns that are in the original file.
         self.columns.update({
             "gene_hgnc": [("feature_id", None, None)],
@@ -2167,20 +2399,6 @@ class LIMIX_REDUCED(LIMIX):
             # "AF": [(None, None, None)],
             "MAF": [("maf", None, None)]
         })
-
-        # File paths.
-        self.set_all_effects_path()
-        self.set_top_effects_path()
-
-        # Other file paths.
-        self.qtl_results_file = None
-        self.feature_metadata_file = None
-        self.snp_metadata_file = None
-        self.snp_qc_metrics = None
-
-        # Other class variables.
-        self.chunk_pattern = None
-        self.qtl_chunks = None
 
     def set_all_effects_path(self, effects_path=None):
         if effects_path is None:
@@ -2219,101 +2437,68 @@ class mbQTL(Dataset):
         super(mbQTL, self).__init__(*args, **kwargs)
         self.class_name = "mbQTL"
 
-        # Columns that are in the original file.
-        self.columns.update({
-            "gene_hgnc": [("Gene", None, None)],
-            # "gene_ensembl": [(None, None, None)],
-            "SNP_rsid": [("SNP", None, None)],
-            "SNP_chr:pos": [("SNPChr", None, ":"), ("SNPPos", None, None)],
-            "alleles": [("SNPAlleles", None, None)],
-            "EA": [("SNPEffectAllele", None, None)],
-            # "OA": [(None, None, None)],
-            "beta": [("MetaBeta", None, None)],
-            "beta_se": [("MetaSE", None, None)],
-            "n_tests": [("NrTestedSNPs", None, None)],
-            "nominal_pvalue": [("MetaP", None, None)],
-            "permuted_pvalue": [("BetaAdjustedMetaP", None, None)],
-            # "bonferroni_pvalue": [(None, None, None)],
-            "zscore": [("MetaPZ", None, None)],
-            # "FDR": [(None, None, None)],
-            "N": [("MetaPN", None, None)],
-            "AF": [("SNPEffectAlleleFreq", None, None)],
-            # "MAF": [(None, None, None)]
-        })
-
         # File paths.
-        self.set_all_effects_path(effects_path=os.path.join(self.path.replace("<CT>", self.cell_type), self.cell_type + "-AllEffects.txt"))
-        self.set_top_effects_path(effects_path=os.path.join(self.path.replace("<CT>", self.cell_type), self.cell_type + "-TopEffects.txt"))
+        self.set_all_effects_path(filename=self.cell_type + "-AllEffects.txt")
+        self.set_top_effects_path(filename=self.cell_type + "-TopEffects.txt")
 
-
-##############################################################################################################
-
-
-class mbQTL_Joost(Dataset):
-    def __init__(self, *args, **kwargs):
-        super(mbQTL_Joost, self).__init__(*args, **kwargs)
-        self.class_name = "mbQTL_Joost"
+        # Extract the header and first line of the effects path (assuming this is the same for all and top effects)
+        # to determine certain columns.
+        example_file = self.search_for_fpath(fpath=self.all_effects_path)
+        if example_file is None:
+            example_file = self.search_for_fpath(fpath=self.top_effects_path)
+        self.all_effects_header, self.all_effect_line = self.get_file_header_and_first_line(example_file)
 
         # Columns that are in the original file.
         self.columns.update({
             "gene_hgnc": [("GeneSymbol", None, None)],
-            "gene_ensembl": [("Gene", "(ENSG[0-9]+).[0-9]+", None)],
-            "SNP_rsid": [("SNP", None, None)],
+            "gene_ensembl": self.get_gene_ensembl_column(),
+            "SNP_rsid": self.get_snp_rsid_column(),
             "SNP_chr:pos": [("SNPChr", None, ":"), ("SNPPos", None, None)],
             "alleles": [("SNPAlleles", None, None)],
             "EA": [("SNPEffectAllele", None, None)],
             # "OA": [(None, None, None)],
-            "beta": [("MetaR", None, None)],
+            "beta": self.get_beta_column(),
             "beta_se": [("MetaSE", None, None)],
             "n_tests": [("NrTestedSNPs", None, None)],
             "nominal_pvalue": [("MetaP", None, None)],
             "permuted_pvalue": [("BetaAdjustedMetaP", None, None)],
             # "bonferroni_pvalue": [(None, None, None)],
             "zscore": [("MetaPZ", None, None)],
-            "FDR": [("qval", None, None)],
+            "FDR": self.get_fdr_column(),
             "N": [("MetaPN", None, None)],
             "AF": [("SNPEffectAlleleFreq", None, None)],
             # "MAF": [(None, None, None)]
         })
 
-        # File paths.
-        # self.set_all_effects_path(effects_path)
-        self.set_top_effects_path(effects_path=os.path.join(self.path, "merged-withqval.txt"))
+    def get_beta_column(self):
+        if "MetaBeta" in self.all_effects_header:
+            return [("MetaBeta", None, None)]
+        elif "MetaR" in self.all_effects_header:
+            return [("MetaR", None, None)]
+        else:
+            return [(None, None, None)]
 
+    def get_gene_ensembl_column(self):
+        if re.match("ENSG[0-9]+$", self.all_effect_line["Gene"]):
+            return [("Gene", None, None)]
+        elif re.match("(ENSG[0-9]+).[0-9]+", self.all_effect_line["Gene"]):
+            return [("Gene", "(ENSG[0-9]+).[0-9]+", None)]
+        else:
+            return [(None, None, None)]
 
-##############################################################################################################
+    def get_snp_rsid_column(self):
+        if re.match("rs[0-9]+$", self.all_effect_line["SNP"]):
+            return [("SNP", None, None)]
+        elif re.match("(?:[0-9]{1,2}|X|Y|MT):[0-9]+:(rs[0-9]+):[A-Z]+_[A-Z]+", self.all_effect_line["SNP"]):
+            return [("SNP", "(?:[0-9]{1,2}|X|Y|MT):[0-9]+:(rs[0-9]+):[A-Z]+_[A-Z]+", None)]
+        else:
+            return [(None, None, None)]
 
-
-class mbQTL_MetaBrain(mbQTL):
-    def __init__(self, *args, **kwargs):
-        super(mbQTL, self).__init__(*args, **kwargs)
-        self.class_name = "mbQTL_MetaBrain"
-
-        # Columns that are in the original file.
-        self.columns.update({
-            "gene_hgnc": [("GeneSymbol", None, None)],
-            "gene_ensembl": [("Gene", "(ENSG[0-9]+).[0-9]+", None)],
-            "SNP_rsid": [("SNP", "(?:[0-9]{1,2}|X|Y|MT):[0-9]+:(rs[0-9]+):[A-Z]+_[A-Z]+", None)],
-            "SNP_chr:pos": [("SNPChr", None, ":"), ("SNPPos", None, None)],
-            "alleles": [("SNPAlleles", None, None)],
-            "EA": [("SNPEffectAllele", None, None)],
-            # "OA": [(None, None, None)],
-            "beta": [("MetaBeta", None, None)],
-            "beta_se": [("MetaSE", None, None)],
-            "n_tests": [("NrTestedSNPs", None, None)],
-            "nominal_pvalue": [("MetaP", None, None)],
-            "permuted_pvalue": [("BetaAdjustedMetaP", None, None)],
-            # "bonferroni_pvalue": [(None, None, None)],
-            "zscore": [("MetaPZ", None, None)],
-            "FDR": [("qval", None, None)],
-            "N": [("MetaPN", None, None)],
-            "AF": [("SNPEffectAlleleFreq", None, None)],
-            # "MAF": [(None, None, None)]
-        })
-
-        # File paths.
-        self.set_all_effects_path(effects_path=os.path.join(self.path, "chr<CHR>-AllEffects-sorted.bgz.txt.gz"))
-        self.set_top_effects_path(effects_path=os.path.join(self.path, "merged-withqval.txt.gz"))
+    def get_fdr_column(self):
+        if "qval" in self.all_effects_header:
+            return [("qval", None, None)]
+        else:
+            return [(None, None, None)]
 
 
 ##############################################################################################################
@@ -2323,6 +2508,10 @@ class eQTLMappingPipeline(Dataset):
     def __init__(self, *args, **kwargs):
         super(eQTLMappingPipeline, self).__init__(*args, **kwargs)
         self.class_name = "eQTLMappingPipeline"
+
+        # File paths.
+        self.set_all_effects_path(filename="cis-eQTLs_full_20180905.txt")
+        self.set_top_effects_path(filename="2019-12-11-cis-eQTLsFDR-ProbeLevel-CohortInfoRemoved-BonferroniAdded.txt") # TODO: for some reason this still has multiple snps per gene in there.
 
         # Columns that are in the original file.
         self.columns.update({
@@ -2346,10 +2535,6 @@ class eQTLMappingPipeline(Dataset):
             # "MAF": [(None, None, None)],
         })
 
-        # File paths.
-        self.set_all_effects_path(effects_path=os.path.join(self.path, "cis-eQTLs_full_20180905.txt"))
-        self.set_top_effects_path(effects_path=os.path.join(self.path, "2019-12-11-cis-eQTLsFDR-ProbeLevel-CohortInfoRemoved-BonferroniAdded.txt")) # TODO: for some reason this still has multiple snps per gene in there.
-
     def get_top_effects(self, gene=None, snp=None):
         df = self.get_effects_wrapper(
             inpath=self.get_top_effects_path(),
@@ -2365,6 +2550,10 @@ class eQTLgenPhase2(Dataset):
     def __init__(self, *args, **kwargs):
         super(eQTLgenPhase2, self).__init__(*args, **kwargs)
         self.class_name = "eQTLgenPhase2"
+
+        # File paths.
+        self.set_all_effects_path(filename="output_empirical_4GenPC20ExpPC_2023-05-27_interestingGeneSnpCombi_fixedConcatenation.csv")  # Not really all effects, just the sc-eQTLgen ones
+        # self.set_top_effects_path(effects_path=None)
 
         # Columns that are in the original file.
         self.columns.update({
@@ -2388,9 +2577,6 @@ class eQTLgenPhase2(Dataset):
             # "MAF": [(None, None, None)]
         })
 
-        # File paths.
-        self.set_all_effects_path(effects_path=os.path.join(self.path, "output_empirical_4GenPC20ExpPC_2023-05-27_interestingGeneSnpCombi_fixedConcatenation.csv"))  # Not really all effects, just the sc-eQTLgen ones
-        # self.set_top_effects_path(effects_path=None)
 
 ##############################################################################################################
 
@@ -2398,6 +2584,26 @@ class Bryois(Dataset):
     def __init__(self, *args, **kwargs):
         super(Bryois, self).__init__(*args, **kwargs)
         self.class_name = "Bryois"
+
+        # File paths.
+        self.set_all_effects_path(filename=self.cell_type + ".<CHR>.gz")
+        self.set_top_effects_path(filename=self.cell_type + ".top.gz")
+        self.snp_pos_path = self.get_fpath(fpath=os.path.join(self.path, "snp_pos.txt.gz"))
+
+        # Other variables.
+        self.all_effects_columns = ["symbol_ensembl", "SNP", "dist_TSS", "pval", "beta"]
+
+        # These are the best estimates I can get. At least it is better than just assuming 192 for every cell type.
+        self.n = {
+            "Astrocytes": 192,
+            "Endothelial.cells": 154,
+            "Excitatory.neurons": 191,
+            "Inhibitory.neurons": 173,
+            "Microglia": 190,
+            "Oligodendrocytes": 192,
+            "OPCs...COPs": 188,
+            "Pericytes": 165
+        }[self.cell_type]
 
         # Columns that are in the original file.
         self.columns.update({
@@ -2420,26 +2626,6 @@ class Bryois(Dataset):
             # "AF": [(None, None, None)],
             "MAF": [("MAF", None, None)]
         })
-
-        # File paths.
-        self.set_all_effects_path(effects_path=os.path.join(self.path, self.cell_type + ".<CHR>.gz"))
-        self.set_top_effects_path(effects_path=os.path.join(self.path, self.cell_type + ".top.gz"))
-        self.snp_pos_path = self.get_fpath(fpath=os.path.join(self.path, "snp_pos.txt.gz"))
-
-        # Other variables.
-        self.all_effects_columns = ["symbol_ensembl", "SNP", "dist_TSS", "pval", "beta"]
-
-        # These are the best estimates I can get. At least it is better than just assuming 192 for every cell type.
-        self.n = {
-            "Astrocytes": 192,
-            "Endothelial.cells": 154,
-            "Excitatory.neurons": 191,
-            "Inhibitory.neurons": 173,
-            "Microglia": 190,
-            "Oligodendrocytes": 192,
-            "OPCs...COPs": 188,
-            "Pericytes": 165
-        }[self.cell_type]
 
     def load_snp_pos_data(self, effects, specific_entries_cols):
         specific_entries_cols = self.trans_label_to_index(
@@ -2566,6 +2752,10 @@ class Bryois_REDUCED(Dataset):
         super(Bryois_REDUCED, self).__init__(*args, **kwargs)
         self.class_name = "Bryois_REDUCED"
 
+        # File paths.
+        # self.set_all_effects_path(filename=)
+        self.set_top_effects_path(filename="JulienBryois2021SummaryStats.txt.gz")
+
         # Columns that are in the original file.
         self.columns.update({
             # "gene_hgnc": [(None, None, None)],
@@ -2588,10 +2778,6 @@ class Bryois_REDUCED(Dataset):
             # "MAF": [(None, None, None)],
         })
 
-        # File paths.
-        # self.set_all_effects_path(effects_path=)
-        self.set_top_effects_path(effects_path=os.path.join(self.path, "JulienBryois2021SummaryStats.txt.gz"))
-
     def update_df(self, df):
         # Remove empty rows and unwanted columns.
         df = df.loc[df[self.cell_type + " beta"] != "", [col for col in df.columns if (not col.endswith("p-value") and not col.endswith("beta")) or col.startswith(self.cell_type)]]
@@ -2605,6 +2791,11 @@ class Fujita(Dataset):
     def __init__(self, *args, **kwargs):
         super(Fujita, self).__init__(*args, **kwargs)
         self.class_name = "Fujita"
+
+        # File paths.
+        self.set_all_effects_path(filename="celltype-eqtl-sumstats." + self.cell_type + ".tsv")
+        # self.set_top_effects_path(filename=None)
+        self.n = 424
 
         # Columns that are in the original file.
         self.columns.update({
@@ -2628,12 +2819,6 @@ class Fujita(Dataset):
             # "MAF": [(None, None, None)]
         })
 
-        # File paths.
-        self.set_all_effects_path(effects_path=os.path.join(self.path, "celltype-eqtl-sumstats." + self.cell_type + ".tsv"))
-        # self.set_top_effects_path(effects_path=None)
-        self.n = 424
-
-
 ##############################################################################################################
 
 
@@ -2643,6 +2828,18 @@ class DeconQTL(Dataset):
         self.class_name = "DeconQTL"
 
         # TODO: work in progress, untested code
+
+        # File paths.
+        # self.set_all_effects_path(filename=)
+        self.set_top_effects_path(filename="deconvolutionResults.txt.gz")
+        self.alleles_path = self.get_fpath(fpath="/groups/umcg-biogen/prm03/projects/2022-DeKleinEtAl/output/2020-10-12-deconvolution/deconvolution/matrix_preparation/2022-10-18-CortexEUR-cis-NegativeToZero-DatasetAndRAMCorrected/create_matrices/genotype_alleles.txt.gz") # TODO: this is hard-coded
+        self.genotypes_stats_path = self.get_fpath(fpath=os.path.join(self.path, "geno_stats.txt.gz"))
+
+        # Other variables.
+        self.beta_pattern = "Beta[0-9]+_<CT>:GT"
+        self.gene_pattern = [("Unnamed: 0", "(ENSG[0-9]+.[0-9]+)_(?:[0-9]{1,2}|X|Y|MT):[0-9]+:rs[0-9]+:[A-Z]+_[A-Z]+", None)]
+        self.snp_pattern = [("Unnamed: 0", "ENSG[0-9]+.[0-9]+_((?:[0-9]{1,2}|X|Y|MT):[0-9]+:rs[0-9]+:[A-Z]+_[A-Z]+)", None)]
+        self.columns["beta"] = self.get_beta_column()
 
         # Columns that are in the original file.
         self.columns.update({
@@ -2665,18 +2862,6 @@ class DeconQTL(Dataset):
             # "AF": [(None, None, None)],
             # "MAF": [(None, None, None)],
         })
-
-        # File paths.
-        # self.set_all_effects_path(effects_path=)
-        self.set_top_effects_path(effects_path=os.path.join(self.path, "deconvolutionResults.txt.gz"))
-        self.alleles_path = self.get_fpath(fpath="/groups/umcg-biogen/prm03/projects/2022-DeKleinEtAl/output/2020-10-12-deconvolution/deconvolution/matrix_preparation/2022-10-18-CortexEUR-cis-NegativeToZero-DatasetAndRAMCorrected/create_matrices/genotype_alleles.txt.gz") # TODO: this is hard-coded
-        self.genotypes_stats_path = self.get_fpath(fpath=os.path.join(self.path, "geno_stats.txt.gz"))
-
-        # Other variables.
-        self.beta_pattern = "Beta[0-9]+_<CT>:GT"
-        self.gene_pattern = [("Unnamed: 0", "(ENSG[0-9]+.[0-9]+)_(?:[0-9]{1,2}|X|Y|MT):[0-9]+:rs[0-9]+:[A-Z]+_[A-Z]+", None)]
-        self.snp_pattern = [("Unnamed: 0", "ENSG[0-9]+.[0-9]+_((?:[0-9]{1,2}|X|Y|MT):[0-9]+:rs[0-9]+:[A-Z]+_[A-Z]+)", None)]
-        self.columns["beta"] = self.get_beta_column()
 
     def get_beta_column(self):
         header = self.get_file_header(inpath=self.top_effects_path)
@@ -2736,6 +2921,12 @@ class PICALO(Dataset):
         super(PICALO, self).__init__(*args, **kwargs)
         self.class_name = "PICALO"
 
+        # File paths.
+        #self.set_all_effects_path(filename=)
+        self.set_top_effects_path(filename=self.cell_type + ".txt.gz")
+        self.alleles_path = self.get_fpath(fpath="/groups/umcg-biogen/prm03/projects/2022-VochtelooEtAl-PICALO/preprocess_scripts/prepare_picalo_files/2022-03-24-MetaBrain_CortexEUR_NoENA_NoRNAseqAlignmentMetrics_GT1AvgExprFilter_PrimaryeQTLs_UncenteredPCA/genotype_alleles_table.txt.gz") # TODO: this is hard-coded
+        self.genotypes_stats_path = self.get_fpath(fpath=os.path.join(self.path, "genotype_stats.txt.gz"))
+
         # Columns that are in the original file.
         self.columns.update({
             # "gene_hgnc": [(None, None, None)],
@@ -2757,12 +2948,6 @@ class PICALO(Dataset):
             # "AF": [(None, None, None)],
             "MAF": [("MAF", None, None)]
         })
-
-        # File paths.
-        #self.set_all_effects_path(effects_path=)
-        self.set_top_effects_path(effects_path=os.path.join(self.path, self.cell_type + ".txt.gz"))
-        self.alleles_path = self.get_fpath(fpath="/groups/umcg-biogen/prm03/projects/2022-VochtelooEtAl-PICALO/preprocess_scripts/prepare_picalo_files/2022-03-24-MetaBrain_CortexEUR_NoENA_NoRNAseqAlignmentMetrics_GT1AvgExprFilter_PrimaryeQTLs_UncenteredPCA/genotype_alleles_table.txt.gz") # TODO: this is hard-coded
-        self.genotypes_stats_path = self.get_fpath(fpath=os.path.join(self.path, "genotype_stats.txt.gz"))
 
     def update_df(self, df):
         # Load the alleles path.

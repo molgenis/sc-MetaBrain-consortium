@@ -9,7 +9,6 @@ The main code ([replication.py](replication.py)) offers several implementations 
  * [LIMIX](https://github.com/sc-eQTLgen-consortium/limix_qtl): eQTL mapping software
  * LIMIX_REDUCED: adapted from LIMIX but only expecting the [minimal_postporcessing](https://github.com/sc-eQTLgen-consortium/limix_qtl/blob/master/Limix_QTL/post_processing/minimal_postprocess.py) output
  * [mbQTL](https://github.com/molgenis/systemsgenetics/tree/master/mbQTL): eQTL mapping software
- * mbQTL_MetaBrain: adapted from mbQTL but expecting different formatting of gene and SNPs, personal use
  * [eQTLMappingPipeline](https://github.com/molgenis/systemsgenetics/tree/master/eqtl-mapping-pipeline): eQTL mapping software
  * [DeconQTL](https://github.com/molgenis/systemsgenetics/tree/master/Decon2/Decon-eQTL): interaction eQTL mapping software
  * [PICALO](https://github.com/molgenis/PICALO): interaction eQTL mapping software
@@ -34,7 +33,28 @@ The steps of the program are as follows:
    * Rb: correlation of effect sizes correcting for standard error of the effect sizes
 4. Visualise the replication
 
-### Implementing custom summary statistics
+### Implementing custom summary statistics (no coding required)
+
+New summary statistics can easily be added by following these steps:
+1. Copy the example custom class JSON [custom.json](custom.json).
+2. Fill in the top fields. Note that these are optional and can also be set using **--[discovery/replication]_all_filename** and **--[discovery/replication]_top_filename**.
+   * **class_name**: the name of your custom class.
+   * **n**: default sample size equal for all effects. Note: leave empty and use `columns - N` if your files have a sample size per effect.
+   * **all_effects_filename**: the default filename for all the effects file. The field `<CHR>` will be replaced with 1 to 22 on the fly. The field `<CT>` will be replaced with **--[discovery/replication]_cell_type**.
+   * **top_effects_filename**: same as **all_effects_filename** but then the file containing the top variant per gene.
+3. Fill in the columns info denoting which column in your **[all/top]_effects_filename** represents which type of information. Some examples on how to define this:
+ * Option 0: data does not exist `[(null, null, null)]` or delete the line
+ * Option 1: data is a full singular column `"A"` or `[("A", null, null)]`
+ * Option 2: data is part of a singular column `[("A", "(a-zA-Z]+)_", null)]`, make sure that group 1 of the regex captures the info of interest
+ * Option 3: data is two or more full columns `[("A", null, null), ("B", null, null)]`
+ * Option 4: data is two or more full columns with a symbol inbetween `[("A", null, ":"), ("B", null, null)]`
+ * Option 5: data is a combination of option 2 and option 3 `[("A", "(a-zA-Z]+)_", null), ("B", null, null)]`
+ * Option 6: data needs info from other file `[("A", {"A": "a"}, null)]`, prepare info as a translate dictionary
+4. Run [replication.py](replication.py) with your custom class using **--[discovery/replication]_class_settings**
+
+### Implementing custom summary statistics (coding required)
+
+In some cases you might need to overwrite default code that loads or processes your input files. In order to do so you need to follow these steps:
 
 New summary statistics can easily be added by following these steps:
 1. Update the `METHODS` global variable to include your new method
@@ -46,6 +66,10 @@ class METHOD(Dataset):
     def __init__(self, *args, **kwargs):
         super(METHOD, self).__init__(*args, **kwargs)
         self.class_name = "METHOD"
+        
+        # File paths.
+        self.set_all_effects_path(filename="celltype-eqtl-sumstats." + self.cell_type + ".tsv")
+        self.set_top_effects_path(filename="celltype-eqtl-sumstats." + self.cell_type + ".tsv")
 
         # Columns that are in the original file.
         self.columns.update({
@@ -68,19 +92,20 @@ class METHOD(Dataset):
             "AF": [(None, None, None)], # the allele frequency
             "MAF": [(None, None, None)] # the minor allele frequency
         })
-
-        # File paths.
-        self.set_all_effects_path(effects_path=os.path.join(self.path, "celltype-eqtl-sumstats." + self.cell_type + ".tsv"))
-        self.set_top_effects_path(effects_path=os.path.join(self.path, "celltype-eqtl-sumstats." + self.cell_type + ".tsv"))
 ```
 
-The `self.columns` variable defines how the standard columns are named in your specific summary statistic dataset. Try to fill in as many of them as are available to you using the following formatting:
- * Option 0: data does not exist `[(None, None, sep)]`
- * Option 1: data is a full singular column `[("A", None, sep)]`
- * Option 2: data is part of a singular column `[("A", "(a-zA-Z]+)_", sep)]`, make sure that group 1 of the regex captures the info of interest
- * Option 3: data is two or more full columns `[("A", None, sep), ("B", None, sep)]`
- * Option 4: data is a combination of option 2 and option 3 `[("A", "(a-zA-Z]+)_", sep), ("B", None, sep)]`
- * Option 5: data needs info from other file `[("A", {"A": "a"}, sep)]`, prepare info as a translate dictionary
+4. overwrite / add existing functions as necessary. 
+
+The `self.columns` variable defines how the standard columns are named in your specific summary statistic dataset. Try to fill in as many of them as are available to you. The format should always be `[(column name, regex / dict, suffix)]`, some examples:
+ * Option 0: data does not exist `[(None, None, None)]`
+ * Option 1: data is a full singular column `[("A", None, None)]`
+ * Option 2: data is part of a singular column `[("A", "(a-zA-Z]+)_", None)]`, make sure that group 1 of the regex captures the info of interest
+ * Option 3: data is two or more full columns `[("A", None, None), ("B", None, None)]`
+ * Option 4: data is two or more full columns with a symbol inbetween `[("A", null, ":"), ("B", null, null)]`
+ * Option 5: data is a combination of option 2 and option 3 `[("A", "(a-zA-Z]+)_", None), ("B", None, None)]`
+ * Option 6: data needs info from other file `[("A", {"A": "a"}, None)]`, prepare info as a translate dictionary
+
+### Autofill of columns
 
 Certain columns will be automatically decuced from other columns if they are unavailable:
  * `OA` can be deduced if `EA` and `alleles` are available
@@ -133,11 +158,14 @@ Note that a [Dockerfile](Dockerfile) is available will all required software.
 ### Discovery arguments:
  * **--discovery_method**: Method of the discovery summary statistics.
  * **--discovery_path**: Basedir of the discovery summary statistics.
+ * **--discovery_all_filename**: Update the default all effects filename of the replication class. Default: class default.
+ * **--discovery_top_filename**: Update the default top effects filename of the replication class. Default: class default.
  * **--discovery_name**: Name of the discovery summary statistics.
  * **--discovery_cell_type**: Cell type of the discovery summary statistics. Default: None.
+ * **--discovery_class_settings**: JSON file containing custom discovery class settings.
 
 ### Replication arguments:
- * **--replication_[method/path/name/cell_type]**: same as discovery but then for the replication summary statistics
+ * **--replication_[method/path/all_filename/top_filename/name/cell_type/class_settings]**: same as discovery but then for the replication summary statistics
 
 ### Data extraction arguments:
  * **--gene**: Which gene format to select on. Options: hgnc, ensembl. Default: ensembl.

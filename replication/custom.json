@@ -1,0 +1,26 @@
+{
+  "class_name": "",
+  "all_effects_filename":  "",
+  "top_effects_filename":  "",
+  "n": null,
+  "columns": {
+    "gene_hgnc": "HGNC symbol of the gene",
+    "gene_ensembl": "ENSEMBL id of the gene (no version)",
+    "SNP_rsid": "RS id of the variant",
+    "SNP_chr:pos": "chr:pos of the variant (no chr prefix)",
+    "alleles": "alleles of the variant in format alleleA/alleleB",
+    "EA": "the allele indicating the direction of the beta",
+    "OA": "the other alelle",
+    "beta": "the (interaction) eQTL beta",
+    "beta_se": "the (interaction) eQTL standard error",
+    "n_tests": "the number of tests (e.g. for top effects the variants had the lowest p-value out of N total variants)",
+    "nominal_pvalue": "the nominal (interaction) eQTL p-value",
+    "permuted_pvalue": "the gene level permutation based (interaction) eQTL p-value",
+    "bonferroni_pvalue": "the bonferroni corrected p-value correcting the nominal p-value for the number of variants considered",
+    "zscore": "the z-score of the nominal p-value",
+    "FDR": "the global FDR of the eQTL effect",
+    "N": "the number of samples",
+    "AF": "the allele frequency",
+    "MAF": "the minor allele frequency"
+  }
+}
