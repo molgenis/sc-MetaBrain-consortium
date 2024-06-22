@@ -54,7 +54,7 @@ New summary statistics can easily be added by following these steps:
 
 Note that if you do not have a `top_effects_path` file you can leave this empty and the program will automatically select the top effects from the `all_effects_path` file. Similarly, if you do not have a `all_effects_path` you can leave this empty and the `top_effects_path` will be used instead; note that you might get very low overlap between two datasets because of this. Furthermore, you can use `<.+>` fields to use dynamic input for the **--[discovery/replication]_[all/top]_filename**:
 * the field `<CT>` will be replaced with **--[discovery/replication]_cell_type**
-* The field `<CHR>` will be replaced with a chromosome
+* The field `<CHR>` will be replaced with chromosome 1 to 22, X, Y, and MT
 * The field `<BATCH>` will be replaced with 0 to 1000 on the fly
 * Other `<.+>` fields can be used to define wildcards, the program will use `glob` to find a singular file that matches. If nothing matches, the wildcard is kept.
 
