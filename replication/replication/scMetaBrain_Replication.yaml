@@ -2,8 +2,8 @@
 ##### The following arguments need to be changed by the user to indicating file locations on your system #####
 ##############################################################################################################
 inputs:
-  singularity_image: /path/to/singularity/image.sif ### The complete path to the singularity image that has all the softwares
   bind_path: /path/to/bind/to/mount ### List of paths to bind to Singularity. You can specify multiple directories by adding a "," between them. Eg. ${DIRECTORY1},${DIRECTORY2}
+  singularity_image: /path/to/singularity/image.sif ### The complete path to the singularity image that has all the softwares
   repo_dir: /path/to/repo/dir/ ### Path to the github repository directory
   discovery_method: method
   discovery_path: /path/to/discovery/directory
@@ -18,6 +18,8 @@ outputs:
 
 settings:
   only_matching: False
+  disc_subfolders: []
+  repl_subfolder: []
   disc_cell_types: ['AST', 'EX', 'IN', 'MIC', 'OLI', 'OPC', 'PER']
   repl_cell_types: ['AST', 'EX', 'IN', 'MIC', 'OLI', 'OPC', 'PER']
   gene: "ensembl"

@@ -11,12 +11,13 @@ Syntax:
 parser = argparse.ArgumentParser(
     description="wrapper for DoubletDetection for doublet detection from transcriptomic data.")
 parser.add_argument("--workdir", type=str, required=True, help="")
-parser.add_argument("--discovery_name", type=str, required=True, help="")
-parser.add_argument("--replication_name", type=str, required=True, help="")
+parser.add_argument("--disc_name", type=str, required=True, help="")
 parser.add_argument("--disc_cell_types", nargs="*", type=str, required=False, default=["AST", "END", "EX", "IN", "MIC", "OLI", "OPC", "PER"], help="")
+parser.add_argument("--disc_folders", nargs="*", type=str, required=False, default=["Main"], help="")
+parser.add_argument("--repl_name", type=str, required=True, help="")
 parser.add_argument("--repl_cell_types", nargs="*", type=str, required=False, default=["AST", "END", "EX", "IN", "MIC", "OLI", "OPC", "PER"], help="")
+parser.add_argument("--repl_folders", nargs="*", type=str, required=False, default=["Main"], help="")
 parser.add_argument("--standardise", action='store_true', help="")
-parser.add_argument("--plotdir", type=str, required=True, help="")
 parser.add_argument("--palette", type=str, required=False, default=None, help="A color palette file.")
 parser.add_argument("--extensions", nargs="+", type=str, choices=["png", "pdf", "eps"], default=["png"], help="The figure file extension.. Default: 'png'.")
 args = parser.parse_args()
@@ -37,14 +38,21 @@ import matplotlib.pyplot as plt
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
 
+outfolder = args.disc_name + "discovery_" + args.repl_name + "replication/"
+data_outdir = os.path.join(args.workdir, "replication_data", outfolder)
+plot_outdir = os.path.join(args.workdir, "replication_plot", outfolder)
+for outdir in [data_outdir, plot_outdir]:
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+
 
 def plot(df, title="", filename="heatmap"):
     sns.set_style("ticks")
 
     nrows = 1
-    ncols = 3
-    ncolumn_cells = len(args.disc_cell_types)
-    nrow_cells = len(args.repl_cell_types)
+    ncols = 4
+    ncolumn_cells = len(df["discovery_id"].unique())
+    nrow_cells = len(df["replication_id"].unique())
     sns.set(rc={'figure.figsize': (ncols * ncolumn_cells, nrows * nrow_cells if nrow_cells > 1 else 9)})
     sns.set_style("ticks")
     fig, axes = plt.subplots(nrows=nrows,
@@ -53,14 +61,15 @@ def plot(df, title="", filename="heatmap"):
                              sharey='none')
 
     for col_index, (metric, vmin, center, vmax) in enumerate([("AC", -100, 0, 100),
+                                                              ("Coef", -1, 0, 1),
                                                               ("pi1", -1, 0, 1),
                                                               ("Rb", -1, 0, 1)]):
 
         if ncolumn_cells > 1 and nrow_cells > 1:
             value_df, annot_df = create_pivot_table(
                 df=df.loc[df["Disc significant"] & ~df["Repl significant"], :],
-                index_col="replication_ct",
-                column_col="discovery_ct",
+                index_col="replication_id",
+                column_col="discovery_id",
                 value_col=metric,
                 n_digits=0 if metric == "AC" else 2
             )
@@ -75,8 +84,8 @@ def plot(df, title="", filename="heatmap"):
                 vmin=vmin if args.standardise else (min_value if min_value < 0 else None),
                 center=center if args.standardise else (min_value if min_value > 0 else 0),
                 vmax=vmax if args.standardise else max_value,
-                xlabel=args.discovery_name + " discovery",
-                ylabel=args.replication_name + " replication",
+                xlabel=args.disc_name + " discovery",
+                ylabel=args.repl_name + " replication",
                 title=metric
             )
         elif (ncolumn_cells > 1 and nrow_cells == 1) or (ncolumn_cells == 1 and nrow_cells > 1):
@@ -84,11 +93,11 @@ def plot(df, title="", filename="heatmap"):
 
             if ncolumn_cells > 1 and nrow_cells == 1:
                 x = "discovery_ct"
-                xlabel = args.discovery_name + " discovery"
+                xlabel = args.disc_name + " discovery"
                 ylabel = args.repl_cell_types[0]
             else:
                 x = "replication_ct"
-                xlabel = args.replication_name + " replication"
+                xlabel = args.repl_name + " replication"
                 ylabel = args.disc_cell_types[0]
 
             plot_barplot(
@@ -109,16 +118,13 @@ def plot(df, title="", filename="heatmap"):
 
     plt.tight_layout()
     for extension in args.extensions:
-        fig.savefig(os.path.join(args.plotdir, "{}.{}".format(filename, extension)))
+        fig.savefig(os.path.join(plot_outdir, "{}.{}".format(filename, extension)))
     plt.close()
 
 
 def create_pivot_table(df, index_col, column_col, value_col, n_digits=2):
-    index = list(df[index_col].unique())
-    index.sort()
-
-    columns = list(df[column_col].unique())
-    columns.sort()
+    index = [folder + "_" + ct for folder in args.repl_folders for ct in args.repl_cell_types if folder + "_" + ct in df[index_col].unique()]
+    columns = [folder + "_" + ct for folder in args.disc_folders for ct in args.disc_cell_types if folder + "_" + ct in df[column_col].unique()]
 
     value_df = pd.DataFrame(np.nan, index=index, columns=columns)
     annot_df = pd.DataFrame("", index=index, columns=columns)
@@ -206,32 +212,38 @@ def plot_barplot(fig, ax, df, x="x", y="y", n="n", xlabel="", ylabel="", title="
                   fontweight='bold')
 
 df_list = []
-for discovery_ct in args.disc_cell_types:
-    for replication_ct in args.repl_cell_types:
-        fpath = os.path.join(args.workdir, args.discovery_name + "_" + discovery_ct + "_Disc_" + args.replication_name + "_" + replication_ct + "_Repl_ReplicationStats.txt.gz")
-        if not os.path.exists(fpath):
-            continue
+for disc_folder in args.disc_folders:
+    for disc_ct in args.disc_cell_types:
+        for repl_folder in args.repl_folders:
+            for repl_ct in args.repl_cell_types:
+                fpath = os.path.join(args.workdir, "replication_data", args.disc_name + disc_folder + "discovery_" + args.repl_name + repl_folder + "replication", args.disc_name + disc_folder  + "_" + disc_ct + "_Disc_" + args.repl_name + repl_folder + "_" + repl_ct + "_Repl_ReplicationStats.txt.gz")
+                if not os.path.exists(fpath):
+                    continue
 
-        df = pd.read_csv(fpath, sep="\t", header=0, index_col=None)
-        df["discovery_name"] = args.discovery_name
-        df["discovery_ct"] = discovery_ct
-        df["replication_name"] = args.replication_name
-        df["replication_ct"] = replication_ct
-        df_list.append(df)
+                df = pd.read_csv(fpath, sep="\t", header=0, index_col=None)
+                df["discovery_name"] = args.disc_name
+                df["discovery_folder"] = disc_folder
+                df["discovery_ct"] = disc_ct
+                df["discovery_id"] = disc_folder + "_" + disc_ct
+                df["replication_name"] = args.repl_name
+                df["replication_folder"] = repl_folder
+                df["replication_ct"] = repl_ct
+                df["replication_id"] = repl_folder + "_" + repl_ct
+                df_list.append(df)
 df = pd.concat(df_list, axis=0)
 print(df)
 
-filename = args.discovery_name + "_Disc_" + args.replication_name + "_Repl_ReplicationStats"
-df.to_csv(os.path.join(args.workdir, filename + ".txt.gz"), sep="\t", header=True, index=False)
+filename = args.disc_name + "_Disc_" + args.repl_name + "_Repl_ReplicationStats"
+df.to_csv(os.path.join(data_outdir, filename + ".txt.gz"), sep="\t", header=True, index=False)
 
 print("Replication stats:")
-replication_df = df.loc[df["Disc significant"] & ~df["Repl significant"], ["N", "discovery_ct", "replication_ct"]].merge(
-df.loc[df["Disc significant"] & df["Repl significant"], ["N", "discovery_ct", "replication_ct"]], on=["discovery_ct", "replication_ct"], suffixes=('_discovery', '_replicating')
+replication_df = df.loc[df["Disc significant"] & ~df["Repl significant"], ["N", "discovery_id", "replication_id"]].merge(
+df.loc[df["Disc significant"] & df["Repl significant"], ["N", "discovery_id", "replication_id"]], on=["discovery_id", "replication_id"], suffixes=('_discovery', '_replicating')
 )
 for _, row in replication_df.iterrows():
-    print("\t{} - {}:\t{:,} / {:,} ({:.0f}%)".format(row["discovery_ct"], row["replication_ct"], row["N_replicating"], row["N_discovery"], (100 / row["N_discovery"]) * row["N_replicating"]))
+    print("\t{} - {}:\t{:,} / {:,} ({:.0f}%)".format(row["discovery_id"], row["replication_id"], row["N_replicating"], row["N_discovery"], (100 / row["N_discovery"]) * row["N_replicating"]))
 print("")
 
 plot(df=df,
-     title="{} vs {}".format(args.discovery_name, args.replication_name),
+     title="{} vs {}".format(args.disc_name, args.repl_name),
      filename=filename)
