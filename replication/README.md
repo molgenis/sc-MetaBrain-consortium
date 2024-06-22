@@ -7,7 +7,6 @@ This code offers functionality to perform replication analyses between sets of e
 The main code ([replication.py](replication.py)) offers several implementations of common eQTL summary statistics. The following are implemented:
 
  * [LIMIX](https://github.com/sc-eQTLgen-consortium/limix_qtl): eQTL mapping software
- * LIMIX_REDUCED: adapted from LIMIX but only expecting the [minimal_postporcessing](https://github.com/sc-eQTLgen-consortium/limix_qtl/blob/master/Limix_QTL/post_processing/minimal_postprocess.py) output
  * [mbQTL](https://github.com/molgenis/systemsgenetics/tree/master/mbQTL): eQTL mapping software
  * [eQTLMappingPipeline](https://github.com/molgenis/systemsgenetics/tree/master/eqtl-mapping-pipeline): eQTL mapping software
  * [DeconQTL](https://github.com/molgenis/systemsgenetics/tree/master/Decon2/Decon-eQTL): interaction eQTL mapping software
@@ -188,6 +187,7 @@ Note that a [Dockerfile](Dockerfile) is available will all required software.
  * **--outdir**: The output directory. Default: current work directory.
  * **--force**: Whether to ignore previously loaded summary statistics. Default: False.
  * **--save**: Whether to store loaded summary statistics. Default: False.
+ * **--verbose**: Print additional log messages. Default: False.
 
  * **--qvalue_truncp**: The path to the qvalues script. Default: qvalue_truncp.R.
  * **--rb**: The path to the Rb script. Default: Rb.R.
