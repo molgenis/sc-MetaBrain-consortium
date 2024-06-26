@@ -116,7 +116,7 @@ The `self.columns` variable defines how the standard columns are named in your s
  * Option 5: data is a combination of option 2 and option 3 `[("A", "(a-zA-Z]+)_", None), ("B", None, None)]`
  * Option 6: data needs info from other file `[("A", {"A": "a"}, None)]`, prepare info as a translate dictionary
 
-### Required and outfilled columns
+### Required and autofilled columns
 
 Required columns are:
  * `gene_hgnc` or `gene_ensembl` depending on **--gene** setting.

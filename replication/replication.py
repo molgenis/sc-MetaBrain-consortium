@@ -1145,7 +1145,7 @@ class Dataset:
 
         # Default effects info.
         self.effects_header = None
-        self.effect_line = None
+        self.effects_line = None
 
         # Default sample size, assume equal for all effects.
         self.n = None
@@ -1197,14 +1197,14 @@ class Dataset:
         return self.path
 
     def update_all_filename(self, filename):
-        if self.all_filename is None:
+        if self.all_filename is None and filename != "":
             self.all_filename = filename
 
     def get_all_filename(self):
         return self.all_filename
 
     def update_top_filename(self, filename):
-        if self.top_filename is None:
+        if self.top_filename is None and filename != "":
             self.top_filename = filename
 
     def get_top_filename(self):
@@ -1245,7 +1245,7 @@ class Dataset:
         example_file = self.get_example_file()
         if example_file is None:
             return
-        self.effects_header, self.effect_line = self.get_file_header_and_first_line(example_file)
+        self.effects_header, self.effects_line = self.get_file_header_and_first_line(example_file)
 
     def get_cell_type(self):
         return self.cell_type
@@ -2354,13 +2354,13 @@ class LIMIX(Dataset):
         })
 
     def get_snp_rsid_column(self):
-        if re.match("rs[0-9]+$", self.effect_line["snp_id"]):
+        if re.match("rs[0-9]+$", self.effects_line["snp_id"]):
             return [("snp_id", "(rs[0-9]+)", None)]
         else:
             return [(None, None, None)]
 
     def get_alleles_column(self):
-        if re.match("(?:[0-9]{1,2}|X|Y|MT):[0-9]+:[A-Z]+:[A-Z]+", self.effect_line["snp_id"]):
+        if re.match("(?:[0-9]{1,2}|X|Y|MT):[0-9]+:[A-Z]+:[A-Z]+", self.effects_line["snp_id"]):
             return [("snp_id", "(?:[0-9]{1,2}|X|Y|MT):[0-9]+:([A-Z]+):[A-Z]+", "/"), ("snp_id", "(?:[0-9]{1,2}|X|Y|MT):[0-9]+:[A-Z]+:([A-Z]+)", None)]
         else:
             return [(None, None, None)]
@@ -2632,6 +2632,8 @@ class mbQTL(Dataset):
 
         # Set effects info.
         self.set_effects_info()
+        print(self.effects_header)
+        print(self.effects_line)
 
         # Columns that are in the original file.
         self.columns.update({
@@ -2656,6 +2658,9 @@ class mbQTL(Dataset):
         })
 
     def get_beta_column(self):
+        if self.effects_header is None:
+            return [(None, None, None)]
+        
         if "MetaBeta" in self.effects_header:
             return [("MetaBeta", None, None)]
         elif "MetaR" in self.effects_header:
@@ -2664,6 +2669,9 @@ class mbQTL(Dataset):
             return [(None, None, None)]
 
     def get_gene_ensembl_column(self):
+        if self.effects_line is None:
+            return [(None, None, None)]
+        
         if re.match("ENSG[0-9]+$", self.effects_line["Gene"]):
             return [("Gene", "(ENSG[0-9]+)", None)]
         elif re.match("(ENSG[0-9]+).[0-9]+", self.effects_line["Gene"]):
@@ -2672,6 +2680,9 @@ class mbQTL(Dataset):
             return [(None, None, None)]
 
     def get_snp_rsid_column(self):
+        if self.effects_line is None:
+            return [(None, None, None)]
+        
         if re.match("rs[0-9]+$", self.effects_line["SNP"]):
             return [("SNP", "(rs[0-9]+)", None)]
         elif re.match("(?:[0-9]{1,2}|X|Y|MT):[0-9]+:(rs[0-9]+):[A-Z]+_[A-Z]+", self.effects_line["SNP"]):
@@ -2680,6 +2691,9 @@ class mbQTL(Dataset):
             return [(None, None, None)]
 
     def get_fdr_column(self):
+        if self.effects_header is None:
+            return [(None, None, None)]
+        
         if "qval" in self.effects_header:
             return [("qval", None, None)]
         else:
