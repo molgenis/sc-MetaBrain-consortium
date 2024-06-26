@@ -1230,11 +1230,16 @@ class Dataset:
         # Function that grabs a file preferring the all effects file. I assume
         # that the format of both files is the same so it doesn't matter which one I take.
         if self.all_effects_path is not None:
-            return self.all_effects_path
-        if self.top_effects_path is not None:
-            return self.top_effects_path
+            fpath = self.all_effects_path
+        elif self.top_effects_path is not None:
+            fpath = self.top_effects_path
+        else:
+            return None
 
-        return None
+        _, tmp_fpath = self.replace_wildcards(fpath=fpath)
+        example_fpath, _, _ = self.get_existing_fpath(fpath=tmp_fpath)
+
+        return example_fpath
 
     def set_effects_info(self):
         # Extract the header and first line of an example file to automatically determine the format
@@ -1322,19 +1327,7 @@ class Dataset:
         if fpath is None:
             return None
 
-        wildcards = re.findall("<[A-Z]+>", fpath)
-        tmp_fpath = fpath
-        for wildcard in wildcards:
-            if wildcard == "<CT>":
-                # Cell type wildcards can simply be replaced.
-                tmp_fpath = fpath.replace("<CT>", self.cell_type)
-            elif wildcard == "<CHR>" or wildcard == "<BATCH>":
-                # These cannot be handled here but need to be iterated over.
-                continue
-            else:
-                # All other wildcards I simply replace with * to
-                # make the input more generic.
-                tmp_fpath = tmp_fpath.replace(wildcard, "*")
+        wildcards, tmp_fpath = self.replace_wildcards(fpath=fpath)
 
         # If CHR or BATCH is in the input file that means we have multiple files
         # that need to be combined to create the full 'all' or 'top' file.
@@ -1355,6 +1348,24 @@ class Dataset:
         # Applying to fix before returning the original file path to deal with
         # file that were expected to be gzipped or not.
         return (fpath + fix if not fix.startswith("-") else fpath.rstrip(fix.lstrip("-"))).replace("<CT>", self.cell_type)
+
+    def replace_wildcards(self, fpath):
+        wildcards = re.findall("<[A-Z]+>", fpath)
+        tmp_fpath = fpath
+        for wildcard in wildcards:
+            if wildcard == "<CT>":
+                # Cell type wildcards can simply be replaced.
+                tmp_fpath = fpath.replace("<CT>", self.cell_type)
+            elif wildcard == "<CHR>" or wildcard == "<BATCH>":
+                # These cannot be handled here but need to be iterated over.
+                continue
+            else:
+                # All other wildcards I simply replace with * to
+                # make the input more generic.
+                tmp_fpath = tmp_fpath.replace(wildcard, "*")
+
+        return wildcards, tmp_fpath
+
 
     def search_chr_batch_fpath(self, fpath):
         # Loop through the chromosomes and batches and return the first existing file.
@@ -2632,8 +2643,6 @@ class mbQTL(Dataset):
 
         # Set effects info.
         self.set_effects_info()
-        print(self.effects_header)
-        print(self.effects_line)
 
         # Columns that are in the original file.
         self.columns.update({
