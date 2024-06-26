@@ -14,11 +14,11 @@ The main code ([replication.py](replication.py)) offers several implementations 
 
 But also certain published summary statistics are supported:
  * eQTLgenPhase2: Unpublished
- * Bryois: [Bryois  et al. Nature Neuroscience 2022](https://doi.org/10.1038/s41593-022-01128-z)
- * Bryois_REDUCED: adapted from Bryois, personal use
+ * Bryois: [Bryois et al. Nature Neuroscience 2022](https://doi.org/10.1038/s41593-022-01128-z)
+ * Bryois_REDUCED: Bryois et al. bioRxiv 2021, personal use
  * Fujita: [Fujita et al. Nature Genetics 2024](https://doi.org/10.1038/s41588-024-01685-y)
 
-Each type of summary statistics has a class that loads the data in one of three ways: 1) all effects, 2) top variant per gene, and 3) specific gene - variant combinations. All these functions can be inherited from the default `Dataset` class and do not need to be re-implemented in most cases.
+Each type of summary statistics has a class that loads the data in one of three ways: 1) all effects, 2) top variant per gene, and 3) specific gene - variant combinations.
 
 The steps of the program are as follows:
 1. Load in the top effects from the discovery summary statistics
@@ -30,7 +30,7 @@ The steps of the program are as follows:
    * coef: Pearson correlation coefficient between eQTL effects
    * pi1: proportion of true positive within the replication data
    * Rb: correlation of effect sizes correcting for standard error of the effect sizes
-4. Visualise the replication
+5Visualise the replication
 
 ### Implementing custom summary statistics (no coding required)
 
@@ -39,9 +39,9 @@ New summary statistics can easily be added by following these steps:
 2. Fill in the top fields. Note that these are optional and can also be set using **--[discovery/replication]_all_filename** and **--[discovery/replication]_top_filename**.
    * **class_name**: the name of your custom class.
    * **n**: default sample size equal for all effects. Note: leave empty and use `columns - N` if your files have a sample size per effect.
-   * **all_effects_filename**: the default filename for the file containg all gene - variant combinations.
+   * **all_effects_filename**: the default filename for the file containing all gene - variant combinations.
    * **top_effects_filename**: same as **all_effects_filename** but then the file containing the top variant per gene.
-4. Fill in the columns info denoting which column in your **[all/top]_effects_filename** represents which type of information. Some examples on how to define this:
+4. Fill in the columns info denoting which column in your **[all/top]_effects_filename** represents which type of information. Some examples on how to define this are:
  * Option 0: data does not exist `[(null, null, null)]` or delete the line
  * Option 1: data is a full singular column `"A"` or `[("A", null, null)]`
  * Option 2: data is part of a singular column `[("A", "(a-zA-Z]+)_", null)]`, make sure that group 1 of the regex captures the info of interest
@@ -73,9 +73,13 @@ class METHOD(Dataset):
         super(METHOD, self).__init__(*args, **kwargs)
         self.class_name = "METHOD"
         
-        # File paths.
-        self.set_all_effects_path(filename="celltype-eqtl-sumstats." + self.cell_type + ".tsv")
-        self.set_top_effects_path(filename="celltype-eqtl-sumstats." + self.cell_type + ".tsv")
+         # Update filenames. Only applies if --[all/top]_filename is not set.
+        self.update_all_filename(filename="all_results.txt")
+        self.update_top_filename(filename="top_results.txt")
+
+        # Set file paths.
+        self.set_all_effects_path()
+        self.set_top_effects_path()
 
         # Columns that are in the original file.
         self.columns.update({
@@ -100,7 +104,8 @@ class METHOD(Dataset):
         })
 ```
 
-4. overwrite / add existing functions as necessary. 
+4. Overwrite functions inherited from the default `Dataset` class or add new function as necessary.
+
 
 The `self.columns` variable defines how the standard columns are named in your specific summary statistic dataset. Try to fill in as many of them as are available to you. The format should always be `[(column name, regex / dict, suffix)]`, some examples:
  * Option 0: data does not exist `[(None, None, None)]`
@@ -180,14 +185,14 @@ Note that a [Dockerfile](Dockerfile) is available will all required software.
  * **--replication_[method/path/all_filename/top_filename/name/cell_type/class_settings]**: same as discovery but then for the replication summary statistics
 
 ### Data extraction arguments:
- * **--gene**: Which gene format to select on. Options: hgnc, ensembl. Default: ensembl.
- * **--snp**: Which variant format to select on. Options: chr:pos, rsid. Default: chr:pos.
- * **--pvalue**: Which pvalue to use. Options: permuted, bonferroni, nominal. Default: permuted.
- * **--effect**: What to consider as the effect column. Options: beta, zscore. Default: zscore.
+ * **--gene**: Which gene format to select on. Options: hgnc, ensembl. Default: 'ensembl'.
+ * **--snp**: Which variant format to select on. Options: chr:pos, rsid. Default: 'chr:pos'.
+ * **--pvalue**: Which pvalue to use. Options: permuted, bonferroni, nominal. Default: 'permuted'.
+ * **--effect**: What to consider as the effect column. Options: beta, zscore. Default: 'zscore'.
  * **--allow_infer**: Allow for inferring summary stats information. Note that inferred info are approximations and not exact. Default: False.
 
 ### Overlap arguments:
- * **--rm_dupl**: How to deal with duplicates in the replication summary statistics. Options: none) throw error and exit, all) remove all duplicates, mismatches) removed duplicates for which the effect allele does not match. Default: none.
+ * **--rm_dupl**: How to deal with duplicates in the replication summary statistics. Options: **none**) throw error and exit, **all**) remove all duplicates, **mismatches**) removed duplicates for which the effect allele does not match. Default: 'none'.
  * **--alpha**: The significance threshold to use. Default: 0.05.
  * **--fdr_calc_method**: The multiple testing correction method to use. Default: 'qvalues'.
 
@@ -202,8 +207,8 @@ Note that a [Dockerfile](Dockerfile) is available will all required software.
  * **--force**: Whether to ignore previously loaded summary statistics. Default: False.
  * **--save**: Whether to store loaded summary statistics. Default: False.
  * **--verbose**: Print additional log messages. Default: False.
- * **--qvalue_truncp**: The path to the qvalues script. Default: qvalue_truncp.R.
- * **--rb**: The path to the Rb script. Default: Rb.R.
+ * **--qvalue_truncp**: The path to the qvalues script. Default: 'qvalue_truncp.R'.
+ * **--rb**: The path to the Rb script. Default: 'Rb.R'.
 
 ## Output
 
