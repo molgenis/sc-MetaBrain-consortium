@@ -2843,16 +2843,16 @@ class Bryois(Dataset):
         # Other variables.
         self.all_effects_columns = ["symbol_ensembl", "SNP", "dist_TSS", "pval", "beta"]
 
-        # These are the best estimates I can get. At least it is better than just assuming 192 for every cell type.
+        # Number of samples depends on the cell type.
         self.n = {
-            "Astrocytes": 192,
-            "Endothelial.cells": 154,
-            "Excitatory.neurons": 191,
-            "Inhibitory.neurons": 173,
-            "Microglia": 190,
+            "Astrocytes": 189,
+            "Endothelial.cells": 144,
+            "Excitatory.neurons": 187,
+            "Inhibitory.neurons": 178,
+            "Microglia": 187,
             "Oligodendrocytes": 192,
-            "OPCs...COPs": 188,
-            "Pericytes": 165
+            "OPCs...COPs": 187,
+            "Pericytes": 150
         }[self.cell_type]
 
         # Columns that are in the original file.
