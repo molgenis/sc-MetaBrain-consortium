@@ -1,0 +1,98 @@
+##############################################################################################################
+##### The following arguments need to be changed by the user to indicating file locations on your system #####
+##############################################################################################################
+inputs:
+  bind_path:
+  singularity_image:
+  repo_dir:
+  mbqtl_jar:
+  annotation:
+  vcf:
+  exp:
+  gte:
+
+  cov:
+  genelimit:
+  snpgenelimit:
+
+outputs:
+  output_dir:
+  output_prefix:
+
+settings:
+  n_pcs: null
+  n_genes: 200
+  use_snpannotation: False
+  perm: 10
+  ciswindow: 1000000
+  maf: 0.05
+  cr: 0.95
+  hwep: 0.0001
+  minobservations: 10
+  mingenotypecount: 2
+  replacemissinggenotypes: True
+  norank: True
+  fisherzmeta: True
+  outputall: True
+
+cluster_time: {0: "00:59:00", 1: "23:59:00", 2: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
+
+##############################################################################################################
+##### The following arguments are common parameters that may need to be changed depending on the dataset #####
+##############################################################################################################
+
+create_gene_annotation_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+create_gene_annotation_threads: 1 ### Number of threads to use
+create_gene_annotation_time: 0 ### The time setting to use
+
+create_snp_annotation_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+create_snp_annotation_threads: 1 ### Number of threads to use
+create_snp_annotation_time: 0 ### The time setting to use
+
+smf_to_gte_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+smf_to_gte_threads: 1 ### Number of threads to use
+smf_to_gte_time: 0 ### The time setting to use
+
+index_vcf_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+index_vcf_threads: 1 ### Number of threads to use
+index_vcf_time: 0 ### The time setting to use
+
+pca_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+pca_threads: 1 ### Number of threads to use
+pca_time: 0 ### The time setting to use
+
+concat_covs_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+concat_covs_threads: 1 ### Number of threads to use
+concat_covs_time: 0 ### The time setting to use
+
+regressor_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+regressor_threads: 1 ### Number of threads to use
+regressor_time: 0 ### The time setting to use
+
+create_batches_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+create_batches_threads: 1 ### Number of threads to use
+create_batches_time: 0 ### The time setting to use
+
+run_qtl_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
+run_qtl_threads: 2 ### Number of threads to use
+run_qtl_time: 1 ### The time setting to use
+
+merge_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+merge_threads: 1 ### Number of threads to use
+merge_time: 0 ### The time setting to use
+
+qvalues_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+qvalues_threads: 1 ### Number of threads to use
+qvalues_time: 0 ### The time setting to use
+
+
+############################################################################################################################################
+##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####
+############################################################################################################################################
+create_annotation_settings:
+  feature_name: "gene_name"
+  autosomes_only: True
+
+settings_extra:
+  java_memory_buffer: 1
+
