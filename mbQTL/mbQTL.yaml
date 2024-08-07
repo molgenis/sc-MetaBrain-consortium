@@ -91,7 +91,7 @@ create_batches_time: 0 ### The time setting to use
 
 run_qtl_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
 run_qtl_threads: 2 ### Number of threads to use
-run_qtl_time: 1 ### The time setting to use
+run_qtl_time: 0 ### The time setting to use
 
 merge_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 merge_threads: 1 ### Number of threads to use

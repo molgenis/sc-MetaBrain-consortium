@@ -6,12 +6,24 @@ Snakemake pipeline build around mbQTL.
 
 This implements preprocessing steps to create the correct input files as well as perform covariate and/or expression PCs correction. The mbQTL top effects files are automatically combined, multiple testing correction using [qvalue](https://github.com/StoreyLab/qvalue) is applied, and the number of eQTLs are counted.
 
+## Installing
+
+In order to run the pipeline you require snakemake. The pipeline was developed using snakemake version `5.26.1=0` as part of the [sc-eQTLgen WG1](https://github.com/sc-eQTLgen-consortium/WG1-pipeline-QC/tree/scMetaBrain) conda environment ([snakemake.yaml](https://github.com/sc-eQTLgen-consortium/WG1-pipeline-QC/blob/master/Demultiplexing/snakemake.yaml)). In order to install this you require [miniconda3](https://repo.anaconda.com/miniconda/) and subsequently run:
+```
+conda env create -f snakemake.yaml -n wg1_snakemake
+``` 
+Then, to activate the environment, run:
+
+```
+conda activate wg1_snakemake
+``` 
+
 ## Arguments
 
 See the [manual](https://github.com/molgenis/systemsgenetics/tree/master/mbQTL) of mbQTL for information on mbQTL arguments.
 
  * `bind_path`: directories that the singularity should have access to (comma seperated)
- * `singularity_image`: path to the singularity image containing the software: [Dockerfile](https://github.com/sc-eQTLgen-consortium/WG3-pipeline-QTL/blob/scMetaBrain/Dockerfile)
+ * `singularity_image`: path to the singularity image containing the software. I used the [sc-MetaBrain WG3](https://github.com/sc-eQTLgen-consortium/WG3-pipeline-QTL/tree/scMetaBrain) singularity file from this created from this [Dockerfile](https://github.com/sc-eQTLgen-consortium/WG3-pipeline-QTL/blob/scMetaBrain/Dockerfile).
  * `repo_dir`: path to the base directory where the scripts are stored (i.e. parent of `scripts`)
  * `mbqtl_jar`: mbQTL jar [download](https://jenkins.harmjanwestra.nl/job/systemsgenetics_hjw/lastStableBuild/nl.systemsgenetics$MbQTL/)
  * `annotation`: `genes.gtf` of your alignment reference. If the file does not end with `.gtf` it assumes it is a mbQTL annotation file.

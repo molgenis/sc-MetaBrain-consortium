@@ -49,6 +49,16 @@ if config["inputs"]["snpgenelimit"] != "" and not config["qtl_settings"]["perm"]
     logger.info("Warning, setting perm to 0 since snpgenelimit is used.")
     config["qtl_settings"]["perm"] = 0
 
+# Some friendly reminders.
+if config["general_settings"]["n_genes"] is None and config["run_qtl_time"] == 0:
+    logger.info("Warning, you are running all tests in one job file but the runtime for this "
+                "job is max {}. If you tink this is too short you should increase"
+                "run_qtl_time to 1 or higher.".format(config["cluster_time"][config["run_qtl_time"]]))
+if config["general_settings"]["n_genes"] is not None and config["run_qtl_time"] != 0:
+    logger.info("Warning, you are running tests in multiple job files but the runtime for each "
+                "job is max {}. If you tink this is too long you should decrease"
+                "run_qtl_time to e.g. 0.".format(config["cluster_time"][config["run_qtl_time"]]))
+
 # Define the expected input files.
 covariates = ["default"]
 if config["inputs"]["cov"] != "" and config["general_settings"]["n_pcs"] is None:
