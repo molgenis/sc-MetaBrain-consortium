@@ -74,6 +74,8 @@ data <- data[order(data[[opt$qvalue]]), cols]
 print("Saving data")
 write.table(data, paste0(opt$data_out, opt$suffix, ".txt"), quote = F, sep = "\t", col.names = NA)
 
+setwd(dirname(opt$plot_out))
+
 print("Creating figures")
 plot1 <- plot(qobj)
 ggsave(plot1, filename = paste0(opt$plot_out, "_overview.png"), width = 29.7, height = 21, units = c("cm"))

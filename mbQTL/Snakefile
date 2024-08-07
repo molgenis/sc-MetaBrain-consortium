@@ -556,6 +556,7 @@ rule qvalues:
         top_hits = get_top_hits
     output:
         top_hits = config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffectsWithqval.txt",
+        empty = temp(config["outputs"]["output_dir"] + "figures/{cov}/Rplots.pdf"),
         fig1 = config["outputs"]["output_dir"] + "figures/{cov}/" + config["outputs"]["output_prefix"] + "_overview.png",
         fig2 = config["outputs"]["output_dir"] + "figures/{cov}/" + config["outputs"]["output_prefix"] + "_hist.png"
     resources:
@@ -616,7 +617,7 @@ rule results:
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} python {params.script} \
-            --data {params.data} \
+            --data '{params.data}' \
             --nom_pvalue_column {params.nom_pvalue_column} \
             --perm_pvalue_column {params.perm_pvalue_column} \
             --qvalue_column {params.qvalue_column} \
