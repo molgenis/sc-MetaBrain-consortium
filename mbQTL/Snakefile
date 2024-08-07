@@ -70,7 +70,9 @@ wildcard_constraints:
 
 
 rule all:
-    input: config["outputs"]["output_dir"] + "output/" + config["outputs"]["output_prefix"] + "-results.txt"
+    input:
+        top_hits = expand(config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffectsWithqval.txt", cov=covariates),
+        results = config["outputs"]["output_dir"] + "output/" + config["outputs"]["output_prefix"] + "-results.txt"
 
 
 rule create_gene_annotation:
