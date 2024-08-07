@@ -40,6 +40,7 @@ snakemake \
   --cores 1 \
   --reason
 ```  
+Be aware that `run_qtl` chunks are determined on the fly; dry-run will not show how many chunks will run. If you are using `n_genes` and observe 1 `run_qtl`; this is normal.
 
 #### Run (local):
 This script runs the rules in your current session.
@@ -93,6 +94,10 @@ snakemake \
   --configfile mbQTL.yaml \
   --unlock
 ```  
+
+## Important
+
+Note that expression PCs calculation is only performed over the samples that overlap between the expression identifiers in `gte` and the columns in `exp`.
 
 ## Author  
 
