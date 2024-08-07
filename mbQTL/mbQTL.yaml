@@ -13,16 +13,20 @@ inputs:
 
   cov:
   genelimit:
+  snplimit:
   snpgenelimit:
 
 outputs:
   output_dir:
   output_prefix:
 
-settings:
+general_settings:
   n_pcs: null
   n_genes: 200
   use_snpannotation: False
+  filter_vcf: False
+
+qtl_settings:
   perm: 10
   ciswindow: 1000000
   maf: 0.05
@@ -57,9 +61,21 @@ index_vcf_memory: 4 ### Amount of gigs that will be used for memory and disk spa
 index_vcf_threads: 1 ### Number of threads to use
 index_vcf_time: 0 ### The time setting to use
 
+snpgenelimit_to_vars_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+snpgenelimit_to_vars_threads: 1 ### Number of threads to use
+snpgenelimit_to_vars_time: 0 ### The time setting to use
+
+filter_vcf_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+filter_vcf_threads: 1 ### Number of threads to use
+filter_vcf_time: 0 ### The time setting to use
+
 pca_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 pca_threads: 1 ### Number of threads to use
 pca_time: 0 ### The time setting to use
+
+filter_matrix_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+filter_matrix_threads: 1 ### Number of threads to use
+filter_matrix_time: 0 ### The time setting to use
 
 concat_covs_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 concat_covs_threads: 1 ### Number of threads to use
@@ -85,6 +101,9 @@ qvalues_memory: 4 ### Amount of gigs that will be used for memory and disk space
 qvalues_threads: 1 ### Number of threads to use
 qvalues_time: 0 ### The time setting to use
 
+results_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+results_threads: 1 ### Number of threads to use
+results_time: 0 ### The time setting to use
 
 ############################################################################################################################################
 ##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####
