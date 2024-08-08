@@ -126,9 +126,9 @@ Note that expression PCs calculation is only performed over the samples that ove
 
 Normal mbQTL output files are created. In addition:
  * a `-TopEffectsWithqval.txt` file with 2 columns added:
-   * `PvalueNominalThreshold`: nominal p-value thresholds based on the permutation beta distribution
-   * `qval`: based on the nominal p-values (`MetaP`) if no permutation are run (`perm: 0`) or the permutation p-values (`BetaDistAlpha`) if permutations are run (`perm: >0`)
- * a `-results.txt` file with the number of effects with nominal p-value (`MetaP`), permuted p-value (`PvalueNominalThreshold`) and qvalue (`qval`) below significance threshold (`0.05`) per QTL run (e.g. 0Pcs removed, 5Pcs removed, etc.).
+   * `PvalueNominalThreshold`: nominal p-value thresholds based on the permutation beta distribution (`BetaDistAlpha` and `BetaDistBeta`).
+   * `qval`: based on the nominal p-values (`MetaP`) if no permutation are run (`perm: 0`) or the permutation p-values (`BetaAdjustedMetaP`) if permutations are run (`perm: >0`).
+ * a `-results.txt` file with the number of effects with nominal p-value (`MetaP`), permuted p-value (`BetaAdjustedMetaP`) and qvalue (`qval`) below significance threshold (`<0.05`) per QTL run (e.g. 0Pcs removed, 5Pcs removed, etc.).
 
 ## Author  
 
