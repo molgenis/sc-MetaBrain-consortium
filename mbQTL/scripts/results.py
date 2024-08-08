@@ -55,7 +55,7 @@ del covs
 print("\nCounting number of eQTLs\n")
 
 fhout = gzopen(args.out, mode='w')
-colnames = ["Cov", "N", args.nom_pvalue_column, args.perm_pvalue_column, args.qvalue_column]
+colnames = ["Cov", "N-effects", args.nom_pvalue_column, args.perm_pvalue_column, args.qvalue_column]
 fhout.write("{}\t{}\t{}\t{}\t{}\n".format(*colnames))
 
 data = []
