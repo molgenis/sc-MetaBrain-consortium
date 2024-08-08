@@ -45,6 +45,8 @@ shhh(library(qvalue))
 
 print("Loading data")
 data <- as.data.frame(read_delim(opt$input, delim = "\t"))
+data <- data[order(data[[opt$pvalue]]), ]
+
 cols <- colnames(data)
 data <- data[!is.na(data[[opt$pvalue]]), ]
 print(paste0("  ", nrow(data), " genes loaded"))
@@ -72,7 +74,7 @@ if (!is.na(opt$beta_dist_a) & !is.na(opt$beta_dist_b)) {
 data <- data[order(data[[opt$qvalue]]), cols]
 
 print("Saving data")
-write.table(data, paste0(opt$data_out, opt$suffix, ".txt"), quote = F, sep = "\t", col.names = NA)
+write.table(data, paste0(opt$data_out, opt$suffix, ".txt"), quote = F, sep = "\t", row.names = FALSE)
 
 setwd(dirname(opt$plot_out))
 

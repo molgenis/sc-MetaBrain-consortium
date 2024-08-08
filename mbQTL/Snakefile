@@ -543,7 +543,7 @@ rule merge:
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/merge_mbqtl.py",
+        script = config["inputs"]["repo_dir"] + "scripts/merge.py",
         input_dir = config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"],
         out = config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-merged"
     log: config["outputs"]["output_dir"] + "log/merge.{cov}.log"
