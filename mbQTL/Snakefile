@@ -23,10 +23,6 @@ if config["inputs"]["snpgenelimit"] is not None and not os.path.exists(config["i
     logger.info("Error, the snpgenelimit file does not exist.\n\nExiting.")
     exit("MissingSNPGeneLimitFile")
 
-if config["general_settings"]["use_snpannotation"]:
-    logger.info("Error, use_snpannotation is not implemented yet.\n\nExiting.")
-    exit("InvalidArgument")
-
 # Replace non required variables that are None with empty strings.
 for input_variable in ["cov", "genelimit", "snplimit", "snpgenelimit"]:
     if config["inputs"][input_variable] is None:
@@ -39,6 +35,9 @@ if not config["outputs"]["output_dir"].endswith("/"):
     config["outputs"]["output_dir"] += "/"
 
 # Set outputall to True if you only test specific variants.
+if (config["inputs"]["snpgenelimit"] != "" or config["inputs"]["snplimit"] != "") and config["general_settings"]["use_snpannotation"]:
+    logger.info("Warning, setting use_snpannotation to False since snpgenelimit / snplimit is used.")
+    config["general_settings"]["use_snpannotation"] = False
 if config["inputs"]["snpgenelimit"] == "" and config["inputs"]["snplimit"] == "" and config["general_settings"]["filter_vcf"]:
     logger.info("Warning, setting filter_vcf to False since snpgenelimit / snplimit is not used.")
     config["general_settings"]["filter_vcf"] = False
@@ -412,6 +411,11 @@ def get_annotation(wildcards):
         return config["outputs"]["output_dir"] + "create_annotation/refdata-gex-GeneAnnotation.txt.gz"
     return config["inputs"]["annotation"]
 
+def get_snpannotation(wildcards):
+    if config["general_settings"]["use_snpannotation"]:
+        return config["outputs"]["output_dir"] + "create_annotation/snp_annotation.txt.gz"
+    return []
+
 
 def get_vcf(wildcards):
     if config["inputs"]["snpgenelimit"] != "" and config["general_settings"]["filter_vcf"]:
@@ -447,11 +451,10 @@ def get_snpgenelimit(wildcards):
     return ""
 
 
-# TODO: snpannotation wont be created because it is defined in the params section and not in the input section. However
-#   if I try to add it to the input snakemake does not allow it to be optional for some reason.
 rule run_qtl:
     input:
         annotation = get_annotation,
+        snpannotation = get_snpannotation,
         vcf = get_vcf,
         index = get_vcf_index,
         exp = get_exp,
@@ -472,7 +475,7 @@ rule run_qtl:
         sif = config["inputs"]["singularity_image"],
         jar = config["inputs"]["mbqtl_jar"],
         java_threads = config["run_qtl_threads"] * 2,
-        snpannotation = "--snpannotation " + config["outputs"]["output_dir"] + "create_annotation/snp_annotation.txt.gz" if config["general_settings"]["use_snpannotation"] else "",
+        snpannotation = lambda wildcards: "--snpannotation " + get_snpannotation(wildcards) if config["general_settings"]["use_snpannotation"] else "",
         perm = config["qtl_settings"]["perm"],
         genelimit = get_genelimit,
         snplimit = get_snplimit,
