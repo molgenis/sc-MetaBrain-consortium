@@ -122,6 +122,14 @@ snakemake \
 
 Note that expression PCs calculation is only performed over the samples that overlap between the expression identifiers in `gte` and the columns in `exp`.
 
+## Output
+
+Normal mbQTL output files are created. In addition:
+ * a `-TopEffectsWithqval.txt` file with 2 columns added:
+   * `PvalueNominalThreshold`: nominal p-value thresholds based on the permutation beta distribution
+   * `qval`: based on the nominal p-values (`MetaP`) if no permutation are run (`perm: 0`) or the permutation p-values (`BetaDistAlpha`) if permutations are run (`perm: >0`)
+ * a `-results.txt` file with the number of effects with nominal p-value (`MetaP`), permuted p-value (`PvalueNominalThreshold`) and qvalue (`qval`) below significance threshold (`0.05`) per QTL run (e.g. 0Pcs removed, 5Pcs removed, etc.).
+
 ## Author  
 
 Martijn Vochteloo (m.vochteloo@umcg.nl) *(1)*
