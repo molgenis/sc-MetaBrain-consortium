@@ -54,7 +54,7 @@ vcf_header_columns = {"#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "IN
 id_column = None
 for line in fhin:
     if (n_parsed > 0) and (n_parsed % 500000 == 0):
-        print("  Processed {:,} variants of which {:,} were kept for {:,} samples".format(n_parsed, n_written, len(indices)), end='\r', flush=True)
+        print("  Processed {:,} variants of which {:,} were kept with {:,} columns".format(n_parsed, n_written, len(indices)), end='\r', flush=True)
 
     if line.startswith("##"):
         fhout.write(line)
