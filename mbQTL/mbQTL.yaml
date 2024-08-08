@@ -27,17 +27,19 @@ general_settings:
   filter_vcf: False
 
 qtl_settings:
-  perm: 10
+  perm: 1000
   ciswindow: 1000000
-  maf: 0.05
+  maf: 0.01
   cr: 0.95
   hwep: 0.0001
   minobservations: 10
+  nrdatasets: 2
   mingenotypecount: 2
-  replacemissinggenotypes: True
-  norank: True
-  fisherzmeta: True
-  outputall: True
+  replacemissinggenotypes: False
+  norank: False
+  fisherzmeta: False
+  outputall: False
+  snplog: False
 
 cluster_time: {0: "00:59:00", 1: "23:59:00", 2: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
 

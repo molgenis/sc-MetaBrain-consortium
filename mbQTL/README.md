@@ -61,7 +61,7 @@ snakemake \
   --cores 1 \
   --reason
 ```  
-Be aware that `run_qtl` chunks are determined on the fly; dry-run will not show how many chunks will run. If you are using `n_genes` and observe 1 `run_qtl`; this is normal.
+Be aware that `run_qtl` chunks are determined on the fly when `n_genes` is used. As a result, the shown snakemake rules and job counts might not properly the rules that will be executed in reality.
 
 #### Run (local):
 This script runs the rules in your current session.
@@ -124,7 +124,7 @@ Note that expression PCs calculation is only performed over the samples that ove
 
 ## Output
 
-Normal mbQTL output files are created. In addition:
+Each eQTL run is outputted in a seperate folder: e.g. no covariate or PCs (`default`), cov (`cov`), 5 Pcs (`5Pcs`), or cov + 5 Pcs (`cov5Pcs`) all get their own folder in `output` containing the default mbQTL output files. In addition, the following extra files are created:
  * a `-TopEffectsWithqval.txt` file with 2 columns added:
    * `PvalueNominalThreshold`: nominal p-value thresholds based on the permutation beta distribution (`BetaDistAlpha` and `BetaDistBeta`).
    * `qval`: based on the nominal p-values (`MetaP`) if no permutation are run (`perm: 0`) or the permutation p-values (`BetaAdjustedMetaP`) if permutations are run (`perm: >0`).
