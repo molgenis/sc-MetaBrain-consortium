@@ -19,18 +19,25 @@ import pandas as pd
 import numpy as np
 from scipy import linalg
 
-# def calculate_pca(X):
-#     pca = PCA()
-#     projection = pca.fit_transform(X)
-#     return projection, pca.components_, pca.explained_variance_
 
-def calculate_pca(X):
-    n_samples, n_features = X.shape
+def prcomp(x, retx=True, center=True, scale=False):
+    """
+    https://www.rdocumentation.org/packages/stats/versions/3.6.2/topics/prcomp
+    """
+    n_samples, n_features = x.shape
 
-    # Center data
-    X -= np.mean(X, axis=0)
+    mean_ = False
+    if center:
+        mean_ = np.mean(x, axis=0)
+        x -= mean_
 
-    U, S, Vt = linalg.svd(X, full_matrices=False)
+    scale_ = False
+    if scale:
+        scale_ = np.sqrt(np.sum(x ** 2, axis=0) / max(1, (n_samples - 1)))
+        x /= scale_
+
+    # Perform singular value decomposition. FUll matrix is false since the it is not square.
+    U, S, Vt = linalg.svd(x, full_matrices=False)
 
     # flip eigenvectors' sign to enforce deterministic output
     # columns of u, rows of v
@@ -39,14 +46,16 @@ def calculate_pca(X):
     U *= signs
     Vt *= signs[:, np.newaxis]
 
-    # Get variance explained by singular values
-    explained_variance_ = (S ** 2) / (n_samples - 1)
-    total_var = explained_variance_.sum()
-    explained_variance_ratio_ = explained_variance_ / total_var
+    out = {
+        "sdev": S / np.sqrt(n_samples - 1),
+        "rotation": np.transpose(Vt),
+        "center": mean_,
+        "scale": scale_
+    }
+    if retx:
+        out["x"] = U * S
 
-    U *= S
-
-    return U, Vt, explained_variance_ratio_
+    return out
 
 print("Loading data...")
 df = pd.read_csv(args.data, sep="\t", header=0, index_col=0)
@@ -89,16 +98,12 @@ features_mask = np.std(m, axis=0) != 0
 m = m[:, features_mask]
 features = features[features_mask]
 
-if args.scale:
-    print("Scaling data...")
-    m = (m - np.mean(m, axis=0)) / np.std(m, axis=0)
-
 print("Calculating Principal Components...")
-x, rotation, expl_var = calculate_pca(X=m)
-index = ["PC{}_exp".format(i) for i in range(1, len(samples) + 1)]
-projection_df = pd.DataFrame(x, index=samples, columns=index).astype(float).T
-rotation_df = pd.DataFrame(rotation, index=index, columns=features)
-expl_var_df = pd.Series(expl_var, index=index, name="Explained Variance")
+pca = prcomp(x=m, scale=args.scale)
+pca_indices = ["PC{}_exp".format(i) for i in range(1, len(samples) + 1)]
+projection_df = pd.DataFrame(pca["x"], index=samples, columns=pca_indices).astype(float).T
+rotation_df = pd.DataFrame(pca["rotation"], columns=pca_indices)
+expl_var_df = pd.Series((pca["sdev"] ** 2) / np.sum(pca["sdev"] ** 2), index=pca_indices, name="Explained Variance")
 
 # print(projection_df)
 # print(rotation_df)
