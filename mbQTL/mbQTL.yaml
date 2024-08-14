@@ -21,6 +21,7 @@ outputs:
   output_prefix:
 
 general_settings:
+  include_modes: null ### options: "all", "default", "cov", "covXPcs", "XPcs"
   n_pcs: null
   n_genes: 200
   use_snpannotation: False

@@ -28,6 +28,14 @@ for input_variable in ["cov", "genelimit", "snplimit", "snpgenelimit"]:
     if config["inputs"][input_variable] is None:
         config["inputs"][input_variable] = ""
 
+# Reformat the selected number of PCs into a list and remove 0 Pcs.
+if config["general_settings"]["n_pcs"] is None:
+    config["general_settings"]["n_pcs"] = []
+if not isinstance(config["general_settings"]["n_pcs"], list):
+    config["general_settings"]["n_pcs"] = [config["general_settings"]["n_pcs"]]
+if 0 in config["general_settings"]["n_pcs"]:
+    config["general_settings"]["n_pcs"].remove(0)
+
 # Add trailing /.
 if not config["inputs"]["repo_dir"].endswith("/"):
     config["inputs"]["repo_dir"] += "/"
@@ -78,20 +86,62 @@ if config["inputs"]["snpgenelimit"] == "" and config["general_settings"]["n_gene
                 "job is max {}. If you tink this is too long you should decrease"
                 "run_qtl_time to e.g. 0.".format(config["cluster_time"][config["run_qtl_time"]]))
 
-# Define the expected input files.
-covariates = ["default"]
-if config["inputs"]["cov"] != "" and config["general_settings"]["n_pcs"] is None:
-    covariates = ["cov"]
-elif config["general_settings"]["n_pcs"] is not None:
-    prefix = ""
-    if config["inputs"]["cov"] != "":
-        prefix = "cov"
+# Automatically determine the mode of the input.
+input_mode = "default"
+if config["inputs"]["cov"] != "" and not config["general_settings"]["n_pcs"]:
+    input_mode = "cov"
+elif config["inputs"]["cov"] != "" and config["general_settings"]["n_pcs"]:
+    input_mode = "covXPcs"
+elif config["inputs"]["cov"] == "" and config["general_settings"]["n_pcs"]:
+    input_mode = "XPcs"
+logger.info("Your input is in mode: {}.".format(input_mode))
 
-    covariates = []
-    if not isinstance(config["general_settings"]["n_pcs"], list):
-        config["general_settings"]["n_pcs"] = [config["general_settings"]["n_pcs"]]
-    for n_pcs in config["general_settings"]["n_pcs"]:
-        covariates.append(prefix + str(n_pcs) + "Pcs")
+# Define the tests that the user wants to run.
+modes = ["all", "default", "cov", "covXPcs", "XPcs"]
+selected_modes = set()
+if config["general_settings"]["include_modes"] is None:
+    # No user input defaults to the input mode.
+    config["general_settings"]["include_modes"] = input_mode
+if not isinstance(config["general_settings"]["include_modes"], list):
+    # Force input into a list.
+    config["general_settings"]["include_modes"] = [config["general_settings"]["include_modes"]]
+for mode in config["general_settings"]["include_modes"]:
+    # Validate that each mode is known.
+    if mode not in modes:
+        logger.info("Error, unexpected mode '{}'.\n\nExiting.".format(mode))
+        exit()
+# Construct the selected modes.
+if "all" in config["general_settings"]["include_modes"]:
+    selected_modes = set(modes)
+else:
+    selected_modes = set(config["general_settings"]["include_modes"])
+logger.info("You selected input to execute the following modes: {}.".format(", ".join(selected_modes)))
+
+# Combine the output modes (henceforth named covariates).
+covariates = []
+if "default" in selected_modes:
+    covariates.append("default")
+if "cov" in selected_modes:
+    if config["inputs"]["cov"] == "":
+        logger.info("Warning, you requested to run mode 'cov' but the 'cov' input is empty. Skipping mode.")
+    else:
+        covariates.append("cov")
+if "XPcs" in selected_modes:
+    if not config["general_settings"]["n_pcs"]:
+        logger.info("Warning, you requested to run mode 'XPcs' but the 'n_pcs' input is empty. Skipping mode.")
+    else:
+        for n_pcs in config["general_settings"]["n_pcs"]:
+            covariates.append(str(n_pcs) + "Pcs")
+if "covXPcs" in selected_modes:
+    if config["inputs"]["cov"] == "":
+        logger.info("Warning, you requested to run mode 'covXPcs' but the 'cov' input is empty. Skipping mode.")
+    elif not config["general_settings"]["n_pcs"]:
+        logger.info("Warning, you requested to run mode 'covXPcs' but the 'n_pcs' input is empty. Skipping mode.")
+    else:
+        for n_pcs in config["general_settings"]["n_pcs"]:
+            covariates.append("cov" + str(n_pcs) + "Pcs")
+if len(covariates) > 0:
+    logger.info("Generating output for the following modes: {}.".format(", ".join(covariates)))
 
 
 wildcard_constraints:
@@ -104,10 +154,10 @@ def get_basename(fpath):
 
 rule all:
     input:
-        raw_pca = config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + ".Pcs.png",
-        corrected_pca = expand(config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.Pcs.png", cov=[cov for cov in covariates if cov != "default"]),
+        raw_pca = config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + ".done" if covariates else [],
+        corrected_pca = expand(config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", cov=[cov for cov in covariates if cov not in ["default", "0Pcs"]]),
         top_hits = expand(config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffectsWithqval.txt", cov=covariates),
-        results = config["outputs"]["output_dir"] + "output/" + config["outputs"]["output_prefix"] + "-results.txt"
+        results = config["outputs"]["output_dir"] + "output/" + config["outputs"]["output_prefix"] + "-results.txt" if covariates else []
 
 
 rule create_gene_annotation:
@@ -291,7 +341,9 @@ rule pca:
         pca = config["outputs"]["output_dir"] + "pca/{infile}.Pcs.txt.gz",
         rot = config["outputs"]["output_dir"] + "pca/{infile}.Pcs_rot.txt.gz",
         var = config["outputs"]["output_dir"] + "pca/{infile}.Pcs_var.txt.gz",
-        plot = config["outputs"]["output_dir"] + "pca/{infile}.Pcs.png",
+        pca_plot = config["outputs"]["output_dir"] + "pca/{infile}.Pcs.png",
+        scree_plot = config["outputs"]["output_dir"] + "pca/{infile}.Scree.png",
+        done = config["outputs"]["output_dir"] + "pca/{infile}.done",
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["pca_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["pca_memory"],
@@ -312,6 +364,7 @@ rule pca:
             --center \
             --scale \
             --out {params.out} > {log} 2>&1
+        singularity exec --bind {params.bind} {params.sif} touch {output.done}
         """
 
 
@@ -354,7 +407,7 @@ rule concat_covs:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/merge_covs.py",
-        out = lambda wildcards: config["outputs"]["output_dir"] + "cov/" + get_basename(config["inputs"]["exp"]) + "cov" + wildcards.n_pcs + "Pcs"
+        out = lambda wildcards: config["outputs"]["output_dir"] + "cov/" + get_basename(config["inputs"]["exp"]) + ".cov" + wildcards.n_pcs + "Pcs"
     log: config["outputs"]["output_dir"] + "log/concat_covs.cov{n_pcs}Pcs.log"
     shell:
         """

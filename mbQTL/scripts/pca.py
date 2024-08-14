@@ -64,6 +64,52 @@ def prcomp(x, retx=True, center=True, scale=False):
 
     return out
 
+def plot_scree(data, x, y1, y2, lines=None, xlabel='', ylabel1='', ylabel2='', title='', filename='PCA'):
+    plt.rcParams["figure.figsize"] = (12, 9)
+    fig, ax = plt.subplots()
+
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+
+    plt.scatter(data[x], data[y1], c="#000000", alpha=0.5, linewidths=0)
+    plt.plot(data[x], data[y1], c="#000000", alpha=0.5)
+
+    for (axis, value, color) in lines:
+        if axis == "x":
+            ax.axvline(value, ls='--', color=color, alpha=0.5, zorder=-1, linewidth=2)
+        elif axis == "y1":
+            ax.axhline(value, ls='--', color=color, alpha=0.5, zorder=-1, linewidth=2)
+
+    ax.set_title(title,
+                 fontsize=16,
+                 color="#000000",
+                 weight='bold')
+    ax.set_xlabel(xlabel,
+                  fontsize=12,
+                  color="#000000",
+                  weight='bold')
+    ax.set_ylabel(ylabel1,
+                  fontsize=12,
+                  color="#000000",
+                  weight='bold')
+
+    if y2 is not None:
+        ax2 = ax.twinx()
+        plt.scatter(data[x], data[y2], c="#000000", alpha=0.5, linewidths=0)
+        plt.plot(data[x], data[y2], c="#000000", alpha=0.5)
+
+        for (axis, value, color) in lines:
+            if axis == "y2":
+                ax2.axhline(value, ls='--', color=color, alpha=0.5, zorder=-1, linewidth=2)
+
+        ax2.set_ylabel(ylabel2,
+                       fontsize=12,
+                       color="#000000",
+                       weight='bold')
+
+    fig.tight_layout()
+    plt.savefig(args.out + filename + '.png', bbox_inches="tight")
+
 
 def plot_embedding(data, z=None, annot=None, title='', filename='PCA', label_n_points=5):
     if annot is None:
@@ -140,6 +186,10 @@ def plot_embedding(data, z=None, annot=None, title='', filename='PCA', label_n_p
 print("Loading data...")
 df = pd.read_csv(args.data, sep="\t", header=0, index_col=0)
 
+if df.isnull().values.any() or df.isin([np.inf, -np.inf]).values.any():
+    print("Error, input must not contain infs or NaNs")
+    exit()
+
 # Transform to numpy for speed.
 samples = df.index.to_numpy()
 features = df.columns.to_numpy()
@@ -196,6 +246,23 @@ rotation_df.to_csv(args.out + "Pcs_rot.txt.gz", sep="\t", header=True, index=Tru
 expl_var_df.to_csv(args.out + "Pcs_var.txt.gz", sep="\t", header=True, index=True, compression="gzip")
 
 print("Plotting embedding...")
+scree_df = expl_var_df.to_frame().rename(columns={"Explained Variance": "var"}).reset_index(drop=True).reset_index()
+scree_df["var"] = scree_df["var"] * 100
+scree_df["cumsum"] = scree_df["var"].cumsum()
+
+plot_scree(
+    data=scree_df,
+    x="index",
+    y1="var",
+    y2="cumsum",
+    xlabel="Component Number",
+    ylabel1="% of variance explained",
+    ylabel2="cummulative explained variance",
+    lines=[("y1", 0, "#000000"), ("y2", 100, "#000000")],
+    title='PCA Scree - {}{}Counts'.format('Centered ' if args.scale else '', 'Scaled ' if args.scale else ''),
+    filename="Scree"
+)
+
 expl_var = expl_var_df.to_dict()
 annot = {}
 for label in projection_df.index:
@@ -209,7 +276,7 @@ plot_embedding(
     data=projection_df,
     z='dataset',
     annot=annot,
-    title='PCA {}{}Counts'.format('Centered ' if args.scale else '', 'Scaled ' if args.scale else ''),
+    title='PCA - {}{}Counts'.format('Centered ' if args.scale else '', 'Scaled ' if args.scale else ''),
     filename="Pcs"
 )
 

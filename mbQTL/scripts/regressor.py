@@ -95,6 +95,8 @@ def calc_residuals(y, X):
 
 
 def regress_data(inpath, outpath, covariates, sample_mask):
+    # TODO: this casting to array and back is a bit slow and not even required if sample_mask is all True.
+
     fhin = gzopen(inpath, mode="r")
     fhout = gzopen(outpath, mode="w")
 
@@ -113,7 +115,7 @@ def regress_data(inpath, outpath, covariates, sample_mask):
             del values[args.index_col]
 
         if i == args.header:
-            fhout.write(line)
+            fhout.write(sep.join(["-"] + np.array(values, dtype=object)[sample_mask].tolist()) + "\n")
             continue
 
         adj_values = calc_residuals(y=np.array(values, dtype=np.float64)[sample_mask], X=covariates)

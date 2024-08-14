@@ -28,38 +28,11 @@ def gzopen(file, mode="r"):
     else:
         return open(file, mode)
 
-print("Creating covariate order")
-cov_order = []
-covs = []
+
+print("Counting number of eQTLs\n")
+data = []
 for fpath in glob.glob(args.data):
     cov = fpath.split(os.sep)[-2]
-    if cov == "default" or cov == "cov":
-        cov_order.append((fpath, cov, None))
-        continue
-
-    n_pcs = np.nan
-    if cov.endswith("Pcs"):
-        tmp_cov = cov
-        if cov.startswith("cov"):
-            tmp_cov = cov.lstrip("cov")
-        n_pcs = float(tmp_cov.rstrip("Pcs"))
-        del tmp_cov
-
-    covs.append((fpath, cov, n_pcs))
-if cov_order == ["cov", "default"]:
-    cov_order = ["default", "cov"]
-covs.sort(key=lambda x: (x[2], x[1]))
-cov_order.extend(covs)
-del covs
-
-print("\nCounting number of eQTLs\n")
-
-fhout = gzopen(args.out, mode='w')
-colnames = ["Cov", "N-effects", args.nom_pvalue_column, args.perm_pvalue_column, args.qvalue_column]
-fhout.write("{}\t{}\t{}\t{}\t{}\n".format(*colnames))
-
-data = []
-for fpath, cov, _ in cov_order:
     n = 0
     n_nom = 0
     n_perm = 0
@@ -87,12 +60,13 @@ for fpath, cov, _ in cov_order:
             n += 1
     f.close()
 
-    row = [cov, n, n_nom, n_perm, n_qval]
-    data.append(row)
-    fhout.write("{}\t{}\t{}\t{}\t{}\n".format(*row))
+    data.append([cov, n, n_nom, n_perm, n_qval])
 
-fhout.close()
+colnames = ["Cov", "N-effects", args.nom_pvalue_column, args.perm_pvalue_column, args.qvalue_column]
+df = pd.DataFrame(data, columns=colnames).sort_values(by=[args.qvalue_column, "N-effects", "Cov"], ascending=[False, True, True])
+print(df)
 
-print(pd.DataFrame(data, columns=colnames))
+print("Writing output")
+df.to_csv(args.out, sep="\t", header=True, index=False)
 
 print("\nEND")
