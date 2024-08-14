@@ -342,9 +342,9 @@ rule filter_matrix:
 rule concat_covs:
     input:
         cov = config["inputs"]["cov"],
-        pca = config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + "{n_pcs}.Pcs.txt.gz"
+        pca = config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + ".{n_pcs}Pcs.txt.gz"
     output:
-        cov = config["outputs"]["output_dir"] + "cov/" + get_basename(config["inputs"]["exp"]) + "cov{n_pcs}.Pcs.txt.gz"
+        cov = config["outputs"]["output_dir"] + "cov/" + get_basename(config["inputs"]["exp"]) + ".cov{n_pcs}Pcs.txt.gz"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["concat_covs_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["concat_covs_memory"],
