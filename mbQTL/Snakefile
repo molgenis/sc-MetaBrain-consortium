@@ -98,8 +98,14 @@ wildcard_constraints:
     n_pcs = "[0-9]+"
 
 
+def get_basename(fpath):
+    return os.path.basename(fpath).rstrip(".gz").rstrip(".txt").rstrip(".tsv").rstrip(".csv").rstrip(".vcf")
+
+
 rule all:
     input:
+        raw_pca = config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + ".Pcs.png",
+        corrected_pca = expand(config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.Pcs.png", cov=[cov for cov in covariates if cov != "default"]),
         top_hits = expand(config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffectsWithqval.txt", cov=covariates),
         results = config["outputs"]["output_dir"] + "output/" + config["outputs"]["output_prefix"] + "-results.txt"
 
@@ -229,10 +235,6 @@ def get_variants(wildcards):
         exit()
 
 
-def get_basename(fpath):
-    return os.path.basename(fpath).rstrip(".gz").rstrip(".txt").rstrip(".tsv").rstrip(".csv").rstrip(".vcf")
-
-
 rule filter_vcf:
     input:
         vcf = config["inputs"]["vcf"],
@@ -275,14 +277,21 @@ rule filter_vcf:
         """
 
 
+def get_pca_expression(wildcards):
+    if wildcards.infile == get_basename(config["inputs"]["exp"]):
+        return config["inputs"]["exp"]
+    return config["outputs"]["output_dir"] + "regressor/" + wildcards.infile + ".txt.gz"
+
+
 rule pca:
     input:
-        data = config["inputs"]["exp"],
+        data = get_pca_expression,
         gte = get_gte
     output:
-        pca = config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + "Pcs.txt.gz",
-        rot = config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + "Pcs_rot.txt.gz",
-        var = config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + "Pcs_var.txt.gz"
+        pca = config["outputs"]["output_dir"] + "pca/{infile}.Pcs.txt.gz",
+        rot = config["outputs"]["output_dir"] + "pca/{infile}.Pcs_rot.txt.gz",
+        var = config["outputs"]["output_dir"] + "pca/{infile}.Pcs_var.txt.gz",
+        plot = config["outputs"]["output_dir"] + "pca/{infile}.Pcs.png",
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["pca_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["pca_memory"],
@@ -292,14 +301,15 @@ rule pca:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/pca.py",
-        out = config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"])
-    log: config["outputs"]["output_dir"] + "log/pca.log"
+        out = config["outputs"]["output_dir"] + "pca/{infile}."
+    log: config["outputs"]["output_dir"] + "log/pca.{infile}.log"
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --data {input.data} \
             --gte {input.gte} \
             --transpose \
+            --center \
             --scale \
             --out {params.out} > {log} 2>&1
         """
@@ -307,9 +317,9 @@ rule pca:
 
 rule filter_matrix:
     input:
-        data = config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + "Pcs.txt.gz"
+        data = config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + ".Pcs.txt.gz"
     output:
-        out = config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + "{n_pcs}Pcs.txt.gz"
+        out = config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + ".{n_pcs}Pcs.txt.gz"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["filter_matrix_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["filter_matrix_memory"],
@@ -332,9 +342,9 @@ rule filter_matrix:
 rule concat_covs:
     input:
         cov = config["inputs"]["cov"],
-        pca = config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + "{n_pcs}Pcs.txt.gz"
+        pca = config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + "{n_pcs}.Pcs.txt.gz"
     output:
-        cov = config["outputs"]["output_dir"] + "cov/" + get_basename(config["inputs"]["exp"]) + "cov{n_pcs}Pcs.txt.gz"
+        cov = config["outputs"]["output_dir"] + "cov/" + get_basename(config["inputs"]["exp"]) + "cov{n_pcs}.Pcs.txt.gz"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["concat_covs_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["concat_covs_memory"],
@@ -358,8 +368,8 @@ def get_cov(wildcards):
     if wildcards.cov == "cov" or wildcards.cov == "cov0Pcs":
         return config["inputs"]["cov"]
     elif not wildcards.cov.startswith("cov") and wildcards.cov.endswith("Pcs"):
-        return config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + "{cov}.txt.gz"
-    return config["outputs"]["output_dir"] + "cov/" + get_basename(config["inputs"]["exp"]) + "{cov}.txt.gz"
+        return config["outputs"]["output_dir"] + "pca/" + get_basename(config["inputs"]["exp"]) + ".{cov}.txt.gz"
+    return config["outputs"]["output_dir"] + "cov/" + get_basename(config["inputs"]["exp"]) + ".{cov}.txt.gz"
 
 
 

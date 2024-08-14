@@ -21,7 +21,6 @@ print("")
 from statsmodels.regression.linear_model import OLS
 import numpy as np
 import gzip
-import pandas as pd
 
 sep = "\t"
 
@@ -225,7 +224,6 @@ if cov_rownames != data_colnames:
 # Adding the intercept as the first row.
 cov_m = np.hstack([np.ones((cov_m.shape[0], 1)), cov_m])
 cov_colnames = ["intercept"] + cov_colnames
-print(cov_m.shape)
 
 # Define the output file.
 out_fpath = args.out + ".CovariatesRemovedOLS.txt" + (".gz" if args.data.endswith(".gz") else "")

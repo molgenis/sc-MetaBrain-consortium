@@ -6,7 +6,9 @@ parser = argparse.ArgumentParser(description="")
 parser.add_argument("--data", required=True, type=str, help="")
 parser.add_argument("--transpose", action="store_true", default=False, help="")
 parser.add_argument("--gte", required=False, type=str, default=None, help="")
+parser.add_argument("--center", action="store_true", default=False, help="")
 parser.add_argument("--scale", action="store_true", default=False, help="")
+parser.add_argument("--plot_n", required=False, type=int, default=3, help="")
 parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
 
@@ -18,7 +20,12 @@ print("")
 import pandas as pd
 import numpy as np
 from scipy import linalg
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 
+COLORMAP = ["#000000", "#E69F00",  "#56B4E9",  "#CC79A7",
+            "#F0E442",  "#0072B2",  "#D55E00",  "#009E73",
+            "#E8E8E8",  "#D3D3D3",  "#A9A9A9", "#808080"]
 
 def prcomp(x, retx=True, center=True, scale=False):
     """
@@ -57,6 +64,79 @@ def prcomp(x, retx=True, center=True, scale=False):
 
     return out
 
+
+def plot_embedding(data, z=None, annot=None, title='', filename='PCA', label_n_points=5):
+    if annot is None:
+        annot = {}
+
+    columns = [column for column in data.columns if column != z]
+    ncolumns = len(columns)
+
+    c = None
+    cmap = None
+    if z is not None:
+        values = data[z].unique()
+        if len(values) <= len(COLORMAP):
+            cmap = dict(zip(values, COLORMAP[:len(values)]))
+            c = data[z].map(cmap)
+
+    plt.rcParams["figure.figsize"] = (4 * ncolumns, 4 * ncolumns)
+    fig, axs = plt.subplots(nrows=ncolumns, ncols=ncolumns, sharex='col', sharey='row')
+
+    for i, column1 in enumerate(columns):
+        for j, column2 in enumerate(columns):
+            ax = axs[i, j]
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+
+            if i == j:
+                ax.set_axis_off()
+                ax.annotate(
+                    annot[column1] if column1 in annot else column1,
+                    xy=(0.5, 0.5),
+                    xycoords=ax.transAxes,
+                    color="#000000",
+                    fontsize=16,
+                    ha = 'center',
+                    fontweight='bold')
+                continue
+            elif i == 0 and j == len(columns) - 1:
+                ax.set_axis_off()
+                handles = []
+                for key, color in cmap.items():
+                    handles.append(mpatches.Patch(color=color, label="{} [n={:,}]".format(key, sum(data[z] == key))))
+                ax.legend(handles=handles, loc="center")
+            elif j > i:
+                ax.set_axis_off()
+                continue
+            else:
+                ax.scatter(data[column2], data[column1], c=c, alpha=0.5, linewidths=0)
+                ax.axvline(0, ls='--', color="#000000", alpha=0.5, zorder=-1, linewidth=2)
+                ax.axhline(0, ls='--', color="#000000", alpha=0.5, zorder=-1, linewidth=2)
+
+                data["OrigenDistance"] = data[column1].abs() + data[column2].abs()
+                data.sort_values(by="OrigenDistance", ascending=False, inplace=True)
+                for index, point in data.head(label_n_points).iterrows():
+                    color = "#b22222"
+                    if cmap is not None and cmap[point[z]] == "#D55E00":
+                        color = "#00000"
+
+                    ax.annotate(
+                        str(index),
+                        xy=(point[column2], point[column1]),
+                        color=color,
+                        fontsize=8,
+                        ha='center',
+                        va='bottom',
+                        fontweight='bold')
+
+    fig.suptitle(title,
+                 fontsize=16,
+                 color="#000000",
+                 weight='bold')
+    fig.tight_layout()
+    plt.savefig(args.out + filename + '.png', bbox_inches="tight")
+
 print("Loading data...")
 df = pd.read_csv(args.data, sep="\t", header=0, index_col=0)
 
@@ -74,6 +154,7 @@ if args.transpose:
     features = tmp_samples
     del tmp_samples
 
+gte_df = None
 if args.gte is not None:
     print("Filtering data...")
     gte_df = pd.read_csv(args.gte, sep="\t", header=None, index_col=None)
@@ -99,7 +180,7 @@ m = m[:, features_mask]
 features = features[features_mask]
 
 print("Calculating Principal Components...")
-pca = prcomp(x=m, scale=args.scale)
+pca = prcomp(x=m, center=args.center, scale=args.scale)
 pca_indices = ["PC{}_exp".format(i) for i in range(1, len(samples) + 1)]
 projection_df = pd.DataFrame(pca["x"], index=samples, columns=pca_indices).astype(float).T
 rotation_df = pd.DataFrame(pca["rotation"], columns=pca_indices)
@@ -113,5 +194,23 @@ print("Saving results...")
 projection_df.to_csv(args.out + "Pcs.txt.gz", sep="\t", header=True, index=True, compression="gzip")
 rotation_df.to_csv(args.out + "Pcs_rot.txt.gz", sep="\t", header=True, index=True, compression="gzip")
 expl_var_df.to_csv(args.out + "Pcs_var.txt.gz", sep="\t", header=True, index=True, compression="gzip")
+
+print("Plotting embedding...")
+expl_var = expl_var_df.to_dict()
+annot = {}
+for label in projection_df.index:
+    annot[label] = "{}\n{:.2f}%".format(label, expl_var[label] * 100)
+
+projection_df = projection_df.iloc[:args.plot_n, :].T
+if gte_df is not None:
+    projection_df = projection_df.merge(gte_df[[1, 2]].rename(columns={1: "sample", 2: "dataset"}), left_index=True, right_on="sample", how="left").set_index("sample")
+
+plot_embedding(
+    data=projection_df,
+    z='dataset',
+    annot=annot,
+    title='PCA {}{}Counts'.format('Centered ' if args.scale else '', 'Scaled ' if args.scale else ''),
+    filename="Pcs"
+)
 
 print("Done")
