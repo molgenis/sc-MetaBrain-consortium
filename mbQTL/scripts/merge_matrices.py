@@ -19,7 +19,11 @@ print("Loading data...")
 covs_list = []
 for cov_fpath in args.data:
     covs_list.append(pd.read_csv(cov_fpath, sep="\t", header=0, index_col=0))
-df = pd.concat(covs_list, axis=args.axis).dropna(axis=1, how="any")
+
+if len(covs_list) == 1:
+    df = covs_list[0]
+else:
+    df = pd.concat(covs_list, axis=args.axis).dropna(axis=1, how="any")
 
 print("Saving results...")
 df.to_csv(args.out + ".txt.gz", sep="\t", header=True, index=True, compression="gzip")

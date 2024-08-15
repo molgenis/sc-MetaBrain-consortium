@@ -29,6 +29,7 @@ general_settings:
   filter_vcf: False
 
 qtl_settings:
+  force_mega: True
   perm: 1000
   ciswindow: 1000000
   maf: 0.01

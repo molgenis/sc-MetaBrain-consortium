@@ -282,7 +282,7 @@ def get_dataset_gte(wildcards):
         return get_qtl_gte(wildcards)
 
     logger.debug("\treturn output of checkpoint 'split_gte'")
-    return config["outputs"]["output_dir"] + "gte/gte_" + wildcards.dataset + ".txt"
+    return config["outputs"]["output_dir"] + "gte/split/gte_" + wildcards.dataset + ".txt"
 
 
 def get_pca_expr(wildcards):
@@ -539,7 +539,7 @@ checkpoint split_gte:
     input:
         gte = get_qtl_gte,
     output:
-        datasets = directory(config["outputs"]["output_dir"] + "gte/")
+        datasets = directory(config["outputs"]["output_dir"] + "gte/split/")
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["split_gte_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["split_gte_memory"],
@@ -549,7 +549,7 @@ checkpoint split_gte:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/split_gte.py",
-        out = config["outputs"]["output_dir"] + "gte/"
+        out = config["outputs"]["output_dir"] + "gte/split/"
     log: config["outputs"]["output_dir"] + "log/split_gte.log"
     shell:
         """
@@ -795,7 +795,7 @@ rule merge_exps:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/merge_matrices.py",
-        out = lambda wildcards: config["outputs"]["output_dir"] + "regressor/all/" + get_basename(config["inputs"]["exp"]) + "." + wildcards.cov + ".CovariatesRemovedOLS"
+        out = lambda wildcards: config["outputs"]["output_dir"] + "regressor/" + get_basename(config["inputs"]["exp"]) + "." + wildcards.cov + ".CovariatesRemovedOLS"
     log: config["outputs"]["output_dir"] + "log/merge_exps.{cov}.log"
     shell:
         """
