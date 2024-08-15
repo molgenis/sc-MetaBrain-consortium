@@ -21,6 +21,7 @@ outputs:
   output_prefix:
 
 general_settings:
+  plot_pca: False
   include_modes: null ### options: "all", "default", "cov", "covXPcs", "XPcs"
   n_pcs: null
   n_genes: 200
@@ -117,4 +118,5 @@ create_annotation_settings:
 
 settings_extra:
   java_memory_buffer: 1
+  debug: False
 

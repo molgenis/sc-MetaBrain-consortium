@@ -32,11 +32,13 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * `cov`: covariate file. This is a tab-separated file the value for each covariate per sample. The first column contains the covariate names. The rest of the columns are the sample names. Non-numerical covariates are automatically one-hot encoded where the most abundant category is excluded. Expression PCs can be automatically added as covariates by using `n_pcs`.
 
 **Pipeline specific settings**:
+ * `plot_pca`: whether or not to PCA visualise the expression matrix
  * `include_modes`: which modes to run (options: `all`, `default`, `cov`, `covXPcs`, `XPcs`). For more info, see modes.
  * `n_pcs`: how many PCs should be removed from the expression matrix (e.g. `[0, 5, 10]`). If `cov` is also used these PCs are added to those covariates.
  * `n_genes`: how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk.
  * `use_snpannotation`: whether or not the `snpannotation` option should be used. Default `False`. Automatically set to `False` if `snplimit` or `snpgenelimit` is used since it is faster without `snpannotation` then.
  * `filter_vcf`: whether or not the input VCF should be filtered on variants / samples of interest before running QTL analysis. This adds some pre-processing time but can add substantial speed improvements in the QTL analysis. Only available if `snplimit` or `snpgenelimit` is used. Note that it also filters on the samples in the `gte` file. Default `False`.
+ * `debug`: set logger to level DEBUG printing additional information. 
 
 **mbQTL standard inputs**:
  * `annotation`: `genes.gtf` of your alignment reference. If the file does not end with `.gtf` it assumes it is a mbQTL annotation file.
@@ -132,12 +134,12 @@ You can choose to run different combinations of modes at the same time but using
 
 ## Important
 
-Note that expression PCs calculation is only performed over the samples that overlap between the expression identifiers in `gte` and the columns in `exp`.
+Note that expression PCs calculation is per dataset over the samples that overlap between the expression identifiers in `gte` and the columns in `exp`.
 
 ## Output
 
 Each eQTL run is outputted in a seperate folder: e.g. no covariate or PCs (`default`), cov (`cov`), 5 Pcs (`5Pcs`), or cov + 5 Pcs (`cov5Pcs`) all get their own folder in `output` containing the default mbQTL output files. In addition, the following extra files are created:
- * a `*.Pcs.png` and `*.Scree.png` figure containing visualisations of the expression matrix PCA. If covariates are corrected a plot after correction is created as well.
+ * if `plot_pca` is True, a `*.Pcs.png` and `*.Scree.png` figure containing visualisations of the expression matrix PCA. If covariates are corrected a plot after correction is created as well.
  * a `-TopEffectsWithqval.txt` file with 2 columns added:
    * `PvalueNominalThreshold`: nominal p-value thresholds based on the permutation beta distribution (`BetaDistAlpha` and `BetaDistBeta`).
    * `qval`: based on the nominal p-values (`MetaP`) if no permutation are run (`perm: 0`) or the permutation p-values (`BetaAdjustedMetaP`) if permutations are run (`perm: >0`).

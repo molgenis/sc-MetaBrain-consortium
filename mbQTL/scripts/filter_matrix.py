@@ -4,8 +4,8 @@ import argparse
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--data", required=True, type=str, help="")
-parser.add_argument("--indices", required=False, type=int, default=None, help="")
-parser.add_argument("--columns", required=False, type=int, default=None, help="")
+parser.add_argument("--indices", required=False, type=str, default=None, help="")
+parser.add_argument("--columns", required=False, type=str, default=None, help="")
 parser.add_argument("--head", required=False, type=int, default=None, help="")
 parser.add_argument("--tail", required=False, type=int, default=None, help="")
 parser.add_argument("--outfile", required=True, type=str, help="")

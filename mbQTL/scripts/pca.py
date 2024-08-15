@@ -148,10 +148,11 @@ def plot_embedding(data, z=None, annot=None, title='', filename='PCA', label_n_p
                 continue
             elif i == 0 and j == len(columns) - 1:
                 ax.set_axis_off()
-                handles = []
-                for key, color in cmap.items():
-                    handles.append(mpatches.Patch(color=color, label="{} [n={:,}]".format(key, sum(data[z] == key))))
-                ax.legend(handles=handles, loc="center")
+                if cmap is not None:
+                    handles = []
+                    for key, color in cmap.items():
+                        handles.append(mpatches.Patch(color=color, label="{} [n={:,}]".format(key, sum(data[z] == key))))
+                    ax.legend(handles=handles, loc="center")
             elif j > i:
                 ax.set_axis_off()
                 continue
@@ -186,8 +187,8 @@ def plot_embedding(data, z=None, annot=None, title='', filename='PCA', label_n_p
 print("Loading data...")
 df = pd.read_csv(args.data, sep="\t", header=0, index_col=0)
 
-if df.isnull().values.any() or df.isin([np.inf, -np.inf]).values.any():
-    print("Error, input must not contain infs or NaNs")
+if df.shape[0] == 0 or df.isnull().values.any() or df.isin([np.inf, -np.inf]).values.any():
+    print("Error, input must not be empty or contain infs / NaNs")
     exit()
 
 # Transform to numpy for speed.
@@ -269,12 +270,14 @@ for label in projection_df.index:
     annot[label] = "{}\n{:.2f}%".format(label, expl_var[label] * 100)
 
 projection_df = projection_df.iloc[:args.plot_n, :].T
+z = None
 if gte_df is not None:
     projection_df = projection_df.merge(gte_df[[1, 2]].rename(columns={1: "sample", 2: "dataset"}), left_index=True, right_on="sample", how="left").set_index("sample")
+    z = "dataset"
 
 plot_embedding(
     data=projection_df,
-    z='dataset',
+    z=z,
     annot=annot,
     title='PCA - {}{}Counts'.format('Centered ' if args.scale else '', 'Scaled ' if args.scale else ''),
     filename="Pcs"
