@@ -7,30 +7,67 @@ if config["settings_extra"]["debug"]:
 
 # Validate input.
 if sum([x is not None for x in [config["inputs"]["genelimit"], config["inputs"]["snplimit"], config["inputs"]["snpgenelimit"]]]) > 1:
-    logger.critical("Critical, selected multiple limitation files. Use genelimit, snplimit, snpgenelimit or none.\n\nExiting.")
+    logger.error("Critical, selected multiple limitation files. Use genelimit, snplimit, snpgenelimit or none.\n\nExiting.")
     exit("InvalidInput")
 if config["general_settings"]["n_genes"] is not None and config["general_settings"]["n_genes"] <= 0:
-    logger.critical("Critical, n_genes needs to be larger than zero.\n\nExiting.")
+    logger.error("Critical, n_genes needs to be larger than zero.\n\nExiting.")
     exit("InvalidInput")
 
-# Check the input that snakemake cannot check.
-if config["inputs"]["repo_dir"] is None:
-    logger.critical("Critical, the repo_dir does not exist.\n\nExiting.")
+# Check required input arguments.
+if config["inputs"]["singularity_image"] is None or not os.path.exists(config["inputs"]["singularity_image"]):
+    logger.error("Critical, singularity_image does not exist.\n\nExiting.")
+    exit("MissingsingularityImage")
+if config["inputs"]["repo_dir"] is None or not os.path.exists(config["inputs"]["repo_dir"]):
+    logger.error("Critical, repo_dir does not exist.\n\nExiting.")
     exit("MissingRepoDir")
+if config["inputs"]["mbqtl_jar"] is None or not os.path.exists(config["inputs"]["mbqtl_jar"]):
+    logger.error("Critical, mbqtl_jar does not exist.\n\nExiting.")
+    exit("MissingsingmbQTLJar")
+if config["inputs"]["annotation"] is None or not os.path.exists(config["inputs"]["annotation"]):
+    logger.error("Critical, annotation does not exist.\n\nExiting.")
+    exit("MissingsingAnnotation")
+if config["inputs"]["vcf"] is None or not os.path.exists(config["inputs"]["vcf"]):
+    logger.error("Critical, vcf does not exist.\n\nExiting.")
+    exit("MissingsingVCF")
+if config["inputs"]["exp"] is None or not os.path.exists(config["inputs"]["exp"]):
+    logger.error("Critical, exp does not exist.\n\nExiting.")
+    exit("MissingsingExp")
+if config["inputs"]["gte"] is None or not os.path.exists(config["inputs"]["gte"]):
+    logger.error("Critical, gte does not exist.\n\nExiting.")
+    exit("MissingsingGTE")
 if config["outputs"]["output_dir"] is None:
-    logger.critical("Critical, the output_dir does not exist.\n\nExiting.")
+    logger.error("Critical, the output_dir cannot be empty.\n\nExiting.")
     exit("MissingOutputDir")
+
+# Check optional input arguments.
+if config["inputs"]["cov"] is not None and not os.path.exists(config["inputs"]["cov"]):
+    logger.error("Critical, cov does not exist.\n\nExiting.")
+    exit("InvalidCov")
 if config["inputs"]["genelimit"] is not None and not os.path.exists(config["inputs"]["genelimit"]):
-    logger.critical("Critical, the genelimit file does not exist.\n\nExiting.")
+    logger.error("Critical, genelimit does not exist.\n\nExiting.")
+    exit("InvalidGeneLimit")
+if config["inputs"]["snplimit"] is not None and not os.path.exists(config["inputs"]["snplimit"]):
+    logger.error("Critical, snplimit does not exist.\n\nExiting.")
+    exit("InvalidSNPLimit")
+if config["inputs"]["snpgenelimit"] is not None and not os.path.exists(config["inputs"]["snpgenelimit"]):
+    logger.error("Critical, snpgenelimit does not exist.\n\nExiting.")
+    exit("InvalidSNPGeneLimit")
+
+if config["inputs"]["genelimit"] is not None and not os.path.exists(config["inputs"]["genelimit"]):
+    logger.error("Critical, the genelimit file does not exist.\n\nExiting.")
     exit("MissingGeneLimitFile")
 if config["inputs"]["snpgenelimit"] is not None and not os.path.exists(config["inputs"]["snpgenelimit"]):
-    logger.critical("Critical, the snpgenelimit file does not exist.\n\nExiting.")
+    logger.error("Critical, the snpgenelimit file does not exist.\n\nExiting.")
     exit("MissingSNPGeneLimitFile")
 
 # Replace non required variables that are None with empty strings.
 for input_variable in ["cov", "genelimit", "snplimit", "snpgenelimit"]:
     if config["inputs"][input_variable] is None:
         config["inputs"][input_variable] = ""
+
+# Set the default output prefix.
+if config["outputs"]["output_prefix"] is None:
+    config["outputs"]["output_prefix"] = "mbQTL"
 
 # Reformat the selected number of PCs into a list and remove 0 Pcs.
 if config["general_settings"]["n_pcs"] is None:
@@ -47,27 +84,30 @@ if not config["outputs"]["output_dir"].endswith("/"):
     config["outputs"]["output_dir"] += "/"
 
 # Check setting combinations that do not make sense and update accordingly.
-if (config["inputs"]["snpgenelimit"] != "" or config["inputs"]["snplimit"] != "") and config["general_settings"]["use_snpannotation"]:
-    logger.warning("Warning, setting use_snpannotation to False since snpgenelimit / snplimit is used.")
-    config["general_settings"]["use_snpannotation"] = False
-if config["inputs"]["snpgenelimit"] == "" and config["inputs"]["snplimit"] == "" and config["general_settings"]["filter_vcf"]:
-    logger.warning("Warning, setting filter_vcf to False since snpgenelimit / snplimit is not used.")
-    config["general_settings"]["filter_vcf"] = False
-if config["inputs"]["snpgenelimit"] != "" and not config["qtl_settings"]["outputall"]:
-    logger.warning("Warning, setting outputall to True since snpgenelimit is used.")
-    config["qtl_settings"]["outputall"] = True
-if config["inputs"]["snpgenelimit"] != "" and not config["qtl_settings"]["perm"] == 0:
-    logger.warning("Warning, setting perm to 0 since snpgenelimit is used.")
-    config["qtl_settings"]["perm"] = 0
+if config["settings_extra"]["force"]:
+    logger.warning("Warning, unlogical input arguments will not be automatically updated. Use with caution!")
+else:
+    if (config["inputs"]["snpgenelimit"] != "" or config["inputs"]["snplimit"] != "") and config["general_settings"]["use_snpannotation"]:
+        logger.warning("Warning, setting use_snpannotation to False since snpgenelimit / snplimit is used.")
+        config["general_settings"]["use_snpannotation"] = False
+    if config["inputs"]["snpgenelimit"] == "" and config["inputs"]["snplimit"] == "" and config["general_settings"]["filter_vcf"]:
+        logger.warning("Warning, setting filter_vcf to False since snpgenelimit / snplimit is not used.")
+        config["general_settings"]["filter_vcf"] = False
+    if config["inputs"]["snpgenelimit"] != "" and not config["qtl_settings"]["outputall"]:
+        logger.warning("Warning, setting outputall to True since snpgenelimit is used.")
+        config["qtl_settings"]["outputall"] = True
+    if config["inputs"]["snpgenelimit"] != "" and not config["qtl_settings"]["perm"] == 0:
+        logger.warning("Warning, setting perm to 0 since snpgenelimit is used.")
+        config["qtl_settings"]["perm"] = 0
 
 # Check setting combinations that are not allowed.
 if config["qtl_settings"]["nrdatasets"] > 1 and config["inputs"]["gte"].endswith(".smf"):
-    logger.critical("Critical, setting the minimum number of datasets required in "
+    logger.error("Critical, setting the minimum number of datasets required in "
                     "meta-analysis (nrdatasets) > 1 will result in no results "
                     "since your input GTE has no dataset column.")
     exit()
 if config["qtl_settings"]["replacemissinggenotypes"] and config["qtl_settings"]["perm"] == 0:
-    logger.critical("Critical, replacemissinggenotypes is True while perm is 0. This setting should "
+    logger.error("Critical, replacemissinggenotypes is True while perm is 0. This setting should "
                     "only be True when both genotypes and expression data have missing "
                     "values and perm > 0.\n\nExiting.")
     exit()
@@ -112,7 +152,7 @@ if not isinstance(config["general_settings"]["include_modes"], list):
 for mode in config["general_settings"]["include_modes"]:
     # Validate that each mode is known.
     if mode not in modes:
-        logger.critical("Critical, unexpected mode '{}'.\n\nExiting.".format(mode))
+        logger.error("Critical, unexpected mode '{}'.\n\nExiting.".format(mode))
         exit()
 # Construct the selected modes.
 if "all" in config["general_settings"]["include_modes"]:
@@ -217,7 +257,7 @@ def get_variants(wildcards):
         logger.debug("\treturn input 'snplimit'")
         return config["inputs"]["snplimit"]
     else:
-        logger.critical("Error in get_variants")
+        logger.error("Error in get_variants")
         exit()
 
     return None
@@ -772,8 +812,8 @@ rule run_qtl:
     output:
         log = config["outputs"]["output_dir"] + "output/{cov}/{batch}-log.txt.gz",
         top = config["outputs"]["output_dir"] + "output/{cov}/{batch}-TopEffects.txt",
-        all = config["outputs"]["output_dir"] + "output/{cov}/{batch}-AllEffects.txt.gz" if config["qtl_settings"]["outputall"] else [],
-        snplog = config["outputs"]["output_dir"] + "output/{cov}/{batch}-snpqclog.txt.gz" if config["qtl_settings"]["snplog"] else[],
+        # all = config["outputs"]["output_dir"] + "output/{cov}/{batch}-AllEffects.txt.gz" if config["qtl_settings"]["outputall"] else [],
+        # snplog = config["outputs"]["output_dir"] + "output/{cov}/{batch}-snpqclog.txt.gz" if config["qtl_settings"]["snplog"] else [],
         finished = config["outputs"]["output_dir"] + "output/{cov}/{batch}-TopEffects.finished"
     resources:
         java_mem_gb = lambda wildcards, attempt: attempt * config["run_qtl_memory"] * config["run_qtl_threads"] - config["settings_extra"]["java_memory_buffer"],

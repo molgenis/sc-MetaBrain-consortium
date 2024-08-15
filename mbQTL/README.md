@@ -32,12 +32,13 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * `cov`: covariate file. This is a tab-separated file the value for each covariate per sample. The first column contains the covariate names. The rest of the columns are the sample names. Non-numerical covariates are automatically one-hot encoded where the most abundant category is excluded. Expression PCs can be automatically added as covariates by using `n_pcs`.
 
 **Pipeline specific settings**:
- * `plot_pca`: whether or not to PCA visualise the expression matrix
+ * `plot_pca`: whether or not to PCA visualise the expression matrix.
  * `include_modes`: which modes to run (options: `all`, `default`, `cov`, `covXPcs`, `XPcs`). For more info, see modes.
  * `n_pcs`: how many PCs should be removed from the expression matrix (e.g. `[0, 5, 10]`). If `cov` is also used these PCs are added to those covariates.
  * `n_genes`: how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk.
  * `use_snpannotation`: whether or not the `snpannotation` option should be used. Default `False`. Automatically set to `False` if `snplimit` or `snpgenelimit` is used since it is faster without `snpannotation` then.
  * `filter_vcf`: whether or not the input VCF should be filtered on variants / samples of interest before running QTL analysis. This adds some pre-processing time but can add substantial speed improvements in the QTL analysis. Only available if `snplimit` or `snpgenelimit` is used. Note that it also filters on the samples in the `gte` file. Default `False`.
+ * `force`: prevent snakemake from updating input settings that are unlogical. Use with caution.
  * `debug`: set logger to level DEBUG printing additional information. 
 
 **mbQTL standard inputs**:
@@ -53,6 +54,8 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * The `--perm` mbQTL argument is automatically set to `0` if `snpgenelimit` is used.
 
 ## Usage  
+
+Before running the pipeline it is adviced to perform a `dryrun` to check if all input and settings are valid. Be sure to check the top of the output as import warnings and info are printed.
 
 #### Visualise pipeline:
 This script that will generate a dag.svg file that shows the rules that will be executed and in what order.
