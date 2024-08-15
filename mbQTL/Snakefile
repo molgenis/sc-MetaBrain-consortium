@@ -99,6 +99,9 @@ else:
     if config["inputs"]["snpgenelimit"] != "" and not config["qtl_settings"]["perm"] == 0:
         logger.warning("Warning, setting perm to 0 since snpgenelimit is used.")
         config["qtl_settings"]["perm"] = 0
+    if config["qtl_settings"]["force_mega"] and config["qtl_settings"]["nrdatasets"] > 1:
+        logger.warning("Warning, setting nrdatasets to 1 since force_mega is True.")
+        config["qtl_settings"]["nrdatasets"] = 1
 
 # Check setting combinations that are not allowed.
 if config["qtl_settings"]["nrdatasets"] > 1 and config["inputs"]["gte"].endswith(".smf"):
@@ -119,15 +122,15 @@ if config["qtl_settings"]["nrdatasets"] > 1:
                   "if your input GTE only contains one dataset.")
 if config["inputs"]["snpgenelimit"] != "" and config["run_qtl_time"] != 0:
     logger.warning("Warning, you are only testing a select number of effects but the runtime for each "
-                   "job is max {}. If you tink this is too long you should decrease"
+                   "job is max {}. If you tink this is too long you should decrease "
                    "run_qtl_time to e.g. 0.".format(config["cluster_time"][config["run_qtl_time"]]))
 if config["inputs"]["snpgenelimit"] == "" and config["general_settings"]["n_genes"] is None and config["run_qtl_time"] == 0:
     logger.warning("Warning, you are running all tests in one job file but the runtime for this "
-                   "job is max {}. If you tink this is too short you should increase"
+                   "job is max {}. If you tink this is too short you should increase "
                    "run_qtl_time to 1 or higher.".format(config["cluster_time"][config["run_qtl_time"]]))
 if config["inputs"]["snpgenelimit"] == "" and config["general_settings"]["n_genes"] is not None and config["run_qtl_time"] != 0:
     logger.warning("Warning, you are running tests in multiple job files but the runtime for each "
-                   "job is max {}. If you tink this is too long you should decrease"
+                   "job is max {}. If you tink this is too long you should decrease "
                    "run_qtl_time to e.g. 0.".format(config["cluster_time"][config["run_qtl_time"]]))
 
 # Automatically determine the mode of the input.
@@ -243,10 +246,20 @@ def get_gte(wildcards):
     logger.debug("get_gte(" + print_wildcards(wildcards) + ")")
     if config["inputs"]["gte"].endswith(".smf"):
         logger.debug("\treturn output of rule 'smf_to_gte'")
-        return config["outputs"]["output_dir"] + "smf_to_gte/gte.txt"
+        return config["outputs"]["output_dir"] + "gte/gte.txt"
 
     logger.debug("\treturn input 'gte'")
     return config["inputs"]["gte"]
+
+
+def get_qtl_gte(wildcards):
+    logger.debug("get_qtl_gte(" + print_wildcards(wildcards) + ")")
+    if config["qtl_settings"]["force_mega"]:
+        logger.debug("\treturn output of rule 'remove_gte_dataset'")
+        return config["outputs"]["output_dir"] + "gte/gte_noDataset.txt"
+
+    logger.debug("\tcalling 'get_gte' function")
+    return get_gte(wildcards)
 
 def get_variants(wildcards):
     logger.debug("get_variants(" + print_wildcards(wildcards) + ")")
@@ -265,11 +278,11 @@ def get_variants(wildcards):
 def get_dataset_gte(wildcards):
     logger.debug("get_dataset_gte(" + print_wildcards(wildcards) + ")")
     if wildcards.dataset in ["raw", "merged", "all"]:
-        logger.debug("\tcalling 'get_gte' function")
-        return get_gte(wildcards)
+        logger.debug("\tcalling 'get_qtl_gte' function")
+        return get_qtl_gte(wildcards)
 
     logger.debug("\treturn output of checkpoint 'split_gte'")
-    return config["outputs"]["output_dir"] + "split_gte/gte_" + wildcards.dataset + ".txt"
+    return config["outputs"]["output_dir"] + "gte/gte_" + wildcards.dataset + ".txt"
 
 
 def get_pca_expr(wildcards):
@@ -485,7 +498,7 @@ rule smf_to_gte:
     input:
         smf = config["inputs"]["gte"],
     output:
-        gte = config["outputs"]["output_dir"] + "smf_to_gte/gte.txt"
+        gte = config["outputs"]["output_dir"] + "gte/gte.txt"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["smf_to_gte_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["smf_to_gte_memory"],
@@ -501,11 +514,32 @@ rule smf_to_gte:
         """
 
 
-checkpoint split_gte:
+rule remove_gte_dataset:
     input:
-        gte = get_gte,
+        gte = get_gte
     output:
-        datasets = directory(config["outputs"]["output_dir"] + "split_gte/")
+        gte = config["outputs"]["output_dir"] + "gte/gte_noDataset.txt"
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["remove_gte_dataset_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["remove_gte_dataset_memory"],
+        time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["remove_gte_dataset_time"]]
+    threads: config["remove_gte_dataset_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+    log: config["outputs"]["output_dir"] + "log/remove_gte_dataset.log"
+    shell:
+        """
+        singularity exec --bind {params.bind} {params.sif} awk 'BEGIN{{ FS = OFS = "\\t" }} {{ print $1, $2, "Dataset" }}' {input.gte} > {output.gte}
+        """
+
+
+checkpoint split_gte:
+    priority: 50
+    input:
+        gte = get_qtl_gte,
+    output:
+        datasets = directory(config["outputs"]["output_dir"] + "gte/")
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["split_gte_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["split_gte_memory"],
@@ -515,7 +549,7 @@ checkpoint split_gte:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/split_gte.py",
-        out = config["outputs"]["output_dir"] + "split_gte/"
+        out = config["outputs"]["output_dir"] + "gte/"
     log: config["outputs"]["output_dir"] + "log/split_gte.log"
     shell:
         """
@@ -571,7 +605,7 @@ rule filter_vcf:
     input:
         vcf = config["inputs"]["vcf"],
         sgl = config["inputs"]["snpgenelimit"],
-        gte = get_gte,
+        gte = get_qtl_gte,
         vars = get_variants
     output:
         samples = temp(config["outputs"]["output_dir"] + "genotype/samples.txt"),
@@ -775,6 +809,7 @@ rule merge_exps:
 # TODO: perhaps better to use the genelimit / snpgenelimit file here if it is given so the jobs are more
 #   equally distributed.
 checkpoint create_batches:
+    priority: 50
     input:
         exp = get_exp
     output:
@@ -808,12 +843,12 @@ rule run_qtl:
         vcf = get_vcf,
         index = get_vcf_index,
         exp = get_exp,
-        gte = get_gte
+        gte = get_qtl_gte
     output:
         log = config["outputs"]["output_dir"] + "output/{cov}/{batch}-log.txt.gz",
         top = config["outputs"]["output_dir"] + "output/{cov}/{batch}-TopEffects.txt",
-        # all = config["outputs"]["output_dir"] + "output/{cov}/{batch}-AllEffects.txt.gz" if config["qtl_settings"]["outputall"] else [],
-        # snplog = config["outputs"]["output_dir"] + "output/{cov}/{batch}-snpqclog.txt.gz" if config["qtl_settings"]["snplog"] else [],
+        all = config["outputs"]["output_dir"] + "output/{cov}/{batch}-AllEffects.txt.gz" if config["qtl_settings"]["outputall"] else temp(config["outputs"]["output_dir"] + "output/{cov}/{batch}-AllEffects.txt.gz"),
+        snplog = config["outputs"]["output_dir"] + "output/{cov}/{batch}-snpqclog.txt.gz" if config["qtl_settings"]["snplog"] else temp(config["outputs"]["output_dir"] + "output/{cov}/{batch}-snpqclog.txt.gz"),
         finished = config["outputs"]["output_dir"] + "output/{cov}/{batch}-TopEffects.finished"
     resources:
         java_mem_gb = lambda wildcards, attempt: attempt * config["run_qtl_memory"] * config["run_qtl_threads"] - config["settings_extra"]["java_memory_buffer"],
@@ -879,6 +914,9 @@ rule run_qtl:
            echo "Error, no results in {output.top}"
            rm {output.top}
         fi
+        
+        singularity exec --bind {params.bind} {params.sif} touch {output.all}
+        singularity exec --bind {params.bind} {params.sif} touch {output.snplog}
         """
 
 

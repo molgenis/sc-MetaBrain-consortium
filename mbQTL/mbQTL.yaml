@@ -61,6 +61,10 @@ smf_to_gte_memory: 4 ### Amount of gigs that will be used for memory and disk sp
 smf_to_gte_threads: 1 ### Number of threads to use
 smf_to_gte_time: 0 ### The time setting to use
 
+remove_gte_dataset_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+remove_gte_dataset_threads: 1 ### Number of threads to use
+remove_gte_dataset_time: 0 ### The time setting to use
+
 index_vcf_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 index_vcf_threads: 1 ### Number of threads to use
 index_vcf_time: 0 ### The time setting to use
