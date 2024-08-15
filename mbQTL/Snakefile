@@ -7,24 +7,24 @@ if config["settings_extra"]["debug"]:
 
 # Validate input.
 if sum([x is not None for x in [config["inputs"]["genelimit"], config["inputs"]["snplimit"], config["inputs"]["snpgenelimit"]]]) > 1:
-    logger.info("Error, selected multiple limitation files. Use genelimit, snplimit, snpgenelimit or none.\n\nExiting.")
+    logger.critical("Critical, selected multiple limitation files. Use genelimit, snplimit, snpgenelimit or none.\n\nExiting.")
     exit("InvalidInput")
 if config["general_settings"]["n_genes"] is not None and config["general_settings"]["n_genes"] <= 0:
-    logger.info("Error, n_genes needs to be larger than zero.\n\nExiting.")
+    logger.critical("Critical, n_genes needs to be larger than zero.\n\nExiting.")
     exit("InvalidInput")
 
 # Check the input that snakemake cannot check.
 if config["inputs"]["repo_dir"] is None:
-    logger.info("Error, the repo_dir does not exist.\n\nExiting.")
+    logger.critical("Critical, the repo_dir does not exist.\n\nExiting.")
     exit("MissingRepoDir")
 if config["outputs"]["output_dir"] is None:
-    logger.info("Error, the output_dir does not exist.\n\nExiting.")
+    logger.critical("Critical, the output_dir does not exist.\n\nExiting.")
     exit("MissingOutputDir")
 if config["inputs"]["genelimit"] is not None and not os.path.exists(config["inputs"]["genelimit"]):
-    logger.info("Error, the genelimit file does not exist.\n\nExiting.")
+    logger.critical("Critical, the genelimit file does not exist.\n\nExiting.")
     exit("MissingGeneLimitFile")
 if config["inputs"]["snpgenelimit"] is not None and not os.path.exists(config["inputs"]["snpgenelimit"]):
-    logger.info("Error, the snpgenelimit file does not exist.\n\nExiting.")
+    logger.critical("Critical, the snpgenelimit file does not exist.\n\nExiting.")
     exit("MissingSNPGeneLimitFile")
 
 # Replace non required variables that are None with empty strings.
@@ -48,47 +48,47 @@ if not config["outputs"]["output_dir"].endswith("/"):
 
 # Check setting combinations that do not make sense and update accordingly.
 if (config["inputs"]["snpgenelimit"] != "" or config["inputs"]["snplimit"] != "") and config["general_settings"]["use_snpannotation"]:
-    logger.info("Warning, setting use_snpannotation to False since snpgenelimit / snplimit is used.")
+    logger.warning("Warning, setting use_snpannotation to False since snpgenelimit / snplimit is used.")
     config["general_settings"]["use_snpannotation"] = False
 if config["inputs"]["snpgenelimit"] == "" and config["inputs"]["snplimit"] == "" and config["general_settings"]["filter_vcf"]:
-    logger.info("Warning, setting filter_vcf to False since snpgenelimit / snplimit is not used.")
+    logger.warning("Warning, setting filter_vcf to False since snpgenelimit / snplimit is not used.")
     config["general_settings"]["filter_vcf"] = False
 if config["inputs"]["snpgenelimit"] != "" and not config["qtl_settings"]["outputall"]:
-    logger.info("Warning, setting outputall to True since snpgenelimit is used.")
+    logger.warning("Warning, setting outputall to True since snpgenelimit is used.")
     config["qtl_settings"]["outputall"] = True
 if config["inputs"]["snpgenelimit"] != "" and not config["qtl_settings"]["perm"] == 0:
-    logger.info("Warning, setting perm to 0 since snpgenelimit is used.")
+    logger.warning("Warning, setting perm to 0 since snpgenelimit is used.")
     config["qtl_settings"]["perm"] = 0
 
 # Check setting combinations that are not allowed.
 if config["qtl_settings"]["nrdatasets"] > 1 and config["inputs"]["gte"].endswith(".smf"):
-    logger.info("Error, setting the minimum number of datasets required in "
-                "meta-analysis (nrdatasets) > 1 will result in no results "
-                "since your input GTE has no dataset column.")
+    logger.critical("Critical, setting the minimum number of datasets required in "
+                    "meta-analysis (nrdatasets) > 1 will result in no results "
+                    "since your input GTE has no dataset column.")
     exit()
 if config["qtl_settings"]["replacemissinggenotypes"] and config["qtl_settings"]["perm"] == 0:
-    logger.info("Error, replacemissinggenotypes is True while perm is 0. This setting should "
-                "only be True when both genotypes and expression data have missing "
-                "values and perm > 0.\n\nExiting.")
+    logger.critical("Critical, replacemissinggenotypes is True while perm is 0. This setting should "
+                    "only be True when both genotypes and expression data have missing "
+                    "values and perm > 0.\n\nExiting.")
     exit()
 
 # Some friendly reminders.
 if config["qtl_settings"]["nrdatasets"] > 1:
-    logger.info("Warning, setting the minimum number of datasets required in "
-                "meta-analysis (nrdatasets) > 1 will result in no results "
-                "if your input GTE only contains one dataset.")
+    logger.error("Error, setting the minimum number of datasets required in "
+                  "meta-analysis (nrdatasets) > 1 will result in no results "
+                  "if your input GTE only contains one dataset.")
 if config["inputs"]["snpgenelimit"] != "" and config["run_qtl_time"] != 0:
-    logger.info("Warning, you are only testing a select number of effects but the runtime for each "
-                "job is max {}. If you tink this is too long you should decrease"
-                "run_qtl_time to e.g. 0.".format(config["cluster_time"][config["run_qtl_time"]]))
+    logger.warning("Warning, you are only testing a select number of effects but the runtime for each "
+                   "job is max {}. If you tink this is too long you should decrease"
+                   "run_qtl_time to e.g. 0.".format(config["cluster_time"][config["run_qtl_time"]]))
 if config["inputs"]["snpgenelimit"] == "" and config["general_settings"]["n_genes"] is None and config["run_qtl_time"] == 0:
-    logger.info("Warning, you are running all tests in one job file but the runtime for this "
-                "job is max {}. If you tink this is too short you should increase"
-                "run_qtl_time to 1 or higher.".format(config["cluster_time"][config["run_qtl_time"]]))
+    logger.warning("Warning, you are running all tests in one job file but the runtime for this "
+                   "job is max {}. If you tink this is too short you should increase"
+                   "run_qtl_time to 1 or higher.".format(config["cluster_time"][config["run_qtl_time"]]))
 if config["inputs"]["snpgenelimit"] == "" and config["general_settings"]["n_genes"] is not None and config["run_qtl_time"] != 0:
-    logger.info("Warning, you are running tests in multiple job files but the runtime for each "
-                "job is max {}. If you tink this is too long you should decrease"
-                "run_qtl_time to e.g. 0.".format(config["cluster_time"][config["run_qtl_time"]]))
+    logger.warning("Warning, you are running tests in multiple job files but the runtime for each "
+                   "job is max {}. If you tink this is too long you should decrease"
+                   "run_qtl_time to e.g. 0.".format(config["cluster_time"][config["run_qtl_time"]]))
 
 # Automatically determine the mode of the input.
 input_mode = "default"
@@ -112,7 +112,7 @@ if not isinstance(config["general_settings"]["include_modes"], list):
 for mode in config["general_settings"]["include_modes"]:
     # Validate that each mode is known.
     if mode not in modes:
-        logger.info("Error, unexpected mode '{}'.\n\nExiting.".format(mode))
+        logger.critical("Critical, unexpected mode '{}'.\n\nExiting.".format(mode))
         exit()
 # Construct the selected modes.
 if "all" in config["general_settings"]["include_modes"]:
@@ -127,20 +127,20 @@ if "default" in selected_modes:
     covariates.append("default")
 if "cov" in selected_modes:
     if config["inputs"]["cov"] == "":
-        logger.info("Warning, you requested to run mode 'cov' but the 'cov' input is empty. Skipping mode.")
+        logger.warning("Warning, you requested to run mode 'cov' but the 'cov' input is empty. Skipping mode.")
     else:
         covariates.append("cov")
 if "XPcs" in selected_modes:
     if not config["general_settings"]["n_pcs"]:
-        logger.info("Warning, you requested to run mode 'XPcs' but the 'n_pcs' input is empty. Skipping mode.")
+        logger.warning("Warning, you requested to run mode 'XPcs' but the 'n_pcs' input is empty. Skipping mode.")
     else:
         for n_pcs in config["general_settings"]["n_pcs"]:
             covariates.append(str(n_pcs) + "Pcs")
 if "covXPcs" in selected_modes:
     if config["inputs"]["cov"] == "":
-        logger.info("Warning, you requested to run mode 'covXPcs' but the 'cov' input is empty. Skipping mode.")
+        logger.warning("Warning, you requested to run mode 'covXPcs' but the 'cov' input is empty. Skipping mode.")
     elif not config["general_settings"]["n_pcs"]:
-        logger.info("Warning, you requested to run mode 'covXPcs' but the 'n_pcs' input is empty. Skipping mode.")
+        logger.warning("Warning, you requested to run mode 'covXPcs' but the 'n_pcs' input is empty. Skipping mode.")
     else:
         for n_pcs in config["general_settings"]["n_pcs"]:
             covariates.append("cov" + str(n_pcs) + "Pcs")
@@ -174,18 +174,18 @@ def get_input(wildcards):
             logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor'")
             input.append(config["outputs"]["output_dir"] + "pca/all/" + get_basename(config["inputs"]["exp"]) + ".cov.CovariatesRemovedOLS.done")
 
-        corr_covariates = [cov for cov in covariates if cov not in ["default", "0Pcs"]]
-        if len(corr_covariates) > 0:
+        ds_corr_covariates = [cov for cov in covariates if cov not in ["default", "cov", "0Pcs", "cov0Pcs"]]
+        if len(ds_corr_covariates) > 0:
             datasets = get_datasets(wildcards)
 
             logger.debug("\trequesting output of rule 'pca' on the output of rule 'filter_exp' for a specific dataset")
             input.extend(expand(config["outputs"]["output_dir"] + "pca/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".done", dataset=datasets))
 
             logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor' for a specific dataset")
-            input.extend(expand(config["outputs"]["output_dir"] + "pca/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", dataset=datasets, cov=corr_covariates))
+            input.extend(expand(config["outputs"]["output_dir"] + "pca/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", dataset=datasets, cov=ds_corr_covariates))
 
             logger.debug("\trequesting output of rule 'pca' on the output of rule 'merge_exps'")
-            input.extend(expand(config["outputs"]["output_dir"] + "pca/merged/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", cov=corr_covariates))
+            input.extend(expand(config["outputs"]["output_dir"] + "pca/merged/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", cov=ds_corr_covariates))
 
     # Output of mbQTL.
     logger.debug("\trequesting output of rule 'run_qtl'")
@@ -217,7 +217,7 @@ def get_variants(wildcards):
         logger.debug("\treturn input 'snplimit'")
         return config["inputs"]["snplimit"]
     else:
-        logger.error("Error in get_variants")
+        logger.critical("Error in get_variants")
         exit()
 
     return None
@@ -557,9 +557,9 @@ rule filter_vcf:
             --samples {output.samples} \
             --outfile {output.vcf_gz} > {log} 2>&1
             
-        if [[ "$(singularity exec --bind {params.bind} {params.sif} zcat {output.vcf_gz} | wc -l)" -le "1" ]]; 
+        if [[ "$(singularity exec --bind {params.bind} {params.sif} zcat {output.vcf_gz} | grep -v "^#" | wc -l)" -eq "0" ]]; 
         then
-           echo "Error, no results in {output.vcf_gz}"
+           echo "Error, total number of SNPs in the output VCF is 0"
            rm {output.vcf_gz}
         fi
             

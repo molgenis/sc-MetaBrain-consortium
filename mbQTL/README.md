@@ -54,6 +54,15 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
 
 ## Usage  
 
+#### Visualise pipeline:
+This script that will generate a dag.svg file that shows the rules that will be executed and in what order.
+```{R}
+snakemake \
+  --snakefile Snakefile \
+  --configfile mbQTL.yaml \
+  --dag | dot -Tsvg > dag.svg
+```  
+
 #### Dry run:
 This script show what rules will be executed.
 ```{R}
@@ -64,7 +73,8 @@ snakemake \
   --cores 1 \
   --reason
 ```  
-Be aware that `run_qtl` chunks are determined on the fly when `n_genes` is used. As a result, the shown snakemake rules and job counts might not properly the rules that will be executed in reality.
+Be aware that some variables are determined at runtime and as a result, the shown snakemake rules and job counts might not properly the rules that will be executed in reality.
+
 
 #### Run (local):
 This script runs the rules in your current session.
