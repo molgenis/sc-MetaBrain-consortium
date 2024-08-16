@@ -22,6 +22,7 @@ inputs:
 
 outputs:
   output_dir: /path/to/parent/out/dir ### The path to the parent dir where you would like all outputs/results saved. This path must exist before running
+  log_dir: /path/to/log/out/dir ### base path where the log files will write to (not including 'log')
 
 settings:
   only_matching: False
