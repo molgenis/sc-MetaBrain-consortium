@@ -75,7 +75,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
                                         __license__)
 
 CHROMOSOMES = [str(chromosome) for chromosome in range(1, 23)] + ["X", "Y", "MT"]
-BATCHES = [str(batch) for batch in range(0, 1000)]
+BATCHES = [str(batch) for batch in range(0, 100000)]
 METHODS = ["CUSTOM", "LIMIX", "mbQTL", "eQTLMappingPipeline", "eQTLgenPhase2", "Bryois", "Bryois_REDUCED", "Fujita", "DeconQTL", "PICALO"]
 EFFECTS = ["zscore", "beta"]
 
@@ -996,7 +996,8 @@ class main():
             color=color,
             annotations=["N = {:,}".format(replication_stats_df.loc["True_True", "N"]),
                          "r = {:.2f}".format(replication_stats_df.loc["True_True", "Coef"]),
-                         "AC = {:.0f}%".format(replication_stats_df.loc["True_True", "AC"])]
+                         "AC = {:.0f}%".format(replication_stats_df.loc["True_True", "AC"]),
+                         "%repl = {:.0f}%".format((100 / replication_stats_df.loc["True_False", "N"]) * replication_stats_df.loc["True_True", "N"])]
         )
         shared_xlim, shared_ylim = self.update_limits(
             shared_xlim=shared_xlim,
@@ -1073,6 +1074,12 @@ class main():
 
         ax.axhline(0, ls='--', color="#808080", alpha=0.3, zorder=-1)
         ax.axvline(0, ls='--', color="#808080", alpha=0.3, zorder=-1)
+
+        low_x, high_x = ax.get_xlim()
+        low_y, high_y = ax.get_ylim()
+        low = max(low_x, low_y)
+        high = min(high_x, high_y)
+        ax.plot([low, high], [low, high], ls='--', color="#808080", alpha=0.3, zorder=-1)
 
         y_pos = 0.95
         for annotation in annotations:
@@ -1229,10 +1236,19 @@ class Dataset:
     def get_example_file(self):
         # Function that grabs a file preferring the all effects file. I assume
         # that the format of both files is the same so it doesn't matter which one I take.
-        if self.all_effects_path is not None:
-            fpath = self.all_effects_path
-        elif self.top_effects_path is not None:
-            fpath = self.top_effects_path
+        if self.type == "discovery":
+            first_file = self.top_effects_path
+            second_file = self.all_effects_path
+        elif self.type == "replication":
+            first_file = self.all_effects_path
+            second_file = self.top_effects_path
+        else:
+            return None
+
+        if first_file is not None:
+            fpath = first_file
+        elif second_file is not None:
+            fpath = second_file
         else:
             return None
 
@@ -1316,6 +1332,15 @@ class Dataset:
                 print("\tWarning, beta_se could be inferred from zscore, MAF, and N info. Turn on --allow_infer to allow this estimation.")
                 return False
             return True
+
+        if label == "nominal_pvalue":
+            if self.contains_data("zscore"):
+                return True
+            elif self.contains_data("beta") and self.contains_data("MAF") and self.contains_data("N"):
+                if not self.allow_infer:
+                    print("\tWarning, nominal_pvalue could be inferred from beta, MAF, and N info. Turn on --allow_infer to allow this estimation.")
+                    return False
+                return True
 
         return False
 
@@ -2057,6 +2082,13 @@ class Dataset:
             df["beta_se"] = self.calc_beta_se(df=df, zscore_column=self.get_column("zscore"), maf_column=self.get_column("MAF"), n_column=self.get_column("N"))
             self.columns["beta_se"] = [("beta_se", None, None)]
 
+        # Fill in the nominal p-value.
+        if not self.has_column("nominal_pvalue") and self.contains_data("nominal_pvalue"):
+            # We know zscore is there because it is checked above.
+            print("\tAdding nominal_pvalue column")
+            df["nominal_pvalue"] = self.calc_pvalue_from_zscore(df=df, zscore_column=self.get_column("zscore"))
+            self.columns["nominal_pvalue"] = [("nominal_pvalue", None, None)]
+
         print("")
         return df
 
@@ -2111,6 +2143,22 @@ class Dataset:
             zscore *= -1.
 
         return zscore
+
+    def calc_pvalue_from_zscore(self, df, zscore_column):
+        return df.apply(lambda row: self.zscore_to_pvalue(row=row, zscore_column=zscore_column), axis=1)
+
+    def zscore_to_pvalue(self, row, zscore_column):
+        """
+        non-zero output range is between -37.677121 and 37.677121.
+        """
+        try:
+            zscore = float(self.extract_info(data=row, query=zscore_column))
+        except ValueError:
+            return np.nan
+
+        pvalue = stats.norm.cdf(-abs(zscore)) * 2
+
+        return pvalue
 
     def calc_zscore_from_beta(self, df, beta_column, maf_column, n_column):
         return df.apply(lambda row: self.beta_to_zscore(row=row, beta_column=beta_column, maf_column=maf_column, n_column=n_column), axis=1)
@@ -2168,9 +2216,7 @@ class Dataset:
                 if i == 0:
                     columns.append(self.name + " " + argument)
             df_info.append(row_info)
-        standard_df = pd.DataFrame(df_info, columns=columns)
-        standard_df = standard_df.replace("NA", np.nan)
-        standard_df.dropna(axis=1, how='all', inplace=True)
+        standard_df = pd.DataFrame(df_info, columns=columns).replace("NA", np.nan).replace("-", np.nan).dropna(axis=1, how='all').dropna(axis=0, how='any')
 
         dtypes = {
             self.name + " gene_hgnc": str,
