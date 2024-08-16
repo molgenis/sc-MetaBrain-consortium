@@ -108,6 +108,7 @@ def plot(df, title="", filename="heatmap"):
                 xlabel = args.repl_name + " replication"
                 ylabel = args.disc_cell_types[0]
 
+            # TODO: this plot does not look great.
             plot_barplot(
                 fig=fig,
                 ax=axes[col_index],
