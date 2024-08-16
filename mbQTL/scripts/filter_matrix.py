@@ -50,9 +50,13 @@ if args.columns is not None:
     df = df.loc[:, [column for column in columns if column in df.columns]]
 
 if args.head is not None:
+    if args.head >= df.shape[0]:
+        print("\tWarning, requesting more or all rows than are present in the input file.")
     df = df.head(args.head)
 
 if args.tail is not None:
+    if args.tail >= df.shape[0]:
+        print("\tWarning, requesting more or all rows than are present in the input file.")
     df = df.tail(args.tail)
 
 df.to_csv(args.outfile, sep="\t", header=True, index=True)

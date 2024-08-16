@@ -60,6 +60,14 @@ if config["inputs"]["snpgenelimit"] is not None and not os.path.exists(config["i
     logger.error("Critical, the snpgenelimit file does not exist.\n\nExiting.")
     exit("MissingSNPGeneLimitFile")
 
+# Checking settings with options to be valid.
+if config["qtl_settings"]["analysis_type"] not in ["cis", "trans", "cistrans"]:
+    logger.error("Critical, analysis_type must be 'cis', 'trans', or 'cistrans'.\n\nExiting.")
+    exit("InvalidAnalysisType")
+if config["qtl_settings"]["meta_analysis_method"] not in ["empzmeta", "fisherzmeta", "fisherzmetarandom"]:
+    logger.error("Critical, meta_analysis_method must be 'empzmeta', 'fisherzmeta', or 'fisherzmetarandom'.\n\nExiting.")
+    exit("InvalidMetaAnalysisMethod")
+
 # Replace non required variables that are None with empty strings.
 for input_variable in ["cov", "genelimit", "snplimit", "snpgenelimit"]:
     if config["inputs"][input_variable] is None:
@@ -99,7 +107,7 @@ else:
     if config["inputs"]["snpgenelimit"] != "" and not config["qtl_settings"]["perm"] == 0:
         logger.warning("Warning, setting perm to 0 since snpgenelimit is used.")
         config["qtl_settings"]["perm"] = 0
-    if config["qtl_settings"]["force_mega"] and config["qtl_settings"]["nrdatasets"] > 1:
+    if config["general_settings"]["force_mega"] and config["qtl_settings"]["nrdatasets"] > 1:
         logger.warning("Warning, setting nrdatasets to 1 since force_mega is True.")
         config["qtl_settings"]["nrdatasets"] = 1
 
@@ -213,22 +221,26 @@ def get_input(wildcards):
         logger.debug("\trequesting output of rule 'pca' on the input 'exp'")
         input.append(config["outputs"]["output_dir"] + "pca/raw/" + get_basename(config["inputs"]["exp"]) + ".done")
 
-        if "cov" in covariates:
+        if config["general_settings"]["force_mega"]:
             logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor'")
-            input.append(config["outputs"]["output_dir"] + "pca/all/" + get_basename(config["inputs"]["exp"]) + ".cov.CovariatesRemovedOLS.done")
+            input.extend(expand(config["outputs"]["output_dir"] + "pca/all/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", cov=covariates))
+        else:
+            if "cov" in covariates:
+                logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor'")
+                input.append(config["outputs"]["output_dir"] + "pca/all/" + get_basename(config["inputs"]["exp"]) + ".cov.CovariatesRemovedOLS.done")
 
-        ds_corr_covariates = [cov for cov in covariates if cov not in ["default", "cov", "0Pcs", "cov0Pcs"]]
-        if len(ds_corr_covariates) > 0:
-            datasets = get_datasets(wildcards)
+            ds_corr_covariates = [cov for cov in covariates if cov not in ["default", "cov", "0Pcs", "cov0Pcs"]]
+            if len(ds_corr_covariates) > 0 and not config["general_settings"]["force_mega"]:
+                datasets = get_datasets(wildcards)
 
-            logger.debug("\trequesting output of rule 'pca' on the output of rule 'filter_exp' for a specific dataset")
-            input.extend(expand(config["outputs"]["output_dir"] + "pca/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".done", dataset=datasets))
+                logger.debug("\trequesting output of rule 'pca' on the output of rule 'filter_exp' for a specific dataset")
+                input.extend(expand(config["outputs"]["output_dir"] + "pca/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".done", dataset=datasets))
 
-            logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor' for a specific dataset")
-            input.extend(expand(config["outputs"]["output_dir"] + "pca/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", dataset=datasets, cov=ds_corr_covariates))
+                logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor' for a specific dataset")
+                input.extend(expand(config["outputs"]["output_dir"] + "pca/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", dataset=datasets, cov=ds_corr_covariates))
 
-            logger.debug("\trequesting output of rule 'pca' on the output of rule 'merge_exps'")
-            input.extend(expand(config["outputs"]["output_dir"] + "pca/merged/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", cov=ds_corr_covariates))
+                logger.debug("\trequesting output of rule 'pca' on the output of rule 'merge_exps'")
+                input.extend(expand(config["outputs"]["output_dir"] + "pca/merged/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", cov=ds_corr_covariates))
 
     # Output of mbQTL.
     logger.debug("\trequesting output of rule 'run_qtl'")
@@ -252,15 +264,6 @@ def get_gte(wildcards):
     return config["inputs"]["gte"]
 
 
-def get_qtl_gte(wildcards):
-    logger.debug("get_qtl_gte(" + print_wildcards(wildcards) + ")")
-    if config["qtl_settings"]["force_mega"]:
-        logger.debug("\treturn output of rule 'remove_gte_dataset'")
-        return config["outputs"]["output_dir"] + "gte/gte_noDataset.txt"
-
-    logger.debug("\tcalling 'get_gte' function")
-    return get_gte(wildcards)
-
 def get_variants(wildcards):
     logger.debug("get_variants(" + print_wildcards(wildcards) + ")")
     if config["inputs"]["snplimit"] == "" and config["inputs"]["snpgenelimit"] != "":
@@ -278,16 +281,17 @@ def get_variants(wildcards):
 def get_dataset_gte(wildcards):
     logger.debug("get_dataset_gte(" + print_wildcards(wildcards) + ")")
     if wildcards.dataset in ["raw", "merged", "all"]:
-        logger.debug("\tcalling 'get_qtl_gte' function")
-        return get_qtl_gte(wildcards)
+        logger.debug("\tcalling 'get_gte' function")
+        return get_gte(wildcards)
 
     logger.debug("\treturn output of checkpoint 'split_gte'")
     return config["outputs"]["output_dir"] + "gte/split/gte_" + wildcards.dataset + ".txt"
 
 
 def get_pca_expr(wildcards):
+    raw_infile = wildcards.infile == get_basename(config["inputs"]["exp"])
     logger.debug("get_pca_expr(" + print_wildcards(wildcards) + ")")
-    if wildcards.dataset == "raw":
+    if wildcards.dataset == "raw" or (config["general_settings"]["force_mega"] and raw_infile):
         logger.debug("\treturning input 'exp'")
         return config["inputs"]["exp"]
     elif wildcards.dataset == "all":
@@ -297,7 +301,7 @@ def get_pca_expr(wildcards):
         logger.debug("\treturning output of rule 'merge_exps'")
         return config["outputs"]["output_dir"] + "regressor/" + wildcards.infile + ".txt.gz"
     else:
-        if wildcards.infile == get_basename(config["inputs"]["exp"]):
+        if raw_infile:
             logger.debug("\treturning output of rule 'filter_exp' for a specific dataset")
             folder = "exp"
         else:
@@ -317,6 +321,7 @@ def get_regressor_exp(wildcards):
 
     logger.debug("\treturning output of rule 'filter_exp' for a specific dataset")
     return config["outputs"]["output_dir"] + "exp/" + wildcards.dataset + "/" + get_basename(config["inputs"]["exp"]) + ".txt.gz"
+
 
 def get_cov(wildcards):
     logger.debug("get_cov(" + print_wildcards(wildcards) + ")")
@@ -345,8 +350,8 @@ def get_exp(wildcards):
     if wildcards.cov == "default" or wildcards.cov == "0Pcs":
         logger.debug("\treturning input 'exp'")
         return config["inputs"]["exp"]
-    elif wildcards.cov == "cov":
-        logger.debug("\treturning outout of rule 'regressor'")
+    elif wildcards.cov == "cov" or config["general_settings"]["force_mega"]:
+        logger.debug("\treturning output of rule 'regressor'")
         return config["outputs"]["output_dir"] + "regressor/all/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.txt.gz"
 
     logger.debug("\treturning outout of rule 'merge_exps'")
@@ -387,6 +392,16 @@ def get_vcf_index(wildcards):
     logger.debug("get_vcf_index(" + print_wildcards(wildcards) + ")")
     logger.debug("\tcalling 'get_vcf' function")
     return get_vcf(wildcards) + ".tbi"
+
+
+def get_qtl_gte(wildcards):
+    logger.debug("get_qtl_gte(" + print_wildcards(wildcards) + ")")
+    if config["general_settings"]["force_mega"]:
+        logger.debug("\treturn output of rule 'remove_gte_dataset'")
+        return config["outputs"]["output_dir"] + "gte/gte_noDataset.txt"
+
+    logger.debug("\tcalling 'get_gte' function")
+    return get_gte(wildcards)
 
 
 def get_genelimit(wildcards):
@@ -514,30 +529,10 @@ rule smf_to_gte:
         """
 
 
-rule remove_gte_dataset:
-    input:
-        gte = get_gte
-    output:
-        gte = config["outputs"]["output_dir"] + "gte/gte_noDataset.txt"
-    resources:
-        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["remove_gte_dataset_memory"],
-        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["remove_gte_dataset_memory"],
-        time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["remove_gte_dataset_time"]]
-    threads: config["remove_gte_dataset_threads"]
-    params:
-        bind = config["inputs"]["bind_path"],
-        sif = config["inputs"]["singularity_image"],
-    log: config["outputs"]["output_dir"] + "log/remove_gte_dataset.log"
-    shell:
-        """
-        singularity exec --bind {params.bind} {params.sif} awk 'BEGIN{{ FS = OFS = "\\t" }} {{ print $1, $2, "Dataset" }}' {input.gte} > {output.gte}
-        """
-
-
 checkpoint split_gte:
     priority: 50
     input:
-        gte = get_qtl_gte,
+        gte = get_gte,
     output:
         datasets = directory(config["outputs"]["output_dir"] + "gte/split/")
     resources:
@@ -605,7 +600,7 @@ rule filter_vcf:
     input:
         vcf = config["inputs"]["vcf"],
         sgl = config["inputs"]["snpgenelimit"],
-        gte = get_qtl_gte,
+        gte = get_gte,
         vars = get_variants
     output:
         samples = temp(config["outputs"]["output_dir"] + "genotype/samples.txt"),
@@ -806,10 +801,29 @@ rule merge_exps:
         """
 
 
+rule remove_gte_dataset:
+    input:
+        gte = get_gte
+    output:
+        gte = config["outputs"]["output_dir"] + "gte/gte_noDataset.txt"
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["remove_gte_dataset_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["remove_gte_dataset_memory"],
+        time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["remove_gte_dataset_time"]]
+    threads: config["remove_gte_dataset_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+    log: config["outputs"]["output_dir"] + "log/remove_gte_dataset.log"
+    shell:
+        """
+        singularity exec --bind {params.bind} {params.sif} awk 'BEGIN{{ FS = OFS = "\\t" }} {{ print $1, $2, "Dataset" }}' {input.gte} > {output.gte}
+        """
+
+
 # TODO: perhaps better to use the genelimit / snpgenelimit file here if it is given so the jobs are more
 #   equally distributed.
 checkpoint create_batches:
-    priority: 50
     input:
         exp = get_exp
     output:
@@ -848,6 +862,7 @@ rule run_qtl:
         log = config["outputs"]["output_dir"] + "output/{cov}/{batch}-log.txt.gz",
         top = config["outputs"]["output_dir"] + "output/{cov}/{batch}-TopEffects.txt",
         all = config["outputs"]["output_dir"] + "output/{cov}/{batch}-AllEffects.txt.gz" if config["qtl_settings"]["outputall"] else temp(config["outputs"]["output_dir"] + "output/{cov}/{batch}-AllEffects.txt.gz"),
+        all_perm = config["outputs"]["output_dir"] + "output/{cov}/{batch}-Permutations.txt.gz" if config["qtl_settings"]["outputallpermutations"] else temp(config["outputs"]["output_dir"] + "output/{cov}/{batch}-Permutations.txt.gz"),
         snplog = config["outputs"]["output_dir"] + "output/{cov}/{batch}-snpqclog.txt.gz" if config["qtl_settings"]["snplog"] else temp(config["outputs"]["output_dir"] + "output/{cov}/{batch}-snpqclog.txt.gz"),
         finished = config["outputs"]["output_dir"] + "output/{cov}/{batch}-TopEffects.finished"
     resources:
@@ -860,6 +875,9 @@ rule run_qtl:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         jar = config["inputs"]["mbqtl_jar"],
+        analysis_type = config["qtl_settings"]["analysis_type"],
+        meta_analysis_method = config["qtl_settings"]["meta_analysis_method"],
+        seed = config["qtl_settings"]["seed"],
         java_threads = config["run_qtl_threads"] * 2,
         snpannotation = lambda wildcards: "--snpannotation " + get_snpannotation(wildcards) if config["general_settings"]["use_snpannotation"] else "",
         perm = config["qtl_settings"]["perm"],
@@ -873,10 +891,12 @@ rule run_qtl:
         minobservations = config["qtl_settings"]["minobservations"],
         nrdatasets = config["qtl_settings"]["nrdatasets"],
         mingenotypecount = config["qtl_settings"]["mingenotypecount"],
+        splitmultiallelic = "--splitmultiallelic" if config["qtl_settings"]["splitmultiallelic"] else "",
         replacemissinggenotypes = "--replacemissinggenotypes" if config["qtl_settings"]["replacemissinggenotypes"] else "",
+        usehardgenotypecalls = "--usehardgenotypecalls" if config["qtl_settings"]["usehardgenotypecalls"] else "",
         norank = "--norank" if config["qtl_settings"]["norank"] else "",
-        fisherzmeta = "--fisherzmeta" if config["qtl_settings"]["fisherzmeta"] else "",
         outputall = "--outputall" if config["qtl_settings"]["outputall"] else "",
+        outputallpermutations = "--outputallpermutations" if config["qtl_settings"]["outputallpermutations"]  else "",
         snplog = "--snplog" if config["qtl_settings"]["snplog"] else "",
         out = lambda wildcards: config["outputs"]["output_dir"] + "output/" + wildcards.cov + "/" + wildcards.batch
     log: config["outputs"]["output_dir"] + "log/run_qtl.{cov}.{batch}.log"
@@ -887,6 +907,9 @@ rule run_qtl:
             -Dmaximum.threads={params.java_threads} -Dthread.pool.size={params.java_threads} \
             -jar {params.jar} \
             --mode mbqtl \
+            --{params.analysis_type} \
+            --{params.meta_analysis_method} \
+            --seed {params.seed} \
             --vcf {input.vcf} \
             --exp {input.exp} \
             --gte {input.gte} \
@@ -902,10 +925,12 @@ rule run_qtl:
             --minobservations {params.minobservations} \
             --nrdatasets {params.nrdatasets} \
             --mingenotypecount {params.mingenotypecount} \
+            {params.splitmultiallelic} \
             {params.replacemissinggenotypes} \
+            {params.usehardgenotypecalls} \
             {params.norank} \
-            {params.fisherzmeta} \
             {params.outputall} \
+            {params.outputallpermutations} \
             {params.snplog} \
             --out {params.out} > {log} 2>&1
             
@@ -916,6 +941,7 @@ rule run_qtl:
         fi
         
         singularity exec --bind {params.bind} {params.sif} touch {output.all}
+        singularity exec --bind {params.bind} {params.sif} touch {output.all_perm}
         singularity exec --bind {params.bind} {params.sif} touch {output.snplog}
         """
 

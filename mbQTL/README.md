@@ -4,7 +4,15 @@ Snakemake pipeline build around [mbQTL](https://github.com/molgenis/systemsgenet
 
 ## Info
 
-This implements preprocessing steps to create the correct input files as well as perform covariate and/or expression PCs correction. The mbQTL top effects files are automatically combined, multiple testing correction using [qvalue](https://github.com/StoreyLab/qvalue) is applied, and the number of eQTLs are counted.
+The snakemake implements the following additions to the standard mbQTL software:
+ * pre-process input files (including filtering of input VCF on variants of interest to reduce disk IO; great speed increase)
+ * correct expression input for covariates and / or N expression PCs (per dataset) in parallel
+ * visualise PCA and scree plots of your expression input
+ * parallel process QTL analysis in arbitrary number of batches + merge results
+ * perform multiple testing correction using [qvalue](https://github.com/StoreyLab/qvalue)
+ * summarise number of eQTLs detected
+
+Furthermore, quality of life settings and setting warnings are added to make the use of mbQTL even easier.
 
 ## Installing
 
@@ -29,30 +37,34 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * `mbqtl_jar`: mbQTL jar [download](https://jenkins.harmjanwestra.nl/job/systemsgenetics_hjw/lastBuild/nl.systemsgenetics$MbQTL/).
  * `output_dir`: the output directory.
  * `output_prefix`: the output filename prefix.
- * `cov`: covariate file. This is a tab-separated file the value for each covariate per sample. The first column contains the covariate names. The rest of the columns are the sample names. Non-numerical covariates are automatically one-hot encoded where the most abundant category is excluded. Expression PCs can be automatically added as covariates by using `n_pcs`.
+ * `cov`: covariate file. Tab-separated file containing the covariate values of each feature per sample. The first column contains the covariates. The rest of the columns are the sample names. Non-numerical covariates are automatically one-hot encoded where the most abundant category is excluded. Expression PCs can be automatically added as covariates by using `n_pcs`.
 
 **Pipeline specific settings**:
- * `plot_pca`: whether or not to PCA visualise the expression matrix.
+ * `plot_pca`: whether or not to PCA visualise the expression matrix. Default `False`.
  * `include_modes`: which modes to run (options: `all`, `default`, `cov`, `covXPcs`, `XPcs`). For more info, see modes.
  * `n_pcs`: how many PCs should be removed from the expression matrix (e.g. `[0, 5, 10]`). If `cov` is also used these PCs are added to those covariates.
- * `n_genes`: how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk.
+ * `n_genes`: how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk. Default `200`.
  * `use_snpannotation`: whether or not the `snpannotation` option should be used. Default `False`. Automatically set to `False` if `snplimit` or `snpgenelimit` is used since it is faster without `snpannotation` then.
+ * `force_mega`: replace the dataset column in your input `gte` to force mbQTL to run a mega-analysis.
  * `filter_vcf`: whether or not the input VCF should be filtered on variants / samples of interest before running QTL analysis. This adds some pre-processing time but can add substantial speed improvements in the QTL analysis. Only available if `snplimit` or `snpgenelimit` is used. Note that it also filters on the samples in the `gte` file. Default `False`.
- * `force`: prevent snakemake from updating input settings that are unlogical. Use with caution.
- * `debug`: set logger to level DEBUG printing additional information. 
+ * `feature_name`: the info column that in your gtf that describes the names of the genes in your expression matrix. Default `gene_name`.
+ * `autosomes_only`: whether or not to only include autosomal chromosomes. Default 'True'.
+ * `force`: prevent snakemake from updating input settings that are unlogical. Use with caution. Default `False`.
+ * `debug`: set logger to level DEBUG printing additional information. Default `False`.
 
 **mbQTL standard inputs**:
- * `annotation`: `genes.gtf` of your alignment reference. If the file does not end with `.gtf` it assumes it is a mbQTL annotation file.
+ * `annotation`: `genes.gtf` of your alignment reference. If the file does not end with `.gtf` it assumes it is a mbQTL annotation file: tab seperated with gene ID, chromosome, gene start, gene end, and strand.
  * `exp`: expression file. This is a tab-separated file containing the expression of each feature per sample. The first column contains the features names. The rest of the columns are the sample names.
- * `gte`: genotype-expression-dataset mapping file. If the file endswith `.smf` it assumes it is a genotype-expression mapping file and a dataset column will be added to it in order to be compatable with mbQTL.
+ * `gte`: genotype to expression coupling file. This is a tab-separated file with three columns; genotype ID, expression ID, dataset (name). There is no header. If the file endswith `.smf` it assumes it is a genotype-expression mapping file and a dataset column will be added to it in order to be compatable with mbQTL.
  * `vcf`: bgzipped genotype VCF file. If no tabix index (`.tbi`) is present it will be generated by the pipeline.
 
 **Additional to mbQTL manual**:
- * `force_mega`: replace the dataset column in your input `gte` to force mbQTL to run a mega-analysis.
  * In this implementation `genelimit`, `snplimit` and `snpgenelimit` cannot be combined.
  * The `--out` mbQTL argument is created by `output_dir` + `output_prefix`
  * The `--outputall` mbQTL argument is automatically set to `True` if `snpgenelimit` is used.
  * The `--perm` mbQTL argument is automatically set to `0` if `snpgenelimit` is used.
+
+The following arguments of mbQTL are not implemented: `--expgroups`, `--nriters`, `--sortbyz`, and `--testnonparseablechr`.
 
 ## Usage  
 
