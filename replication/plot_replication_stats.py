@@ -13,10 +13,10 @@ parser = argparse.ArgumentParser(
 parser.add_argument("--workdir", type=str, required=True, help="")
 parser.add_argument("--disc_name", type=str, required=True, help="")
 parser.add_argument("--disc_cell_types", nargs="*", type=str, required=False, default=["AST", "END", "EX", "IN", "MIC", "OLI", "OPC", "PER"], help="")
-parser.add_argument("--disc_folders", nargs="*", type=str, required=False, default=["Main"], help="")
+parser.add_argument("--disc_settings", nargs="*", type=str, required=False, default=["Main"], help="")
 parser.add_argument("--repl_name", type=str, required=True, help="")
 parser.add_argument("--repl_cell_types", nargs="*", type=str, required=False, default=["AST", "END", "EX", "IN", "MIC", "OLI", "OPC", "PER"], help="")
-parser.add_argument("--repl_folders", nargs="*", type=str, required=False, default=["Main"], help="")
+parser.add_argument("--repl_settings", nargs="*", type=str, required=False, default=["Main"], help="")
 parser.add_argument("--standardise", action='store_true', help="")
 parser.add_argument("--palette", type=str, required=False, default=None, help="A color palette file.")
 parser.add_argument("--extensions", nargs="+", type=str, choices=["png", "pdf", "eps"], default=["png"], help="The figure file extension.. Default: 'png'.")
@@ -74,6 +74,14 @@ def plot(df, title="", filename="heatmap"):
                 n_digits=0 if metric == "AC" else 2
             )
 
+            if args.repl_settings == ["Main"]:
+                value_df.index = [index.split("_")[1] for index in value_df.index]
+                annot_df.index = [index.split("_")[1] for index in annot_df.index]
+
+            if args.disc_settings == ["Main"]:
+                value_df.columns = [column.split("_")[1] for column in value_df.columns]
+                annot_df.columns = [column.split("_")[1] for column in annot_df.columns]
+
             min_value = value_df.min().min()
             max_value = value_df.max().max()
 
@@ -123,8 +131,10 @@ def plot(df, title="", filename="heatmap"):
 
 
 def create_pivot_table(df, index_col, column_col, value_col, n_digits=2):
-    index = [folder + "_" + ct for folder in args.repl_folders for ct in args.repl_cell_types if folder + "_" + ct in df[index_col].unique()]
-    columns = [folder + "_" + ct for folder in args.disc_folders for ct in args.disc_cell_types if folder + "_" + ct in df[column_col].unique()]
+    index = [folder + "_" + ct for folder in args.repl_settings for ct in args.repl_cell_types if folder + "_" + ct in df[index_col].unique()]
+    index.sort()
+    columns = [folder + "_" + ct for folder in args.disc_settings for ct in args.disc_cell_types if folder + "_" + ct in df[column_col].unique()]
+    columns.sort()
 
     value_df = pd.DataFrame(np.nan, index=index, columns=columns)
     annot_df = pd.DataFrame("", index=index, columns=columns)
@@ -212,23 +222,23 @@ def plot_barplot(fig, ax, df, x="x", y="y", n="n", xlabel="", ylabel="", title="
                   fontweight='bold')
 
 df_list = []
-for disc_folder in args.disc_folders:
+for disc_settings in args.disc_settings:
     for disc_ct in args.disc_cell_types:
-        for repl_folder in args.repl_folders:
+        for repl_settings in args.repl_settings:
             for repl_ct in args.repl_cell_types:
-                fpath = os.path.join(args.workdir, "replication_data", args.disc_name + disc_folder + "discovery_" + args.repl_name + repl_folder + "replication", args.disc_name + disc_folder  + "_" + disc_ct + "_Disc_" + args.repl_name + repl_folder + "_" + repl_ct + "_Repl_ReplicationStats.txt.gz")
+                fpath = os.path.join(args.workdir, "replication_data", args.disc_name + disc_settings + "discovery_" + args.repl_name + repl_settings + "replication", args.disc_name + disc_settings  + "_" + disc_ct + "_Disc_" + args.repl_name + repl_settings + "_" + repl_ct + "_Repl_ReplicationStats.txt.gz")
                 if not os.path.exists(fpath):
                     continue
 
                 df = pd.read_csv(fpath, sep="\t", header=0, index_col=None)
                 df["discovery_name"] = args.disc_name
-                df["discovery_folder"] = disc_folder
+                df["discovery_folder"] = disc_settings
                 df["discovery_ct"] = disc_ct
-                df["discovery_id"] = disc_folder + "_" + disc_ct
+                df["discovery_id"] = disc_settings + "_" + disc_ct
                 df["replication_name"] = args.repl_name
-                df["replication_folder"] = repl_folder
+                df["replication_folder"] = repl_settings
                 df["replication_ct"] = repl_ct
-                df["replication_id"] = repl_folder + "_" + repl_ct
+                df["replication_id"] = repl_settings + "_" + repl_ct
                 df_list.append(df)
 df = pd.concat(df_list, axis=0)
 print(df)
