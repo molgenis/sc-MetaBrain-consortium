@@ -4,7 +4,7 @@ This code offers functionality to perform replication analyses between sets of e
 
 ## How it works
 
-The main code ([replication.py](replication.py)) offers several implementations of common eQTL summary statistics. The following are implemented:
+The main code ([replication.py](scripts/replication.py)) offers several implementations of common eQTL summary statistics. The following are implemented:
 
  * [LIMIX](https://github.com/sc-eQTLgen-consortium/limix_qtl): eQTL mapping software
  * [mbQTL](https://github.com/molgenis/systemsgenetics/tree/master/mbQTL): eQTL mapping software
@@ -49,7 +49,7 @@ New summary statistics can easily be added by following these steps:
  * Option 4: data is two or more full columns with a symbol inbetween `[("A", null, ":"), ("B", null, null)]`
  * Option 5: data is a combination of option 2 and option 3 `[("A", "(a-zA-Z]+)_", null), ("B", null, null)]`
  * Option 6: data needs info from other file `[("A", {"A": "a"}, null)]`, prepare info as a translate dictionary
-4. Run [replication.py](replication.py) with your custom class using **--[discovery/replication]_class_settings**
+4. Run [replication.py](scripts/replication.py) with your custom class using **--[discovery/replication]_class_settings**
 
 
 Note that if you do not have a `top_effects_path` file you can leave this empty and the program will automatically select the top effects from the `all_effects_path` file. Similarly, if you do not have a `all_effects_path` you can leave this empty and the `top_effects_path` will be used instead; note that you might get very low overlap between two datasets because of this. Furthermore, you can use `<.+>` fields to use dynamic input for the **--[discovery/replication]_[all/top]_filename**:
@@ -130,6 +130,7 @@ Certain columns will be automatically decuced from other columns if they are una
  * `OA` can be deduced if `EA` and `alleles` are available
  * `bonferroni_pvalue` can be deduced if `nominal_pvalue` and `n_tests` are available
  * `zscore` can be deduced if `beta` and `nominal_pvalue` are available
+ * `nominal_pvalue` can be deduced if `zscore` is available
  * `MAF` can be deduced if `AF` is available
 
 Furthermore, if `N` is unavailable in the summary statistics file you can define this using `self.n = N`.
@@ -153,7 +154,7 @@ This program is written in Python v3.7. The program requires the following packa
  * adjustText (v1.1.1)
  * rpy2 (v3.5.16)
 
-Furthermore, it uses two R v4.1 scripts [Rb.R](Rb.R) and [qvalue_truncp.R](qvalue_truncp.R) that require the following packages to be installed:
+Furthermore, it uses two R v4.1 scripts [Rb.R](scripts/Rb.R) and [qvalue_truncp.R](scripts/qvalue_truncp.R) that require the following packages to be installed:
  * BiocManager (v3.14)
  * ggplot2
  * reshape2
