@@ -291,27 +291,25 @@ def get_dataset_gte(wildcards):
 def get_pca_expr(wildcards):
     raw_infile = wildcards.infile == get_basename(config["inputs"]["exp"])
     logger.debug("get_pca_expr(" + print_wildcards(wildcards) + ")")
-    if wildcards.dataset == "raw" or (config["general_settings"]["force_mega"] and raw_infile):
-        logger.debug("\treturning input 'exp'")
-        return config["inputs"]["exp"]
-    elif wildcards.dataset == "all":
-        logger.debug("\treturning output of rule 'regressor'")
-        return config["outputs"]["output_dir"] + "regressor/all/" + wildcards.infile + ".txt.gz"
+
+    if raw_infile:
+        # i.e. no covariate correction is needed. Only need to pick between the
+        # full input matrix or a subset of the input matrix.
+        if wildcards.dataset == "raw" or config["general_settings"]["force_mega"]:
+            logger.debug("\treturning input 'exp'")
+            return config["inputs"]["exp"]
+
+        logger.debug("\treturning output of rule 'filter_exp' for a specific dataset")
+        return config["outputs"]["output_dir"] + "exp/" + wildcards.dataset + "/" + wildcards.infile + ".txt.gz"
+
+    # covariate corrected per dataset merged into one file.
     elif wildcards.dataset == "merged":
         logger.debug("\treturning output of rule 'merge_exps'")
-        return config["outputs"]["output_dir"] + "regressor/" + wildcards.infile + ".txt.gz"
-    else:
-        if raw_infile:
-            logger.debug("\treturning output of rule 'filter_exp' for a specific dataset")
-            folder = "exp"
-        else:
-            logger.debug("\treturning output of rule 'regressor' for a specific dataset")
-            folder = "regressor"
+        return config["outputs"]["output_dir"] + "regressor/merged." + wildcards.infile + ".txt.gz"
 
-        return config["outputs"]["output_dir"] + folder + "/" + wildcards.dataset + "/" + wildcards.infile + ".txt.gz"
-
-    return None
-
+    # else, covariate corrected per dataset.
+    logger.debug("\treturning output of rule 'regressor'")
+    return config["outputs"]["output_dir"] + "regressor/" + wildcards.dataset + "/" + wildcards.infile + ".txt.gz"
 
 def get_regressor_exp(wildcards):
     logger.debug("get_regressor_exp(" + print_wildcards(wildcards) + ")")
@@ -355,7 +353,7 @@ def get_exp(wildcards):
         return config["outputs"]["output_dir"] + "regressor/all/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.txt.gz"
 
     logger.debug("\treturning outout of rule 'merge_exps'")
-    return config["outputs"]["output_dir"] + "regressor/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.txt.gz"
+    return config["outputs"]["output_dir"] + "regressor/merged." + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.txt.gz"
 
 
 def get_annotation(wildcards):
@@ -780,7 +778,7 @@ rule merge_exps:
     input:
         exps = lambda wildcards: expand(config["outputs"]["output_dir"] + "regressor/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.txt.gz", dataset=get_datasets(wildcards), allow_missing=True)
     output:
-        out = config["outputs"]["output_dir"] + "regressor/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.txt.gz"
+        out = config["outputs"]["output_dir"] + "regressor/merged." + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.txt.gz"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_matrices_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_matrices_memory"],
@@ -790,7 +788,7 @@ rule merge_exps:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/merge_matrices.py",
-        out = lambda wildcards: config["outputs"]["output_dir"] + "regressor/" + get_basename(config["inputs"]["exp"]) + "." + wildcards.cov + ".CovariatesRemovedOLS"
+        out = lambda wildcards: config["outputs"]["output_dir"] + "regressor/merged." + get_basename(config["inputs"]["exp"]) + "." + wildcards.cov + ".CovariatesRemovedOLS"
     log: config["outputs"]["output_dir"] + "log/merge_exps.{cov}.log"
     shell:
         """
