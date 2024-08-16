@@ -213,6 +213,7 @@ def print_wildcards(wildcards):
         out.append(key + "=" + value)
     return ", ".join(out)
 
+
 def get_input(wildcards):
     logger.debug("get_input(" + print_wildcards(wildcards) + ")")
     input = []
@@ -974,8 +975,7 @@ rule qvalues:
         top_hits = get_top_hits
     output:
         top_hits = config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffectsWithqval.txt",
-        empty = temp(config["outputs"]["output_dir"] + "figures/{cov}/Rplots.pdf"),
-        fig1 = config["outputs"]["output_dir"] + "figures/{cov}/" + config["outputs"]["output_prefix"] + "_overview.png",
+        fig1 = config["outputs"]["output_dir"] + "figures/{cov}/" + config["outputs"]["output_prefix"] + "_overview.pdf",
         fig2 = config["outputs"]["output_dir"] + "figures/{cov}/" + config["outputs"]["output_prefix"] + "_hist.png"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["qvalues_memory"],
@@ -994,6 +994,7 @@ rule qvalues:
         alpha = 0.05,
         data_out = config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffects",
         plot_out = config["outputs"]["output_dir"] + "figures/{cov}/" + config["outputs"]["output_prefix"],
+        tmp = config["outputs"]["output_dir"] + "figures/{cov}/Rplots.pdf",
         suffix = "Withqval"
     log: config["outputs"]["output_dir"] + "log/qvalues.{cov}.log"
     shell:
@@ -1009,6 +1010,7 @@ rule qvalues:
             --data_out {params.data_out} \
             --plot_out {params.plot_out} \
             --suffix {params.suffix} > {log} 2>&1
+        singularity exec --bind {params.bind} {params.sif} mv {params.tmp} {output.fig1}
         """
 
 

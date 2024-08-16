@@ -32,7 +32,7 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
 
 **Pipeline specific inputs**:
  * `bind_path`: directories that the singularity should have access to (comma seperated).
- * `singularity_image`: path to the singularity image containing the software. I used the [sc-MetaBrain WG3](https://github.com/sc-eQTLgen-consortium/WG3-pipeline-QTL/tree/scMetaBrain) singularity file from this created from this [Dockerfile](https://github.com/sc-eQTLgen-consortium/WG3-pipeline-QTL/blob/scMetaBrain/Dockerfile).
+ * `singularity_image`: path to the singularity image containing the software. Can be created from this [Dockerfile](Dockerfile).
  * `repo_dir`: path to the base directory where the scripts are stored (i.e. parent of `scripts`).
  * `mbqtl_jar`: mbQTL jar [download](https://jenkins.harmjanwestra.nl/job/systemsgenetics_hjw/lastBuild/nl.systemsgenetics$MbQTL/).
  * `output_dir`: the output directory.

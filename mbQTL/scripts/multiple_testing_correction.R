@@ -40,7 +40,8 @@ if (any(unlist(lapply(c(opt$input, opt$data_out, opt$plot_out), is.na)))) {
   stop("required parameters (input, data_out & plot_out) must be provided.")
 }
 
-shhh(library(tidyverse))
+shhh(library(readr))
+shhh(library(ggplot2))
 shhh(library(qvalue))
 
 print("Loading data")
@@ -76,12 +77,11 @@ data <- data[order(data[[opt$qvalue]]), cols]
 print("Saving data")
 write.table(data, paste0(opt$data_out, opt$suffix, ".txt"), quote = F, sep = "\t", row.names = FALSE)
 
+dir.create(dirname(opt$plot_out), recursive = TRUE, showWarnings = FALSE)
 setwd(dirname(opt$plot_out))
 
 print("Creating figures")
 plot1 <- plot(qobj)
-ggsave(plot1, filename = paste0(opt$plot_out, "_overview.png"), width = 29.7, height = 21, units = c("cm"))
-
 plot2 <- hist(qobj)
 ggsave(plot2, filename = paste0(opt$plot_out, "_hist.png"), width = 29.7, height = 21 ,units = c("cm"))
 
