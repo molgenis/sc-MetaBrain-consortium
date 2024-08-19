@@ -211,7 +211,7 @@ class main():
                 outfile="dag{}".format(i)
             )
 
-        for jobs in [1, 3, 24, 100, 1000]:
+        for jobs in [1, 10000]:
             self.write_run_script(
                 snakefile=snakefile,
                 configfile=configfile,
