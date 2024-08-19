@@ -8,11 +8,14 @@ Syntax:
 """
 
 parser = argparse.ArgumentParser(description="")
-parser.add_argument("--scmbd_indir", type=str, required=True, help="")
 parser.add_argument("--scmd_metadata", type=str, required=True, help="")
+parser.add_argument("--scmbd_wg0_indir", type=str, required=True, help="")
+parser.add_argument("--scmbd_wg3_indir", type=str, required=True, help="")
 parser.add_argument("--cell_mapping", type=str, required=True, help="")
 parser.add_argument("--bryois_indir", type=str, required=True, help="")
 parser.add_argument("--gte", type=str, required=True, help="")
+parser.add_argument("--cell_level", type=str, required=False, default="L1", help="")
+parser.add_argument("--ancestry", type=str, required=False, default="EUR", help="")
 parser.add_argument("--outdir", type=str, required=True, help="")
 parser.add_argument("--extensions", nargs="+", type=str, choices=["png", "pdf", "eps"], default=["png"], help="The figure file extension.. Default: 'png'.")
 args = parser.parse_args()
@@ -22,6 +25,7 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
+import glob
 import os
 import numpy as np
 import pandas as pd
@@ -63,12 +67,27 @@ print(bryois_df[["individual_id", "sample_id"]].drop_duplicates())
 # azimuth_all.metadata.no_cellbender.tsv.gz
 
 print("Loading scMetaBrain data ...")
-scmb_wg1_df = pd.read_csv(os.path.join(args.scmbd_indir, "Final_Assignments_demultiplexing_doublets_no_cellbender.tsv.gz"), sep="\t", header=0, index_col=None)
-scmb_wg1_tag_df = pd.read_csv("/groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2024-01-10-scMetaBrain-Workgroup3DownstreamAnalyses/2024-05-06-Freeze1Bryois-NoCellBender/expression_input/metadata.tagged.tsv.gz", sep="\t", header=0, index_col=None)
-scmb_wg2_df = pd.read_csv(os.path.join(args.scmbd_indir, "azimuth_all.metadata.no_cellbender.tsv.gz"), sep="\t", header=0, index_col=None)
-l1_df = pd.read_csv(args.cell_mapping, sep=";", header=0, index_col=None)
-scmb_df = scmb_wg1_df.merge(scmb_wg1_tag_df, on=["Pool", "Barcode"], how="left").merge(scmb_wg2_df, on=["Pool", "Barcode"], how="inner").merge(l1_df, on="predicted.subclass", how="left")
-del scmb_wg1_df, scmb_wg1_tag_df, scmb_wg2_df, l1_df
+scmb_df = pd.read_csv(os.path.join(args.scmbd_wg3_indir, "expression_input", "metadata.tsv.gz"), sep="\t", header=0, index_col=None)
+
+# Adding CellBender or not.
+scmb_df["CellBender"] = True
+for fpath in glob.glob(os.path.join(args.scmbd_wg0_indir, "CellRanger", "*", "outs", "filtered_feature_bc_matrix", "barcodes.tsv.gz")):
+    pool = fpath.split(os.sep)[-4]
+    barcodes_df = pd.read_csv(fpath, sep="\t", header=None, index_col=None)
+    barcodes_df["Barcode"] = barcodes_df[0].str.split("-", n=1, expand=True)[0] + "_" + str(pool)
+    scmb_df.loc[scmb_df["Barcode"].isin(set(barcodes_df["Barcode"].values)), "CellBender"] = False
+
+print(scmb_df["CellBender"].value_counts())
+# scmb_df = scmb_df.loc[~scmb_df["CellBender"], :]
+
+# Adding include / exclude.
+scmb_df["Include"] = True
+for fpath in glob.glob(os.path.join(args.scmbd_wg3_indir, "expression_input", "EUR", args.cell_level, "*", "manual_selection", "*_PreQC_exclude_smf.txt")):
+    cell_type = os.path.basename(fpath).split("_")[0]
+    exclude_df = pd.read_csv(fpath, sep="\t", header=None, index_col=None)
+    for index, row in exclude_df.iterrows():
+        scmb_df.loc[(scmb_df["Assignment"] == row[0]) & (scmb_df["Assignment_Run_Lane"] == row[1]) & (scmb_df[args.cell_level] == cell_type), "Include"] = False
+    del exclude_df
 
 print(scmb_df)
 print(scmb_df["L1"].value_counts())
@@ -81,11 +100,40 @@ print(scmb_df["L1"].value_counts())
 # PER     36.400
 # END     36.028
 
-print(scmb_df.loc[scmb_df["DropletType"] == "singlet", "L1"].value_counts())
-print(scmb_df.loc[scmb_df["tag"] == "NotOutlier", "L1"].value_counts())
-print(scmb_df.loc[(scmb_df["DropletType"] == "singlet") & (scmb_df["tag"] == "NotOutlier"), "L1"].value_counts())
-
 print(scmb_df[["Pool", "Assignment"]].drop_duplicates())
+
+mask1 = scmb_df["DropletType"] == "singlet"
+mask2 = scmb_df["tag"] == "NotOutlier"
+mask3 = scmb_df["Provided_Ancestry"] == args.ancestry
+mask4 = scmb_df["cell_treatment"] == "UT"
+mask5 = scmb_df["Include"]
+mask = mask1 & mask2 & mask3 & mask4 & mask5
+scmb_post_qc_df = scmb_df.loc[mask, :].copy()
+
+print("Filtering barcodes:")
+print("  DropletType - Singlet: N = {:,}".format(sum(mask1)))
+print("  tag - NotOutlier: N = {:,}".format(sum(mask2)))
+print("  Provided_Ancestry - {}: N = {:,}".format(args.ancestry, sum(mask3)))
+print("  cell_treatment - UT: N = {:,}".format(sum(mask4)))
+print("  Assignment - Assignment_Run_Lane - include: N = {:,}".format(sum(mask5)))
+print("Barcodes: N = {:,} (post-filter)".format(sum(mask)))
+
+print("Has genotype: {:,}".format(scmb_df.loc[mask3, :].shape[0]))
+print("Has genotype and include: {:,}".format(scmb_df.loc[mask3 & mask5, :].shape[0]))
+print(scmb_df.loc[mask3 & mask5, "DropletType"].value_counts())
+print("Has genotype and include and singlet: {:,}".format(scmb_df.loc[mask1 & mask3 & mask5, :].shape[0]))
+print(scmb_df.loc[mask1 & mask3 & mask5, "nCount_RNA.tag"].value_counts())
+print(scmb_df.loc[mask1 & mask3 & mask5, "percent.mt.tag"].value_counts())
+print(scmb_df.loc[mask1 & mask3 & mask5, "percent.mt"].min(), scmb_df.loc[mask1 & mask3 & mask5, "percent.mt"].max())
+print(scmb_df.loc[mask1 & mask2 & mask3 & mask5, "percent.mt"].min(), scmb_df.loc[mask1 & mask2 & mask3 & mask5, "percent.mt"].max())
+print(scmb_df.loc[mask1 & mask3 & mask5, "nCount_RNA"].min(), scmb_df.loc[mask1 & mask3 & mask5, "nCount_RNA"].max())
+print(scmb_df.loc[mask1 & mask2 & mask3 & mask5, "nCount_RNA"].min(), scmb_df.loc[mask1 & mask2 & mask3 & mask5, "nCount_RNA"].max())
+print(scmb_df.loc[mask1 & mask3 & mask5, "tag"].value_counts())
+
+print(len(scmb_post_qc_df["Pool"].unique()))
+print(scmb_post_qc_df["L1"].value_counts())
+print(scmb_post_qc_df["L1"].value_counts().sum())
+print(scmb_post_qc_df[["Pool", "Assignment"]].drop_duplicates())
 
 #############################################
 
@@ -110,6 +158,7 @@ print(scmb_df[["Pool", "Assignment"]].drop_duplicates())
 # print("Loading scMetaBrain metadata ...")
 # bryois_to_scmbd_sample_id = {}
 # bryois_to_scmbd_individual_id = {}
+# bryois_to_scmb_dataset = {}
 # for dataset in ["Mathys2019", "RocheAD2022", "RocheColumbia2022", "RocheMS2022", "Zhou2020", "Cain2023"]:
 #     full_link_df = pd.read_csv(os.path.join(args.scmd_metadata, dataset, dataset + "_full_link_table.tsv"), sep="\t", header=0, index_col=None)
 #     keep = []
@@ -122,6 +171,7 @@ print(scmb_df[["Pool", "Assignment"]].drop_duplicates())
 #             full_link_df["specimenID"].str.split("_", n=1, expand=True)[0],
 #             full_link_df["wholeGenomeSeqID"]
 #         )))
+#         bryois_to_scmb_dataset.update({sample_id: dataset for sample_id in full_link_df["specimenID"].str.split("_", n=1, expand=True)[0]})
 #     elif dataset in ["RocheAD2022", "RocheMS2022"]:
 #         bryois_to_scmbd_sample_id.update(dict(zip(
 #             [trans_sample_anon[sample_id_anon] if sample_id_anon in trans_sample_anon else sample_id_anon for sample_id_anon in full_link_df["id"].str.split("_", n=1, expand=True)[0]],
@@ -131,6 +181,8 @@ print(scmb_df[["Pool", "Assignment"]].drop_duplicates())
 #             [trans_sample_anon[sample_id_anon] if sample_id_anon in trans_sample_anon else sample_id_anon for sample_id_anon in full_link_df["id"].str.split("_", n=1, expand=True)[0]],
 #             full_link_df["Ind"]
 #         )))
+#         bryois_to_scmb_dataset.update({sample_id: dataset for sample_id in
+#             [trans_sample_anon[sample_id_anon] if sample_id_anon in trans_sample_anon else sample_id_anon for sample_id_anon in full_link_df["id"].str.split("_", n=1, expand=True)[0]]})
 #     elif dataset == "RocheColumbia2022":
 #         bryois_to_scmbd_sample_id.update(dict(zip(
 #             [trans_sample_anon[sample_id_anon] if sample_id_anon in trans_sample_anon else sample_id_anon for sample_id_anon in full_link_df["sample_id_anon"]],
@@ -140,6 +192,8 @@ print(scmb_df[["Pool", "Assignment"]].drop_duplicates())
 #             [trans_sample_anon[sample_id_anon] if sample_id_anon in trans_sample_anon else sample_id_anon for sample_id_anon in full_link_df["sample_id_anon"]],
 #             full_link_df["individual_id"]
 #         )))
+#         bryois_to_scmb_dataset.update({sample_id: dataset for sample_id in
+#             [trans_sample_anon[sample_id_anon] if sample_id_anon in trans_sample_anon else sample_id_anon for sample_id_anon in full_link_df["sample_id_anon"]]})
 #     elif dataset == "Zhou2020":
 #         full_link_df.loc[full_link_df["specimenID"] == "P7", "wholeGenomeSeqID"] = "MAP50104134"
 #
@@ -151,6 +205,8 @@ print(scmb_df[["Pool", "Assignment"]].drop_duplicates())
 #             full_link_df["specimenID"],
 #             full_link_df["wholeGenomeSeqID"]
 #         )))
+#         bryois_to_scmb_dataset.update({sample_id: dataset for sample_id in
+#             full_link_df["specimenID"]})
 #     elif dataset == "Cain2023":
 #         cain_sample_id_dict = {}
 #         for sample_id in smf_df["sample_id"]:
@@ -169,9 +225,12 @@ print(scmb_df[["Pool", "Assignment"]].drop_duplicates())
 #             full_link_df["sample_id"],
 #             full_link_df["wholeGenomeSeqID"]
 #         )))
+#         bryois_to_scmb_dataset.update({sample_id: dataset for sample_id in
+#             full_link_df["sample_id"]})
 #
 # smf_df["scmbd_sample_id"] = smf_df["sample_id"].map(bryois_to_scmbd_sample_id)
 # smf_df["scmbd_individual_id"] = smf_df["sample_id"].map(bryois_to_scmbd_individual_id)
+# smf_df["scmbd_dataset"] = smf_df["sample_id"].map(bryois_to_scmb_dataset)
 # print(smf_df)
 #
 # smf_df.to_csv(os.path.join(args.outdir, "smf.txt"), sep="\t", header=True, index=False)
@@ -217,6 +276,10 @@ def create_confusion_matrix(df, x, y):
         "Endothelial cells": "END",
         "Pericytes": "PER"
     }
+    ct_trans_copy = dict(ct_trans)
+    for key, value in ct_trans_copy.items():
+        ct_trans[value] = key
+    del ct_trans_copy
 
     confusion_df = pd.DataFrame(np.nan, index=row_labels, columns=col_labels)
     annotation_df = pd.DataFrame("", index=row_labels, columns=col_labels)
@@ -287,20 +350,22 @@ def plot_heatmap(df, annot_df, xlabel="", ylabel="", title="", outfile="plot"):
 
 ###############################################################
 
-print("Merging data data ...")
+print("Merging data ...")
 
-bryois_df = bryois_df.merge(smf_df[["sample_id", "scmbd_sample_id", "scmbd_individual_id"]], on="sample_id", how="left")
+bryois_df = bryois_df.merge(smf_df[["sample_id", "scmbd_sample_id", "scmbd_individual_id", "scmbd_dataset"]], on="sample_id", how="left")
+bryois_df["scmbd_sample_id"] = bryois_df["scmbd_sample_id"].astype(str)
+bryois_df["Bryois_Include"] = True
 # print(bryois_df[["sample_id", "individual_id"]].drop_duplicates())
 # print(bryois_df[["scmbd_sample_id", "scmbd_individual_id"]].drop_duplicates())
 
-scmb_df["barcode"] = scmb_df["Barcode"].str.split("_", n=1, expand=True)[0] + "-1"
-print(scmb_df)
+scmb_post_qc_df["Pool"] = scmb_post_qc_df["Pool"].astype(str)
+scmb_post_qc_df["barcode"] = scmb_post_qc_df["Barcode"].str.split("_", n=1, expand=True)[0] + "-1"
+print(scmb_post_qc_df)
 
-df = bryois_df.merge(scmb_df[["Pool", "Assignment", "barcode", "DropletType", "tag", "L1"]], left_on=["scmbd_sample_id", "scmbd_individual_id", "barcode"], right_on=["Pool", "Assignment", "barcode"], how="inner")
-print(df)
-print(df.loc[df["label"] == "Excitatory neurons", ["DropletType"]].value_counts())
-print(df.loc[df["label"] == "Excitatory neurons", ["tag"]].value_counts())
-print(df.loc[df["label"] == "Excitatory neurons", ["L1"]].value_counts())
+df = bryois_df.merge(scmb_post_qc_df[["Pool", "Assignment", "barcode", "DropletType", "percent.mt", "nCount_RNA", "CellBender", "tag", "L1"]],
+                     left_on=["scmbd_sample_id", "scmbd_individual_id", "barcode"],
+                     right_on=["Pool", "Assignment", "barcode"], how="right")
+df["Bryois_Include"] = df["Bryois_Include"].fillna(False)
 # print(df[["sample_id", "scmbd_sample_id"]].drop_duplicates())
 
 df.to_csv(os.path.join(args.outdir, "merged_cell_assignments.txt.gz"), sep="\t", header=True, index=False, compression="gzip")
@@ -318,3 +383,12 @@ plot_heatmap(
     annot_df=annotation_df,
     title="TPR: {:.3f}".format(tpr),
     outfile="Bryois_label_vs_scMetaBrain_L1_confusion_matrix")
+
+confusion_df, annotation_df, tpr = create_confusion_matrix(df=df, x="L1", y="label")
+print(confusion_df)
+
+plot_heatmap(
+    df=confusion_df,
+    annot_df=annotation_df,
+    title="TPR: {:.3f}".format(tpr),
+    outfile="scMetaBrain_L1_vs_Bryois_label_confusion_matrix")
