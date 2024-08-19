@@ -30,6 +30,7 @@ import re
 import os
 
 # Third party imports.
+import numpy as np
 import pandas as pd
 
 # Local application imports.
@@ -117,13 +118,13 @@ class main():
         scrnaseq_metadata = metadata_df.loc[metadata_df["assay"] == "scrnaSeq", ["individualID", "specimenID"]].copy()
         scrnaseq_metadata.drop_duplicates(inplace=True)
         scrnaseq_metadata.columns = ["individualID", "scrnaSeqID"]
-        # print(scrnaseq_metadata)
+        print(scrnaseq_metadata)
 
         # WGS metadata.
         wholegenomeseq_metadata = metadata_df.loc[metadata_df["assay"] == "wholeGenomeSeq", ["individualID", "specimenID"]].copy()
         wholegenomeseq_metadata.drop_duplicates(inplace=True)
         wholegenomeseq_metadata.columns = ["individualID", "wholeGenomeSeqID"]
-        # print(wholegenomeseq_metadata)
+        print(wholegenomeseq_metadata)
 
         print("Loading fastQ samples")
         fastq_df = self.load_fastq_files(inpath=self.fastqdir)
@@ -145,7 +146,7 @@ class main():
 
         fastq_df = fastq_df[[scrnaseq_id]].drop_duplicates()
         fastq_df.reset_index(drop=True, inplace=True)
-        # print(fastq_df)
+        print(fastq_df)
 
         if self.dataset is None:
             fastq_df = fastq_df.merge(scrnaseq_metadata, on=scrnaseq_id, how="left")
@@ -154,8 +155,46 @@ class main():
             dataset_df = self.load_file(inpath=self.dataset)
             dataset_df = dataset_df[list({scrnaseq_id, individual_id, project_id})]
             fastq_df = fastq_df.merge(dataset_df, on=scrnaseq_id, how="left")
+        print(fastq_df)
 
-        df = fastq_df.merge(wholegenomeseq_metadata, on=individual_id, how="left")
+        vcf_samples = None
+        if self.vcf is not None:
+            print("Checking overlap with VCF")
+            vcf_samples = self.load_vcf_samples(inpath=self.vcf)
+
+        # First whole genome seq ids.
+        wholegenomeseq_dict = {}
+        for _, row in fastq_df.iterrows():
+            if row[individual_id] in wholegenomeseq_dict:
+                continue
+            wholegenomeseq_ids = list(wholegenomeseq_metadata.loc[wholegenomeseq_metadata[individual_id] == row[individual_id], genotype_id].values)
+            if len(wholegenomeseq_ids) == 0:
+                wholegenomeseq_dict[row[individual_id]] = "NA"
+            elif len(wholegenomeseq_ids) == 1:
+                wholegenomeseq_dict[row[individual_id]] = wholegenomeseq_ids[0]
+            else:
+                if vcf_samples is None:
+                    print("Error, unable to match {} uniquely to a wholeGenomeSeqID. Options are {}.".format(row[individual_id], ", ".join(wholegenomeseq_ids)))
+                    exit()
+                else:
+                    found_wholegenomeseq_ids = [wholegenomeseq_id for wholegenomeseq_id in wholegenomeseq_ids if wholegenomeseq_id in vcf_samples]
+                    if len(found_wholegenomeseq_ids) == 0:
+                        wholegenomeseq_dict[row[individual_id]] = "NA"
+                    elif len(found_wholegenomeseq_ids) == 1:
+                        wholegenomeseq_dict[row[individual_id]] = found_wholegenomeseq_ids[0]
+                    else:
+                        print("Error, unable to match {} uniquely to a wholeGenomeSeqID. Options are {}.".format(row[individual_id], ", ".join(wholegenomeseq_ids)))
+                        exit()
+
+        print(wholegenomeseq_dict)
+        df = fastq_df.copy()
+        fastq_df["wholeGenomeSeqID"] = fastq_df[individual_id].map(wholegenomeseq_dict)
+        if "projid" in fastq_df.columns and vcf_samples is not None:
+            for index, row in fastq_df.iterrows():
+                if row[genotype_id] not in vcf_samples and "ROS" + str(row[project_id]) in vcf_samples:
+                    fastq_df.loc[index, genotype_id] = "ROS" + str(row[project_id])
+        del fastq_df
+        print(df)
 
         if self.vcf is not None:
             print("Checking overlap with VCF")
@@ -179,7 +218,7 @@ class main():
                 mask.append(found)
 
             print("  Removed {:,} samples due to missing in VCF file.".format(len(mask) - sum(mask)))
-            df = df.loc[mask, : ]
+            df.loc[mask, genotype_id] = np.nan
 
         print("Merged data:")
         print(df)
@@ -189,11 +228,11 @@ class main():
 
         print("Link table:")
         link_table = df[[project_id, scrnaseq_id]].copy()
-        link_table.columns = ["individualID", "specimenID"]
+        link_table.columns = ["fastqID", "specimenID"]
         print(link_table)
-        # self.save_file(df=link_table,
-        #                outpath=os.path.join(self.outdir, self.name, "{}_link_table.csv".format(self.name)),
-        #                sep=",")
+        self.save_file(df=link_table,
+                       outpath=os.path.join(self.outdir, self.name, "{}_link_table.csv".format(self.name)),
+                       sep=",")
 
         print("Individual coupling:")
         ind_coupling = df[[project_id, genotype_id]].copy()
@@ -213,9 +252,6 @@ class main():
                        outpath=os.path.join(self.outdir, self.name, "{}_GTE.tsv".format(self.name)),
                        header=False)
 
-
-
-
     @staticmethod
     def load_file(inpath, header=0, index_col=None, sep=",", skiprows=None,
                   nrows=None):
@@ -232,7 +268,7 @@ class main():
 
         samples = []
         for fpath in fpaths:
-            match = re.match("(.+)_(S[0-9])_(L00[0-9])_(R[12])_001\.fastq\.gz", os.path.basename(fpath))
+            match = re.match("(.+)_(S[0-9]+)_(L00[0-9])_(R[12])_001\.fastq\.gz$", os.path.basename(fpath))
             if match is None:
                 continue
             samples.append([match.group(1), match.group(2), match.group(3), match.group(4)])

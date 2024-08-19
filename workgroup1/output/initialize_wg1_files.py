@@ -97,6 +97,7 @@ class main():
         # Step 2 arguments.
         self.demultiplexing_config = getattr(arguments, 'demultiplexing_config')
         self.poolsheet_path = getattr(arguments, 'poolsheet_path')
+        self.samplesheet_path = getattr(arguments, 'samplesheet_path')
         self.individual_list_dir = getattr(arguments, 'individual_list_dir')
         self.individual_coupling = getattr(arguments, 'individual_coupling')
         if self.individual_list_dir is None:
@@ -104,22 +105,27 @@ class main():
         self.vcf = getattr(arguments, 'vcf')
         if self.vcf is None:
             self.vcf = "[]"
+        self.alignment_fai = getattr(arguments, 'alignment_fai')
         self.is_multiplexed = getattr(arguments, 'is_multiplexed')
         self.sc_data_type = getattr(arguments, 'sc_data_type')
-        self.rename_bam = getattr(arguments, 'rename_bam')
+        self.rename_chrs = getattr(arguments, 'rename_chrs')
+        self.reheader_vcf = getattr(arguments, 'reheader_vcf')
         self.check_sample_swaps = getattr(arguments, 'no_sample_swap_check')
 
         if self.step is None or self.step == 2:
             for label, value in [("--poolsheet_path", self.poolsheet_path),
+                                 ("--alignment_fai", self.alignment_fai),
                                  ("--is_multiplexed", self.is_multiplexed),
                                  ("--sc_data_type", self.sc_data_type),
-                                 ("--rename_bam", self.rename_bam),
+                                 ("--rename_chrs", self.rename_chrs),
+                                 ("--reheader_vcf", self.reheader_vcf),
                                  ("--check_sample_swaps", self.check_sample_swaps)]:
                 if value is None:
                     print("Argument {} is required when --step equals {}.".format(label, self.step))
                     exit()
             if self.is_multiplexed:
-                for label, value in [("--individual_list_dir", self.individual_list_dir),
+                for label, value in [("--samplesheet_path", self.samplesheet_path),
+                                     ("--individual_list_dir", self.individual_list_dir),
                                      ("--vcf", self.vcf)]:
                     if value is None:
                         print("Argument {} is required when --is_multiplexed equals True.".format(label))
@@ -230,6 +236,10 @@ class main():
                                  "line has a pool name used for the scRNA-seq "
                                  "directories and the number of individuals in "
                                  "each pool.")
+        parser.add_argument("--samplesheet_path",
+                            type=str,
+                            default=None,
+                            help="")
         parser.add_argument("--individual_list_dir",
                             type=str,
                             default=None,
@@ -247,6 +257,10 @@ class main():
                             type=str,
                             default=None,
                             help="")
+        parser.add_argument("--alignment_fai",
+                            type=str,
+                            default=None,
+                            help="")
         parser.add_argument("--is_multiplexed",
                             action='store_true',
                             default=False,
@@ -256,7 +270,11 @@ class main():
                             choices=["single-cell", "single-nucleus"],
                             default="",
                             help="")
-        parser.add_argument("--rename_bam",
+        parser.add_argument("--rename_chrs",
+                            action='store_true',
+                            default=False,
+                            help="")
+        parser.add_argument("--reheader_vcf",
                             action='store_true',
                             default=False,
                             help="")
@@ -375,7 +393,7 @@ class main():
                 outfile="dag{}".format(i)
             )
 
-        for jobs in [1, 3, 24, 100, 1000, 10000]:
+        for jobs in [1, 10000]:
             self.write_run_script(
                 snakefile=snakefile,
                 configfile=configfile,
@@ -435,13 +453,16 @@ class main():
             ("repo_dir", repo_dir),
             ("ref_dir", self.ref_dir),
             ("poolsheet_path", self.poolsheet_path),
+            ("samplesheet_path", self.samplesheet_path),
             ("individual_list_dir", self.individual_list_dir),
             ("individual_coupling", self.individual_coupling),
             ("vcf", self.vcf),
+            ("alignment_fai", self.alignment_fai),
             ("output_dir", output_dir),
             ("is_multiplexed", self.is_multiplexed),
             ("sc_data_type", self.sc_data_type),
-            ("rename_bam", self.rename_bam),
+            ("rename_chrs", self.rename_chrs),
+            ("reheader_vcf", self.reheader_vcf),
             ("check_sample_swaps", self.check_sample_swaps)
         )
         self.write_configfile(
@@ -478,7 +499,7 @@ class main():
                 outfile="dag{}".format(i)
             )
 
-        for jobs in [1, 2, 22, 100, 1000, 10000]:
+        for jobs in [1, 10000]:
             self.write_run_script(
                 snakefile=snakefile,
                 configfile=configfile,
@@ -762,11 +783,16 @@ class main():
             print("[Step2] Demultiplexing and doublet removal arguments:")
             print("  > Demultiplexing configuration: {}".format(self.demultiplexing_config))
             print("  > Poolsheet file:               {}".format(self.poolsheet_path))
-            print("  > VCF:                          {}".format(", ".join(self.vcf) if isinstance(self.vcf, list) else ""))
+            print("  > Samplesheet file:             {}".format(self.samplesheet_path))
             print("  > Individual list directory:    {}".format(self.individual_list_dir))
             print("  > Individual coupling file:     {}".format(self.individual_coupling))
+            print("  > VCF:                          {}".format(", ".join(self.vcf) if isinstance(self.vcf, list) else ""))
+            print("  > Alignment FAI:                {}".format(self.alignment_fai))
             print("  > Is multiplexed:               {}".format(self.is_multiplexed))
             print("  > Single-cell data type:        {}".format(self.sc_data_type))
+            print("  > Rename chromosomes:           {}".format(self.rename_chrs))
+            print("  > Reheader VCF:                 {}".format(self.reheader_vcf))
+            print("  > Check sample swap:            {}".format(self.check_sample_swaps))
             print("")
 
 

@@ -30,6 +30,7 @@ import re
 import os
 
 # Third party imports.
+import numpy as np
 import pandas as pd
 
 # Local application imports.
@@ -141,27 +142,61 @@ class main():
         if not os.path.exists(individuals_list_path):
             os.makedirs(individuals_list_path)
 
+        print("Loading cell annotations")
+        individual_list_dict, pool_n_df = self.parse_fujita_cell_annotation(inpath=self.cell_annotation)
+
         print("Creating individual list files")
+        pools_df = fastq_df[["id", "PartialscrnaSeqID"]].drop_duplicates().copy()
+        print(pools_df)
         subset_list = []
-        ids = set()
-        for _, row in fastq_df.iterrows():
-            if row["id"] in ids:
-                continue
+        samplesheet = []
+        for _, row in pools_df.iterrows():
             print("  Pool: {}".format(row["id"]))
             subset = metadata.loc[metadata["PartialscrnaSeqID"] == row["PartialscrnaSeqID"], :].copy()
             subset["id"] = row["id"]
-            subset["N"] = subset.shape[0]
+            n = subset.shape[0]
+            subset["N"] = n
+
+            subset["cell_annot_match"] = False
+            if not row["PartialscrnaSeqID"] in individual_list_dict:
+                print("\tWarning, could not verify if individualIDs match")
+            else:
+                cell_annot_ind_ids = individual_list_dict[row["PartialscrnaSeqID"]]
+                subset["cell_annot_match"] = [ind_id in cell_annot_ind_ids for ind_id in subset["individualID"]]
+
+                n_matches = subset["cell_annot_match"].sum()
+                if n_matches == n:
+                    print("\tall individualIDs match")
+                elif n_matches == len(cell_annot_ind_ids):
+                    print("\tall overlapping individualIDs match")
+                else:
+                    print("\t{} / {} individualIDs match".format(n_matches, n))
+                    print("\t\tMissing: {}".format(", ".join([cell_annot_ind_id for cell_annot_ind_id in cell_annot_ind_ids if cell_annot_ind_id not in subset["individualID"]])))
+                    print(subset)
+
+            interest = ["SM-CTED9", "SM-CJEHE", "SM-CJGGL", "SM-CJK4Y", "SM-CTEMN", "SM-CJGLY", "SM-CTDVR"]
+            for bla in interest:
+                if bla in subset["wholeGenomeSeqID"]:
+                    print(subset)
+                    exit()
+
             subset_list.append(subset)
+            samplesheet.append([row["id"], n])
 
-            self.save_file(pd.DataFrame(subset["wholeGenomeSeqID"]), outpath=os.path.join(individuals_list_path, row["PartialscrnaSeqID"] + ".txt"), header=False, index=False)
+            self.save_file(pd.DataFrame(subset.loc[~subset["wholeGenomeSeqID"].isna(), "wholeGenomeSeqID"]), outpath=os.path.join(individuals_list_path, row["id"] + ".txt"), header=False, index=False)
 
-            ids.add(row["id"])
         df = pd.concat(subset_list, axis=0)
 
         print("Merged data:")
         print(df)
         self.save_file(df=df,
                        outpath=os.path.join(self.outdir, self.name, "{}_full_link_table.tsv".format(self.name)),
+                       sep="\t")
+
+        samplesheet_df = pd.DataFrame(samplesheet, columns=["Pool", "N_Individuals"])
+        print(samplesheet_df)
+        self.save_file(df=samplesheet_df,
+                       outpath=os.path.join(self.outdir, self.name, "{}_samplesheet.tsv".format(self.name)),
                        sep="\t")
 
         print("Link table:")
@@ -175,6 +210,8 @@ class main():
         print("Genotype samples:")
         genotype_samples = df[["wholeGenomeSeqID"]].copy()
         genotype_samples.drop_duplicates(inplace=True)
+        genotype_samples[genotype_samples == ""] = np.nan
+        genotype_samples = genotype_samples.dropna()
         print(genotype_samples)
         self.save_file(df=genotype_samples,
                        header=False,
