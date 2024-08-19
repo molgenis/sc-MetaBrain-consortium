@@ -1,252 +1,220 @@
 #!/usr/bin/env python3
-
-"""
-File:         compare_metadata.py
-Created:      2024/03/02
-Last Changed:
-Author:       M.Vochteloo
-
-Copyright (C) 2020 University Medical Center Groningen.
-
-A copy of the BSD 3-Clause "New" or "Revised" License can be found in the
-LICENSE file in the root directory of this source tree.
-"""
-
-# Standard imports.
-from __future__ import print_function
+# Author: M.Vochteloo
 import argparse
-import glob
-import os
-
-# Third party imports.
-import pandas as pd
-from scipy import stats
-
-
-# Local application imports.
-
-# Metadata
-__program__ = "Compare Metadata"
-__author__ = "Martijn Vochteloo"
-__maintainer__ = "Martijn Vochteloo"
-__email__ = "m.vochteloo@rug.nl"
-__license__ = "BSD (3-Clause)"
-__version__ = 1.0
-__description__ = "{} is a program developed and maintained by {}. " \
-                  "This program is licensed under the {} license and is " \
-                  "provided 'as-is' without any warranty or indemnification " \
-                  "of any kind.".format(__program__,
-                                        __author__,
-                                        __license__)
 
 """
 Syntax: 
 ./compare_metadata.py -h
 """
 
+parser = argparse.ArgumentParser(description="")
+parser.add_argument("--meta1", type=str, required=True, help="")
+parser.add_argument("--label1", type=str, required=True, help="")
+parser.add_argument("--link1", type=str, required=False, default=None, help="")
+parser.add_argument("--keys1", type=str, nargs="+", required=False, default=["Barcode"], help="")
+parser.add_argument("--meta2", type=str, required=True, help="")
+parser.add_argument("--label2", type=str, required=True, help="")
+parser.add_argument("--link2", type=str, required=False, default=None, help="")
+parser.add_argument("--keys2", type=str, nargs="+", required=False, default=["Barcode"], help="")
+parser.add_argument("--values", type=str, nargs="+", required=False, default=None, help="")
+parser.add_argument("--outdir", type=str, required=True, help="")
+args = parser.parse_args()
 
-class main():
-    def __init__(self):
-        # Get the command line arguments.
-        arguments = self.create_argument_parser()
-        self.row_data_path = getattr(arguments, 'row_data')
-        self.row_name = " ".join(getattr(arguments, 'row_name'))
-        self.col_data_path = getattr(arguments, 'col_data')
-        self.col_name = " ".join(getattr(arguments, 'col_name'))
-        self.type = getattr(arguments, 'type')
+print("Options in effect:")
+for arg in vars(args):
+    print("  --{} {}".format(arg, getattr(args, arg)))
+print("")
 
-    @staticmethod
-    def create_argument_parser():
-        parser = argparse.ArgumentParser(prog=__program__,
-                                         description=__description__)
+import os
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
-        # Add optional arguments.
-        parser.add_argument("-v",
-                            "--version",
-                            action="version",
-                            version="{} {}".format(__program__,
-                                                   __version__),
-                            help="show program's version number and exit.")
-        parser.add_argument("-rd",
-                            "--row_data",
-                            type=str,
-                            required=True,
-                            help="The path to the data matrix.")
-        parser.add_argument("-rn",
-                            "--row_name",
-                            nargs="*",
-                            type=str,
-                            required=False,
-                            default="",
-                            help="The name of -r / --row_data.")
-        parser.add_argument("-cd",
-                            "--col_data",
-                            type=str,
-                            required=True,
-                            help="The path to the data matrix.")
-        parser.add_argument("-cn",
-                            "--col_name",
-                            nargs="*",
-                            type=str,
-                            required=False,
-                            default="",
-                            help="The name of -c / --col_data.")
-        parser.add_argument("-t",
-                            "--type",
-                            type=str,
-                            required=True,
-                            choices=["WG1", "WG2", "WG3"],
-                            help="")
+if not os.path.exists(args.outdir):
+    os.makedirs(args.outdir)
+if not os.path.exists(os.path.join(args.outdir, "plot")):
+    os.makedirs(os.path.join(args.outdir, "plot"))
 
-        return parser.parse_args()
-
-    def start(self):
-        self.print_arguments()
-
-        print("Searching row data.")
-        row_df = self.get_pools(self.row_data_path)
-        if row_df.shape[0] == 0:
-            print("\tNo data found.")
-            exit()
-
-        print("Searching col data.")
-        col_df = self.get_pools(self.col_data_path)
-        if col_df.shape[0] == 0:
-            print("\tNo data found.")
-            exit()
-
-        print("Loading and compare per folder.")
-        row_df.columns = ["Folder", self.row_name + " Metadata"]
-        col_df.columns = ["Folder", self.col_name + " Metadata"]
-        df = self.load_and_compare(row_df=row_df, col_df=col_df)
-        print(df)
-
-        print("Summary per metadata feature:")
-        summary_df = df[["Feature", "Match"]].groupby("Feature").mean()
-        for index, row in summary_df.iterrows():
-            print("\tColumn: {}\t{:.2f} match".format(index, row["Match"]))
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 
 
-    def get_pools(self, inpath):
-        if self.type == "WG1":
-            return self.get_wg1_metadata(inpath=inpath)
-        elif self.type == "WG2":
-            return self.get_wg2_metadata(inpath=inpath)
-        elif self.type == "WG3":
-            return self.get_wg3_metadata(inpath=inpath)
-        else:
-            return pd.DataFrame()
+def load_metadata(data_fpath, link_fpath=None, keys=None):
+    meta_df = pd.read_csv(data_fpath, sep="\t", header=0, index_col=None, nrows=None)
+    print("\tMetadata file: {}".format(meta_df.shape))
 
-    @staticmethod
-    def get_wg1_metadata(inpath):
-        data = []
-        fpaths = glob.glob(os.path.join(inpath, "*"))
-        for fpath in fpaths:
-            folder = os.path.basename(fpath)
-            metadata_path = os.path.join(inpath, folder, "CombinedResults", "Final_Assignments_demultiplexing_doublets.tsv.gz")
-            if os.path.exists(metadata_path):
-                data.append([folder, metadata_path])
+    if link_fpath is not None:
+        print("Adding link data.")
+        meta_df = meta_df.merge(pd.read_csv(args.link2, sep=";", header=0, index_col=None))
 
-        return pd.DataFrame(data, columns=["Folder", "Metadata"])
-
-    @staticmethod
-    def get_wg2_metadata(inpath):
-        data = []
-        metadata_path = os.path.join(inpath, "map", "azimuth_all.metadata.tsv.gz")
-        if os.path.exists(metadata_path):
-            data.append(["ALL", metadata_path])
-
-        return pd.DataFrame(data, columns=["Folder", "Metadata"])
-
-    @staticmethod
-    def get_wg3_metadata(inpath):
-        data = []
-        # fpaths = glob.glob(os.path.join(inpath, "expression_input", "pools", "*"))
-        # for fpath in fpaths:
-        #     folder = os.path.basename(fpath).split(".")[0]
-        #     metadata_path = os.path.join(inpath, "expression_input/pools/" + folder + ".metadata.tsv.gz")
-        #     if os.path.exists(metadata_path):
-        #         data.append([folder, metadata_path])
-
-        metadata_path = os.path.join(inpath, "expression_input", "metadata.tagged.tsv.gz")
-        if os.path.exists(metadata_path):
-            data.append(["ALL", metadata_path])
-
-        return pd.DataFrame(data, columns=["Folder", "Metadata"])
-
-    def load_and_compare(self, row_df, col_df):
-        data = []
-
-        df = row_df.merge(col_df, on="Folder")
-        for _, row in df.iterrows():
-            row_df = pd.read_csv(row[self.row_name + " Metadata"], sep="\t", dtype=str)
-            row_df.fillna("NA", inplace=True)
-            row_n = row_df.shape[0]
-
-            col_df = pd.read_csv(row[self.col_name + " Metadata"], sep="\t", dtype=str)
-            col_df.fillna("NA", inplace=True)
-            col_n = col_df.shape[0]
-
-            overlapping_columns = [column for column in row_df.columns if column in col_df.columns]
-
-            row_df.set_index("Barcode", inplace=True)
-            col_df.set_index("Barcode", inplace=True)
-            overlapping_columns.remove("Barcode")
-            if self.type == "WG2" and row["Folder"] == "ALL":
-                overlapping_columns.remove("Pool")
-
-            row_df.columns = ["{} {}".format(self.row_name, column) for column in row_df.columns]
-            col_df.columns = ["{} {}".format(self.col_name, column) for column in col_df.columns]
-
-            df = row_df.merge(col_df, left_index=True, right_index=True)
-            overlap_n = df.shape[0]
-
-            if row["Folder"] == "ALL":
-                for pool in df[self.row_name + " Pool"].unique():
-                    row_n = (row_df[self.row_name + " Pool"] == pool).sum()
-                    col_n = (col_df[self.col_name + " Pool"] == pool).sum()
-
-                    subset = df.loc[df[self.row_name + " Pool"] == pool, :]
-                    overlap_n = subset.shape[0]
-
-                    for column in overlapping_columns:
-                        match = self.match(df=subset, column=column)
-                        data.append([pool, row_n, col_n, overlap_n, column, match])
+    if keys is not None:
+        for key_index, key in enumerate(keys):
+            if key_index == 0:
+                meta_df.index = meta_df[key]
             else:
-                for column in overlapping_columns:
-                    match = self.match(df=df, column=column)
-                    data.append([row["Folder"], row_n, col_n, overlap_n, column, match])
+                meta_df.index = meta_df.index + "_" + meta_df[key]
 
-        return pd.DataFrame(data, columns=["Folder", self.row_name + " N", self.col_name + " N", "Overlap N", "Feature", "Match"])
+    if len(set(meta_df.index)) != len(meta_df.index):
+        print("Error, indices in data frame are not unique.")
+        exit()
+    if len(set(meta_df.columns)) != len(meta_df.columns):
+        print("Error, columns in data frame are not unique.")
+        exit()
 
-    def match(self, df, column):
-        tmp_df = df[["{} {}".format(self.row_name, column),
-                     "{} {}".format(self.col_name, column)]].copy()
-        tmp_df.columns = ["X", "Y"]
+    return meta_df.loc[:, [column for column in meta_df.columns if column not in keys]]
 
-        try:
-            tmp_df["X-float"] = tmp_df["X"].astype(float)
-            tmp_df["Y-float"] = tmp_df["Y"].astype(float)
+def calc_confusion_matrix(ref_matrix, alt_matrix):
+    ref_counts = list(zip(*np.unique(ref_matrix[:, value_index].astype(str), return_counts=True)))
+    ref_counts.sort(key=lambda x: x[0])
 
-            if tmp_df["X-float"].std() == 0 or tmp_df["Y-float"].std() == 0:
-                raise ValueError
+    alt_counts = list(zip(*np.unique(alt_matrix[:, value_index].astype(str), return_counts=True)))
+    alt_counts.sort(key=lambda x: x[0])
 
-            pearson_coef, _ = stats.pearsonr(tmp_df["Y-float"], tmp_df["X-float"])
-            return pearson_coef
-        except ValueError:
-            return (tmp_df["X"] == tmp_df["Y"]).sum() / df.shape[0]
+    confusion_m = np.empty((len(ref_counts), len(alt_counts)), dtype=np.float64)
+    annotation_m = np.empty((len(ref_counts), len(alt_counts)), dtype=object)
+    total_n_same = 0
+    total_n_total = 0
+    for index_index, (index_label, _) in enumerate(ref_counts):
+        ref_mask = ref_matrix[:, value_index] == index_label
+        n_total = np.sum(ref_mask)
+        for column_index, (column_label, _) in enumerate(alt_counts):
+            alt_mask = alt_matrix[:, value_index] == column_label
+            n_same = np.sum(np.logical_and(ref_mask, alt_mask))
+            prop_same = n_same / n_total
+
+            confusion_m[index_index, column_index] = prop_same
+            annotation_m[index_index, column_index] = "{:.2f}%\nN={:,}".format(prop_same * 100, n_same)
+
+            total_n_same += n_same
+            total_n_total += n_total
+
+    indices = ["{}\n[n={:,.0f}]".format(label, size) for label, size in ref_counts]
+    columns = ["{}\n[n={:,.0f}]".format(label, size) for label, size in alt_counts]
+
+    confusion_df = pd.DataFrame(confusion_m, index=indices, columns=columns)
+    annotation_df = pd.DataFrame(annotation_m, index=indices, columns=columns)
+    return confusion_df, annotation_df
 
 
-    def print_arguments(self):
-        print("Arguments:")
-        print("  > Row data path: {}".format(self.row_data_path))
-        print("  > Row name: {}".format(self.row_name))
-        print("  > Col data path: {}".format(self.col_data_path))
-        print("  > Col name: {}".format(self.col_name))
-        print("  > Type: {}".format(self.type))
-        print("")
+def plot_heatmap(df, annot_df, xlabel="", ylabel="", title="", outfile="plot"):
+    cmap = sns.diverging_palette(246, 24, as_cmap=True)
 
+    sns.set_style("ticks")
+    fig, axes = plt.subplots(nrows=2,
+                             ncols=2,
+                             figsize=(1 * df.shape[1] + 5, 1 * df.shape[0] + 5),
+                             gridspec_kw={"width_ratios": [0.2, 0.8],
+                                          "height_ratios": [0.8, 0.2]})
+    sns.set(color_codes=True)
 
-if __name__ == '__main__':
-    m = main()
-    m.start()
+    row_index = 0
+    col_index = 0
+    for _ in range(4):
+        ax = axes[row_index, col_index]
+        if row_index == 0 and col_index == 1:
+
+            sns.heatmap(df, cmap=cmap, vmin=-1, vmax=1, center=0,
+                        square=True, annot=annot_df, fmt='',
+                        cbar=False, annot_kws={"size": 10},
+                        ax=ax)
+
+            plt.setp(ax.set_yticklabels(ax.get_ymajorticklabels(), fontsize=20, rotation=0))
+            plt.setp(ax.set_xticklabels(ax.get_xmajorticklabels(), fontsize=20, rotation=90))
+
+            ax.set_xlabel(xlabel, fontsize=14)
+            ax.xaxis.set_label_position('top')
+
+            ax.set_ylabel(ylabel, fontsize=14)
+            ax.yaxis.set_label_position('right')
+
+            ax.set_title(title, fontsize=40)
+        else:
+            ax.set_axis_off()
+
+        col_index += 1
+        if col_index > 1:
+            col_index = 0
+            row_index += 1
+
+    fig.savefig(os.path.join(args.outdir, "plot", outfile + ".png"))
+    plt.close()
+
+###############################################################
+
+print("Loading data")
+meta_df1 = load_metadata(data_fpath=args.meta1, link_fpath=args.link1, keys=args.keys1)
+print(meta_df1)
+meta_df2 = load_metadata(data_fpath=args.meta2, link_fpath=args.link2, keys=args.keys2)
+print(meta_df2)
+
+print("Overlapping data")
+overlapping_indices = list(set(meta_df1.index).intersection(set(meta_df2.index)))
+print("\t{:,} indices overlapping".format(len(overlapping_indices)))
+if len(overlapping_indices) == 0:
+    exit()
+value_columns = list(set(meta_df1.columns).intersection(set(meta_df2.columns)))
+value_columns1 = value_columns
+value_columns2 = value_columns
+del value_columns
+
+if args.values is not None:
+    value_columns1 = []
+    value_columns2 = []
+    for value in args.values:
+        value1 = value
+        value2 = value
+        if ";" in value:
+            value1, value2 = value.split(";")
+
+        if value1 not in meta_df1.columns or value2 not in meta_df2.columns:
+            continue
+        value_columns1.append(value1)
+        value_columns2.append(value2)
+
+if len(value_columns1) != len(value_columns2):
+    exit()
+n_value_columns = len(value_columns1)
+if n_value_columns == 0:
+    exit()
+print("\tcomparing {} value columns".format(n_value_columns))
+print(value_columns1)
+print(value_columns2)
+
+meta_m1 = meta_df1.loc[overlapping_indices, value_columns1].to_numpy()
+meta_m2 = meta_df2.loc[overlapping_indices, value_columns2].to_numpy()
+del meta_df1, meta_df2
+
+print("Comparing data")
+value_columns = [value_columns1, value_columns2]
+meta_m = [meta_m1, meta_m2]
+labels = [args.label1, args.label2]
+for value_index in range(n_value_columns):
+    for ref_index, alt_index in [(0, 1), (1, 0)]:
+        ref_value = value_columns[ref_index][value_index]
+        ref_matrix = meta_m[ref_index]
+        ref_label = labels[ref_index]
+
+        alt_value = value_columns[alt_index][value_index]
+        alt_matrix = meta_m[alt_index]
+        alt_label = labels[alt_index]
+
+        print("\treference: {} - {}\talternative: {} - {}".format(ref_label, ref_value, alt_label, alt_value))
+        confusion_df, annotation_df = calc_confusion_matrix(ref_matrix=ref_matrix, alt_matrix=alt_matrix)
+
+        title = "{} - {}".format(ref_value, alt_value)
+        if ref_value == alt_value:
+            title = ref_value
+
+        plot_heatmap(
+            df=confusion_df,
+            annot_df=annotation_df,
+            xlabel="{} [N = {:,.0f}]".format(alt_label, alt_matrix.shape[0]),
+            ylabel="{} [N = {:,.0f}]".format(ref_label, ref_matrix.shape[0]),
+            title=title,
+            outfile="ref_{}_{}_vs_alt_{}_{}_confusion_matrix".format(ref_label, ref_value, alt_label, alt_value)
+        )
+
+print("END")
