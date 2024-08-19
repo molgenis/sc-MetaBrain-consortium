@@ -90,13 +90,13 @@ def remove_covariates(Y, X):
 
 
 def calculate_pca(df, n_components=2):
+    x = df.T.to_numpy()
+    x = (x - np.mean(x, axis=0)) / np.sqrt(np.sum(x ** 2, axis=0) / max(1, (x.shape[0] - 1)))
+
     pca = PCA(n_components=n_components)
-    pca.fit(df)
-
     pca_names = ["PC{}".format(i) for i in range(1, n_components + 1)]
-
-    pca_df = pd.DataFrame(pca.components_, index=pca_names, columns=df.columns).T
-    var_df = pd.Series(pca.explained_variance_, index=pca_names)
+    pca_df = pd.DataFrame(pca.fit_transform(x), columns=pca_names, index=df.index)
+    var_df = pd.Series(pca.explained_variance_ratio_, index=pca_names)
     return pca_df, var_df
 
 def plot_scatterplot(df, x="x", y="y", legend=False, hue=None, palette=None,
