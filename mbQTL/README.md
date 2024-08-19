@@ -45,7 +45,7 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * `n_pcs`: how many PCs should be removed from the expression matrix (e.g. `[0, 5, 10]`). If `cov` is also used these PCs are added to those covariates.
  * `n_genes`: how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk. Default `200`.
  * `use_snpannotation`: whether or not the `snpannotation` option should be used. Default `False`. Automatically set to `False` if `snplimit` or `snpgenelimit` is used since it is faster without `snpannotation` then.
- * `force_mega`: replace the dataset column in your input `gte` to force mbQTL to run a mega-analysis.
+ * `force_mega`: force the covariate correction and / or eQTL mapping to be done over all samples at once (options: `all`, `cov`, `qtl`, `none`). Default: `none`.
  * `filter_vcf`: whether or not the input VCF should be filtered on variants / samples of interest before running QTL analysis. This adds some pre-processing time but can add substantial speed improvements in the QTL analysis. Only available if `snplimit` or `snpgenelimit` is used. Note that it also filters on the samples in the `gte` file. Default `False`.
  * `feature_name`: the info column that in your gtf that describes the names of the genes in your expression matrix. Default `gene_name`.
  * `autosomes_only`: whether or not to only include autosomal chromosomes. Default 'True'.

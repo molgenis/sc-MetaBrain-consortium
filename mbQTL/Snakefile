@@ -61,6 +61,9 @@ if config["inputs"]["snpgenelimit"] is not None and not os.path.exists(config["i
     exit("MissingSNPGeneLimitFile")
 
 # Checking settings with options to be valid.
+if config["general_settings"]["force_mega"] not in ["all", "cov", "qtl", "none", None]:
+    logger.error("Critical, force_mega must be 'all', 'cov', 'qtl', 'none', or empty.\n\nExiting.")
+    exit("InvalidForceMegaSetting")
 if config["qtl_settings"]["analysis_type"] not in ["cis", "trans", "cistrans"]:
     logger.error("Critical, analysis_type must be 'cis', 'trans', or 'cistrans'.\n\nExiting.")
     exit("InvalidAnalysisType")
@@ -85,6 +88,12 @@ if not isinstance(config["general_settings"]["n_pcs"], list):
 if 0 in config["general_settings"]["n_pcs"]:
     config["general_settings"]["n_pcs"].remove(0)
 
+# Reformat force mega.
+if config["general_settings"]["force_mega"] == "all":
+    config["general_settings"]["force_mega"] = ["cov", "qtl"]
+else:
+    config["general_settings"]["force_mega"] = [config["general_settings"]["force_mega"]]
+
 # Add trailing /.
 if not config["inputs"]["repo_dir"].endswith("/"):
     config["inputs"]["repo_dir"] += "/"
@@ -107,8 +116,8 @@ else:
     if config["inputs"]["snpgenelimit"] != "" and not config["qtl_settings"]["perm"] == 0:
         logger.warning("Warning, setting perm to 0 since snpgenelimit is used.")
         config["qtl_settings"]["perm"] = 0
-    if config["general_settings"]["force_mega"] and config["qtl_settings"]["nrdatasets"] > 1:
-        logger.warning("Warning, setting nrdatasets to 1 since force_mega is True.")
+    if "qtl" in config["general_settings"]["force_mega"] and config["qtl_settings"]["nrdatasets"] > 1:
+        logger.warning("Warning, setting nrdatasets to 1 since force_mega for QTL mapping is True.")
         config["qtl_settings"]["nrdatasets"] = 1
 
 # Check setting combinations that are not allowed.
@@ -222,7 +231,7 @@ def get_input(wildcards):
         logger.debug("\trequesting output of rule 'pca' on the input 'exp'")
         input.append(config["outputs"]["output_dir"] + "pca/raw/" + get_basename(config["inputs"]["exp"]) + ".done")
 
-        if config["general_settings"]["force_mega"]:
+        if "cov" in config["general_settings"]["force_mega"]:
             logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor'")
             input.extend(expand(config["outputs"]["output_dir"] + "pca/all/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", cov=covariates))
         else:
@@ -231,7 +240,7 @@ def get_input(wildcards):
                 input.append(config["outputs"]["output_dir"] + "pca/all/" + get_basename(config["inputs"]["exp"]) + ".cov.CovariatesRemovedOLS.done")
 
             ds_corr_covariates = [cov for cov in covariates if cov not in ["default", "cov", "0Pcs", "cov0Pcs"]]
-            if len(ds_corr_covariates) > 0 and not config["general_settings"]["force_mega"]:
+            if len(ds_corr_covariates) > 0 and not "cov" in config["general_settings"]["force_mega"]:
                 datasets = get_datasets(wildcards)
 
                 logger.debug("\trequesting output of rule 'pca' on the output of rule 'filter_exp' for a specific dataset")
@@ -296,7 +305,7 @@ def get_pca_expr(wildcards):
     if raw_infile:
         # i.e. no covariate correction is needed. Only need to pick between the
         # full input matrix or a subset of the input matrix.
-        if wildcards.dataset == "raw" or config["general_settings"]["force_mega"]:
+        if wildcards.dataset == "raw" or "cov" in config["general_settings"]["force_mega"]:
             logger.debug("\treturning input 'exp'")
             return config["inputs"]["exp"]
 
@@ -349,7 +358,7 @@ def get_exp(wildcards):
     if wildcards.cov == "default" or wildcards.cov == "0Pcs":
         logger.debug("\treturning input 'exp'")
         return config["inputs"]["exp"]
-    elif wildcards.cov == "cov" or config["general_settings"]["force_mega"]:
+    elif wildcards.cov == "cov" or "cov" in config["general_settings"]["force_mega"]:
         logger.debug("\treturning output of rule 'regressor'")
         return config["outputs"]["output_dir"] + "regressor/all/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.txt.gz"
 
@@ -395,7 +404,7 @@ def get_vcf_index(wildcards):
 
 def get_qtl_gte(wildcards):
     logger.debug("get_qtl_gte(" + print_wildcards(wildcards) + ")")
-    if config["general_settings"]["force_mega"]:
+    if "qtl" in config["general_settings"]["force_mega"]:
         logger.debug("\treturn output of rule 'remove_gte_dataset'")
         return config["outputs"]["output_dir"] + "gte/gte_noDataset.txt"
 

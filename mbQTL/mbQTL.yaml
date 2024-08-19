@@ -30,7 +30,7 @@ general_settings:
   filter_vcf: False ### whether or not the input VCF should be filtered on variants / samples of interest before running QTL analysis.
 
 qtl_settings:
-  force_mega: True ### replace the dataset column in your input `gte` to force mbQTL to run a mega-analysis.
+  force_mega: null ### force the covariate correction and / or eQTL mapping to be done over all samples at once (options: 'all', 'cov', 'qtl').
 
   analysis_type: "cis" ### which variants to test per gene (options: 'cis', 'trans', 'cistrans').
   meta_analysis_method: "empzmeta" ### which variants to test per gene (options: 'empzmeta', 'fisherzmeta', 'fisherzmetarandom').
