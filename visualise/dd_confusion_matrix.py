@@ -31,11 +31,11 @@ import matplotlib.pyplot as plt
 
 
 def create_confusion_matrix(df, x, y):
-    row_counts = list(zip(*np.unique(df[y], return_counts=True)))
+    row_counts = list(zip(*np.unique(df[y].astype(str), return_counts=True)))
     row_counts.sort(key=lambda x: x[0])
     row_labels = ["{}\n[n={:,.0f}]".format(label, size) for label, size in row_counts]
 
-    col_counts = list(zip(*np.unique(df[x], return_counts=True)))
+    col_counts = list(zip(*np.unique(df[x].astype(str), return_counts=True)))
     col_counts.sort(key=lambda x: x[0])
     col_labels = ["{}\n[n={:,.0f}]".format(label, size) for label, size in col_counts]
 
@@ -88,10 +88,10 @@ def plot_heatmap(df, annot_df, xlabel="", ylabel="", title="", outfile="plot"):
             plt.setp(ax.set_xticklabels(ax.get_xmajorticklabels(), fontsize=20, rotation=90))
 
             ax.set_xlabel(xlabel, fontsize=14)
-            ax.xaxis.set_label_position('top')
+            ax.xaxis.set_label_position('bottom')
 
             ax.set_ylabel(ylabel, fontsize=14)
-            ax.yaxis.set_label_position('right')
+            ax.yaxis.set_label_position('left')
 
             ax.set_title(title, fontsize=40)
         else:
@@ -108,30 +108,80 @@ def plot_heatmap(df, annot_df, xlabel="", ylabel="", title="", outfile="plot"):
 
 ###############################################################
 
-def load_data(folder):
+def load_data(method):
+    if method in ["DoubletFinder", "scDblFinder"]:
+        fpath = os.path.join(method + "Run1", method + "_doublets_singlets.tsv.gz")
+        load_function = load_default
+    elif method in ["demuxlet"]:
+        fpath = os.path.join("popscle", "demuxlet", "demuxletOUT.best")
+        load_function = load_demuxlet
+    elif method in ["Souporcell"]:
+        fpath = os.path.join("souporcell", "clusters.tsv.gz")
+        load_function = load_souporcell
+    else:
+        print("Error in load_data")
+        exit()
+
+    inpaths = glob.glob(os.path.join(args.indir + "Step2-DemultiplexingAndDoubletRemoval", "*", fpath))
+    if len(inpaths) == 0:
+        return None
+
     df_list = []
-    for fpath in glob.glob("/groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2023-10-16-scMetaBrain-WorkGroup1QC/*/Step2-DemultiplexingAndDoubletRemoval/*/" + folder + "Run1/" + folder + "_doublets_singlets.tsv.gz"):
-        df = pd.read_csv(fpath, sep="\t", header=0, index_col=None)
-        df["study"] = fpath.split("/")[7]
-        df["pool"] = fpath.split("/")[9]
-        df_list.append(df)
+    for i, fpath in enumerate(inpaths):
+        # if i > 10:
+        #     break
+        df_list.append(load_function(fpath=fpath))
 
     return pd.concat(df_list, axis=0)
 
+def load_default(fpath):
+    df = pd.read_csv(fpath, sep="\t", header=0, index_col=None)
+    df["pool"] = fpath.split("/")[-3]
+    return df
+
+def load_demuxlet(fpath):
+    df = pd.read_csv(fpath, sep="\t", header=0, index_col=None)
+    df["demuxlet_DropletType"] = df["DROPLET.TYPE"].map({"SNG": "singlet", "DBL": "doublet", "AMB": "unassigned"})
+    df = df[["BARCODE", "demuxlet_DropletType"]].rename(columns={"BARCODE": "Barcode"})
+    df["pool"] = fpath.split("/")[-4]
+    return df
+
+def load_souporcell(fpath):
+    df = pd.read_csv(fpath, sep="\t", header=0, index_col=None)
+    df = df[["barcode", "status", "singlet_posterior", "doublet_posterior"]].rename(columns={"barcode": "Barcode", "status": "Souporcell_DropletType", "singlet_posterior": "souporcell_SingletScore", "doublet_posterior": "souporcell_DoubletScore"})
+    df["pool"] = fpath.split("/")[-3]
+    return df
+
+
 print("Loading data ...")
-doubletfinder_df = load_data(folder="DoubletFinder")
-scblfinder_df = load_data(folder="scDblFinder")
-df = doubletfinder_df.merge(scblfinder_df)
+df = None
+methods = []
+for method in ["demuxlet", "Souporcell", "DoubletFinder", "scDblFinder"]:
+    print("\tLoading {}".format(method))
+    method_df = load_data(method=method)
+    print(method_df[method + "_DropletType"].value_counts())
+    if method_df is None:
+        continue
+    methods.append(method)
+    if df is None:
+        df = method_df
+    else:
+        df = df.merge(method_df, on=["Barcode", "pool"], how="outer")
+df = df.fillna("unknown")
 print(df)
-print(df["study"].value_counts())
+print(df.loc[df["demuxlet_DropletType"] == "unknown", "pool"].value_counts())
 
-confusion_df, annotation_df, tpr = create_confusion_matrix(df=df, x="DoubletFinder_DropletType", y="scDblFinder_DropletType")
-print(confusion_df)
+print("\nPlotting data ...")
+for i, method1 in enumerate(methods):
+    for j, method2 in enumerate(methods):
+        if i >= j:
+            continue
+        confusion_df, annotation_df, tpr = create_confusion_matrix(df=df, x=method1 + "_DropletType", y=method2 + "_DropletType")
 
-plot_heatmap(
-    df=confusion_df,
-    annot_df=annotation_df,
-    xlabel="DoubletFinder",
-    ylabel="scDblFinder",
-    title="TPR: {:.3f}".format(tpr),
-    outfile="DoubletFinder_vs_scDblFinder_confusion_matrix")
+        plot_heatmap(
+            df=confusion_df,
+            annot_df=annotation_df,
+            xlabel=method1,
+            ylabel=method2,
+            title="TPR: {:.3f}".format(tpr),
+            outfile=method1 + "_vs_" + method2 + "_confusion_matrix")
