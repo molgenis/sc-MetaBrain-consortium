@@ -190,7 +190,7 @@ class main():
             outfile="dag"
         )
 
-        for jobs in [10000]:
+        for jobs in [1, 10000]:
             self.write_run_script(
                 snakefile=snakefile,
                 configfile=configfile,
