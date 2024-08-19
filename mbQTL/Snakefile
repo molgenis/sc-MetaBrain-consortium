@@ -837,10 +837,10 @@ checkpoint create_batches:
     output:
         batches = directory(config["outputs"]["output_dir"] + "batches/{cov}/")
     resources:
-        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["regressor_memory"],
-        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["regressor_memory"],
-        time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["regressor_time"]]
-    threads: config["regressor_threads"]
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["create_batches_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["create_batches_memory"],
+        time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["create_batches_time"]]
+    threads: config["create_batches_threads"]
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],

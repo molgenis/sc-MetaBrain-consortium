@@ -24,14 +24,13 @@ outputs:
 general_settings:
   plot_pca: False ### whether or not to PCA visualise the expression matrix. Default `False`.
   include_modes: null ### which modes to run (options: `all`, `default`, `cov`, `covXPcs`, `XPcs`).
+  force_mega: null ### force the covariate correction and / or eQTL mapping to be done over all samples at once (options: 'all', 'cov', 'qtl').
   n_pcs: null ### how many PCs should be removed from the expression matrix (e.g. `[0, 5, 10]`).
+  filter_vcf: False ### whether or not the input VCF should be filtered on variants / samples of interest before running QTL analysis.
   n_genes: 200 ### how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk. Default `200`.
   use_snpannotation: False ### whether or not the `snpannotation` option should be used. Default `False`.
-  filter_vcf: False ### whether or not the input VCF should be filtered on variants / samples of interest before running QTL analysis.
 
 qtl_settings:
-  force_mega: null ### force the covariate correction and / or eQTL mapping to be done over all samples at once (options: 'all', 'cov', 'qtl').
-
   analysis_type: "cis" ### which variants to test per gene (options: 'cis', 'trans', 'cistrans').
   meta_analysis_method: "empzmeta" ### which variants to test per gene (options: 'empzmeta', 'fisherzmeta', 'fisherzmetarandom').
   seed: 123456789 ### random seed. Default: '123456789'.
@@ -69,29 +68,33 @@ smf_to_gte_memory: 4 ### Amount of gigs that will be used for memory and disk sp
 smf_to_gte_threads: 1 ### Number of threads to use
 smf_to_gte_time: 0 ### The time setting to use
 
-index_vcf_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
-index_vcf_threads: 1 ### Number of threads to use
-index_vcf_time: 0 ### The time setting to use
+split_gte_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+split_gte_threads: 1 ### Number of threads to use
+split_gte_time: 0 ### The time setting to use
 
 snpgenelimit_to_vars_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 snpgenelimit_to_vars_threads: 1 ### Number of threads to use
 snpgenelimit_to_vars_time: 0 ### The time setting to use
 
+index_vcf_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+index_vcf_threads: 1 ### Number of threads to use
+index_vcf_time: 0 ### The time setting to use
+
 filter_vcf_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 filter_vcf_threads: 1 ### Number of threads to use
 filter_vcf_time: 0 ### The time setting to use
-
-pca_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
-pca_threads: 1 ### Number of threads to use
-pca_time: 0 ### The time setting to use
 
 filter_matrix_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 filter_matrix_threads: 1 ### Number of threads to use
 filter_matrix_time: 0 ### The time setting to use
 
-concat_covs_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
-concat_covs_threads: 1 ### Number of threads to use
-concat_covs_time: 0 ### The time setting to use
+pca_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+pca_threads: 1 ### Number of threads to use
+pca_time: 0 ### The time setting to use
+
+merge_matrices_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+merge_matrices_threads: 1 ### Number of threads to use
+merge_matrices_time: 0 ### The time setting to use
 
 regressor_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 regressor_threads: 1 ### Number of threads to use
