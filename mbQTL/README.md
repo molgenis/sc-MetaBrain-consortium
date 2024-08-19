@@ -17,12 +17,12 @@ Furthermore, quality of life settings and setting warnings are added to make the
 ## Installing
 
 In order to run the pipeline you require snakemake. The pipeline was developed using snakemake version `5.26.1=0` as part of the [sc-eQTLgen WG1](https://github.com/sc-eQTLgen-consortium/WG1-pipeline-QC/tree/scMetaBrain) conda environment ([snakemake.yaml](https://github.com/sc-eQTLgen-consortium/WG1-pipeline-QC/blob/master/Demultiplexing/snakemake.yaml)). In order to install this you require [miniconda3](https://repo.anaconda.com/miniconda/) and subsequently run:
-```
+```console
 conda env create -f snakemake.yaml -n wg1_snakemake
 ``` 
 Then, to activate the environment, run:
 
-```
+```console
 conda activate wg1_snakemake
 ``` 
 
@@ -71,8 +71,8 @@ The following arguments of mbQTL are not implemented: `--expgroups`, `--nriters`
 Before running the pipeline it is adviced to perform a `dryrun` to check if all input and settings are valid. Be sure to check the top of the output as import warnings and info are printed.
 
 #### Visualise pipeline:
-This script that will generate a dag.svg file that shows the rules that will be executed and in what order.
-```{R}
+This script that will generate a `dag.svg` file that shows the rules that will be executed and in what order.
+```console
 snakemake \
   --snakefile Snakefile \
   --configfile mbQTL.yaml \
@@ -81,7 +81,7 @@ snakemake \
 
 #### Dry run:
 This script show what rules will be executed.
-```{R}
+```console
 snakemake \
   --snakefile Snakefile \
   --configfile mbQTL.yaml \
@@ -94,7 +94,7 @@ Be aware that some variables are determined at runtime and as a result, the show
 
 #### Run (local):
 This script runs the rules in your current session.
-```{R}
+```console
 snakemake \
   --snakefile Snakefile \
   --configfile mbQTL.yaml \
@@ -103,7 +103,7 @@ snakemake \
 
 #### Run (SLURM):
 This script runs the rules by submitting them to the SLURM queue.
-```{R}
+```console
 LOGDIR=TODO
 mkdir -p $LOGDIR
 mkdir -p $LOGDIR/log
@@ -140,7 +140,7 @@ The `slurm_log/` contains log output of SLURM executing your rule as a jobfile (
 
 #### Unlock:
 This script unlocks the working directory if for some reason the manager process got killed.
-```{R}
+```console
 snakemake \
   --snakefile Snakefile \
   --configfile mbQTL.yaml \
