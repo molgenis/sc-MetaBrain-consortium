@@ -1639,6 +1639,9 @@ class Dataset:
             print("Failed to load 'top_effects_path'. Selecting top effects from 'all_effects_path' instead.")
 
         # Making sure the required columns are available.
+        # TODO: potentially this could still work if a dataset has no nominal p-values but it
+        #   does have z-scores. However, I need to rewrite the load_partial_file function to
+        #   pick the effects with the highest zscore instead of the lowest p-value...
         for label in [gene, "nominal_pvalue"]:
             if not self.contains_data(label=label):
                 print("Error, get_top_effects() from the all effects file is unavailable for {} since"
@@ -1997,6 +2000,8 @@ class Dataset:
                 if key is None or value is None:
                     continue
 
+                # TODO: could be nice to add an option here to only select certain type of
+                #   variants to be picked as top effect. For example, exclude INDELS.
                 if key not in top_entries:
                     top_entries[key] = [value, values, 1]
                 elif key in top_entries:

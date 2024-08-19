@@ -215,6 +215,118 @@ Note that a [Dockerfile](Dockerfile) is available will all required software.
 
 if **--save** is selected the individual and merged summary statistics will be saved in `replication_data`. A replication figure will be created in `replication_plot` containing three panels: left) all overlapping effects, middle) discovery significant effects, and right) discovery and replication significant effects.
 
+## Snakemake automatisation usage
+
+If you wish to create multiple replication plots this can be done using the supplied snakemake pipeline.
+
+### Installing
+
+In order to run the pipeline you require snakemake. The pipeline was developed using snakemake version `5.26.1=0` as part of the [sc-eQTLgen WG1](https://github.com/sc-eQTLgen-consortium/WG1-pipeline-QC/tree/scMetaBrain) conda environment ([snakemake.yaml](https://github.com/sc-eQTLgen-consortium/WG1-pipeline-QC/blob/master/Demultiplexing/snakemake.yaml)). In order to install this you require [miniconda3](https://repo.anaconda.com/miniconda/) and subsequently run:
+```console
+conda env create -f snakemake.yaml -n wg1_snakemake
+``` 
+Then, to activate the environment, run:
+
+```console
+conda activate wg1_snakemake
+``` 
+
+### Arguments
+
+The different input can be defined using `disc_inputs` in a dictionary format where the tag will be replaced with a supplied values. For example:
+```
+disc_inputs: {
+   "<TAG>": ["foo", "bar"]
+}
+```  
+will result in a run where `<TAG>` in the `discovery_path` will be replaced with `foo` in the first run but with `bar` in the second run. Multiple tags can be supplied. Furthermore, all values for `disc_cell_types` will also be seperate runs where `<CT>` will be filled in similarly. The same applied for the `replication` input and settings.
+
+### Usage
+
+Before running the pipeline it is advised to perform a `dryrun` to check if all input and settings are valid. Be sure to check the top of the output as import warnings and info are printed.
+
+#### Visualise pipeline:
+This script that will generate a `dag.svg` file that shows the rules that will be executed and in what order.
+```console
+snakemake \
+  --snakefile Snakefile \
+  --configfile mbQTL.yaml \
+  --dag | dot -Tsvg > dag.svg
+```  
+
+#### Dry run:
+This script show what rules will be executed.
+```console
+snakemake \
+  --snakefile Snakefile \
+  --configfile mbQTL.yaml \
+  --dryrun \
+  --cores 1 \
+  --reason
+```
+
+
+#### Run (local):
+This script runs the rules in your current session.
+```console
+snakemake \
+  --snakefile Snakefile \
+  --configfile mbQTL.yaml \
+  --cores 1
+```
+
+#### Run (SLURM):
+This script runs the rules by submitting them to the SLURM queue.
+```console
+LOGDIR=TODO
+mkdir -p $LOGDIR
+mkdir -p $LOGDIR/log
+mkdir -p $LOGDIR/slurm_log
+
+nohup \
+snakemake \
+    --snakefile Snakefile \
+    --configfile mbQTL.yaml \
+    --rerun-incomplete \
+    --jobs 10000 \
+    --use-singularity \
+    --restart-times 0 \
+    --keep-going \
+    --latency-wait 60 \
+    --cluster \
+       "sbatch \
+       --job-name=snakemake_{rule}_{wildcards} \
+       --nodes=1 \
+       --cpus-per-task={threads} \
+       --mem=\$(({resources.mem_per_thread_gb} * {threads}))G \
+       --time={resources.time} \
+       --output=$LOGDIR/slurm_log/{rule}_{wildcards}.out \
+       --error=$LOGDIR/slurm_log/{rule}_{wildcards}.out \
+       --export=NONE \
+       --qos=regular \
+       --parsable" \
+    > $LOGDIR/log/nohup_`date +%Y-%m-%d.%H:%M:%S`.log &
+
+echo "Check status of command with:" ps -p $! -u
+```  
+The log output will be written to files in `log/` with `log/nohup_*` being the general pipeline log output.
+The `slurm_log/` contains log output of SLURM executing your rule as a jobfile (e.g. runtime, memory usage etc.).
+
+#### Unlock:
+This script unlocks the working directory if for some reason the manager process got killed.
+```console
+snakemake \
+  --snakefile Snakefile \
+  --configfile mbQTL.yaml \
+  --unlock
+```
+
+### Output
+
+Each replication run is outputted in a seperate folder. In addition, the following extra files are created:
+ * a `_ReplicationStats.txt.gz` containing the replication stats from over all runs.
+ * a `Repl_ReplicationStats.{extension}` file with a heatmap visualisation of the replication statistics for all comparisons.
+
 ## Author  
 
 Martijn Vochteloo (m.vochteloo@umcg.nl) *(1)*
