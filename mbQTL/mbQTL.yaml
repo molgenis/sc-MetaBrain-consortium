@@ -29,6 +29,7 @@ general_settings:
   filter_vcf: False ### whether or not the input VCF should be filtered on variants / samples of interest before running QTL analysis.
   n_genes: 200 ### how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk. Default `200`.
   use_snpannotation: False ### whether or not the `snpannotation` option should be used. Default `False`.
+  alpha: 0.05 ### QTL significance threshold. Default '0.05'.
 
 qtl_settings:
   analysis_type: "cis" ### which variants to test per gene (options: 'cis', 'trans', 'cistrans').

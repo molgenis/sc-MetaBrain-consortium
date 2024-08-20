@@ -42,11 +42,12 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
 **Pipeline specific settings**:
  * `plot_pca`: whether or not to PCA visualise the expression matrix. Default `False`.
  * `include_modes`: which modes to run (options: `all`, `default`, `cov`, `covXPcs`, `XPcs`). For more info, see modes.
+ * `force_mega`: force the covariate correction and / or eQTL mapping to be done over all samples at once (options: `all`, `cov`, `qtl`, `none`). Default: `none`.
  * `n_pcs`: how many PCs should be removed from the expression matrix (e.g. `[0, 5, 10]`). If `cov` is also used these PCs are added to those covariates.
+ * `filter_vcf`: whether or not the input VCF should be filtered on variants / samples of interest before running QTL analysis. This adds some pre-processing time but can add substantial speed improvements in the QTL analysis. Only available if `snplimit` or `snpgenelimit` is used. Note that it also filters on the samples in the `gte` file. Default `False`.
  * `n_genes`: how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk. Default `200`.
  * `use_snpannotation`: whether or not the `snpannotation` option should be used. Default `False`. Automatically set to `False` if `snplimit` or `snpgenelimit` is used since it is faster without `snpannotation` then.
- * `force_mega`: force the covariate correction and / or eQTL mapping to be done over all samples at once (options: `all`, `cov`, `qtl`, `none`). Default: `none`.
- * `filter_vcf`: whether or not the input VCF should be filtered on variants / samples of interest before running QTL analysis. This adds some pre-processing time but can add substantial speed improvements in the QTL analysis. Only available if `snplimit` or `snpgenelimit` is used. Note that it also filters on the samples in the `gte` file. Default `False`.
+ * `alpha`: QTL significance threshold. Default `0.05`.
  * `feature_name`: the info column that in your gtf that describes the names of the genes in your expression matrix. Default `gene_name`.
  * `autosomes_only`: whether or not to only include autosomal chromosomes. Default 'True'.
  * `force`: prevent snakemake from updating input settings that are unlogical. Use with caution. Default `False`.
@@ -64,7 +65,7 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * The `--outputall` mbQTL argument is automatically set to `True` if `snpgenelimit` is used.
  * The `--perm` mbQTL argument is automatically set to `0` if `snpgenelimit` is used.
 
-The following arguments of mbQTL are not implemented: `--expgroups`, `--nriters`, `--sortbyz`, and `--testnonparseablechr`.
+The following arguments of mbQTL are not (yet) implemented: `--expgroups`, `--nriters`, `--sortbyz`, and `--testnonparseablechr`.
 
 ## Usage  
 
@@ -161,6 +162,8 @@ You can choose to run different combinations of modes at the same time but using
 ## Important
 
 Note that expression PCs calculation is per dataset over the samples that overlap between the expression identifiers in `gte` and the columns in `exp`.
+
+Also note that snakemake checks if the output files exist but not with what settings they were generated. If you wish to rerun the pipeline with different settings while keeping the old files I recommend renaming the `output` subfolder (e.g. `default` to `defaultSettingA`). This way snakemake will rerun mbQTL with the updated settings. Generally speaking it is only necessary to rename the `output` subfolder as the other files are generated in subfolders based on the settings used (exception: rename `create_annotation` folder as well if update settings in `create_annotation_settings`).
 
 ## Output
 

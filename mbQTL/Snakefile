@@ -1000,7 +1000,7 @@ rule qvalues:
         nom_threshold = "PvalueNominalThreshold",
         pvalue = "BetaAdjustedMetaP" if config["qtl_settings"]["perm"] > 0 else "MetaP",
         qvalue = "qval",
-        alpha = 0.05,
+        alpha = config["general_settings"]["alpha"],
         data_out = config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffects",
         plot_out = config["outputs"]["output_dir"] + "figures/{cov}/" + config["outputs"]["output_prefix"],
         tmp = config["outputs"]["output_dir"] + "figures/{cov}/Rplots.pdf",
@@ -1041,7 +1041,7 @@ rule results:
         nom_pvalue_column = "MetaP",
         perm_pvalue_column = "BetaAdjustedMetaP",
         qvalue_column = "qval",
-        minimimal_reporting_p = 0.05
+        minimimal_reporting_p = config["general_settings"]["alpha"]
     log: config["outputs"]["output_dir"] + "log/results.log"
     shell:
         """
