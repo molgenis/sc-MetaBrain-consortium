@@ -5,12 +5,14 @@ Snakemake pipeline build around [mbQTL](https://github.com/molgenis/systemsgenet
 ## Info
 
 The snakemake implements the following additions to the standard mbQTL software:
- * pre-process input files (including filtering of input VCF on variants of interest to reduce disk IO; great speed increase)
- * correct expression input for covariates and / or N expression PCs (per dataset) in parallel
- * visualise PCA and scree plots of your expression input
- * parallel process QTL analysis in arbitrary number of batches + merge results
- * perform multiple testing correction using [qvalue](https://github.com/StoreyLab/qvalue)
- * summarise number of eQTLs detected
+ * pre-process input files:
+   * create gene annotation file from a `gtf` file
+   * filter the input VCF on variants of interest to reduce disk IO; great speed increase if you use `--snplimit` or `--snpgenelimit`
+ * calculate and visualise expression PCs (possibly per dataset in parallel)
+ * correct expression input for covariates and / or N expression PCs (possibly per dataset in parallel)
+ * QTL analysis in arbitrary number of batches on the HPC in parallel (including merging of output files)
+ * perform multiple testing correction over top effects using [qvalue](https://github.com/StoreyLab/qvalue) including visualisations
+ * summarise number of eQTLs detected (possibly per N expression PCs removed)
 
 Furthermore, quality of life settings and setting warnings are added to make the use of mbQTL even easier.
 
@@ -163,7 +165,7 @@ You can choose to run different combinations of modes at the same time but using
 
 Note that expression PCs calculation is per dataset over the samples that overlap between the expression identifiers in `gte` and the columns in `exp`.
 
-Also note that snakemake checks if the output files exist but not with what settings they were generated. If you wish to rerun the pipeline with different settings while keeping the old files I recommend renaming the `output` subfolder (e.g. `default` to `defaultSettingA`). This way snakemake will rerun mbQTL with the updated settings. Generally speaking it is only necessary to rename the `output` subfolder as the other files are generated in subfolders based on the settings used (exception: rename `create_annotation` folder as well if update settings in `create_annotation_settings`).
+Also note that snakemake checks if the output files exist but not with what settings they were generated. If you wish to rerun the pipeline with different settings while keeping the old files I recommend renaming the `output` subfolder (e.g. `default` to `defaultSettingA`). This way snakemake will rerun mbQTL with the updated settings. Generally speaking it is only necessary to rename the `output` subfolder as the other files are generated in subfolders based on the settings used. Exceptions are: the `create_annotation` folder if update settings in `create_annotation_settings`, and the `genotype` folder if you update `snplimit` / `snpgenelimit`.  
 
 ## Output
 
