@@ -882,16 +882,16 @@ rule run_qtl:
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
+        java_threads = config["run_qtl_threads"] * 2,
         jar = config["inputs"]["mbqtl_jar"],
         analysis_type = config["qtl_settings"]["analysis_type"],
         meta_analysis_method = config["qtl_settings"]["meta_analysis_method"],
         seed = config["qtl_settings"]["seed"],
-        java_threads = config["run_qtl_threads"] * 2,
         snpannotation = lambda wildcards: "--snpannotation " + get_snpannotation(wildcards) if config["general_settings"]["use_snpannotation"] else "",
-        perm = config["qtl_settings"]["perm"],
         genelimit = get_genelimit,
         snplimit = get_snplimit,
         snpgenelimit = get_snpgenelimit,
+        perm = config["qtl_settings"]["perm"],
         ciswindow = config["qtl_settings"]["ciswindow"],
         maf = config["qtl_settings"]["maf"],
         cr = config["qtl_settings"]["cr"],
@@ -924,6 +924,7 @@ rule run_qtl:
             --annotation {input.annotation} \
             {params.snpannotation} \
             {params.genelimit} \
+            {params.snplimit} \
             {params.snpgenelimit} \
             --perm {params.perm} \
             --ciswindow {params.ciswindow} \
