@@ -1,0 +1,168 @@
+#!/usr/bin/env python
+import pandas as pd
+import os
+
+# Set logger level.
+if config["settings_extra"]["debug"]:
+    logger.set_level("DEBUG")
+
+# Check required input arguments.
+if config["inputs"]["singularity_image"] is None or not os.path.exists(config["inputs"]["singularity_image"]):
+    logger.error("Critical, singularity_image does not exist.\n\nExiting.")
+    exit("MissingsingularityImage")
+if config["inputs"]["repo_dir"] is None or not os.path.exists(config["inputs"]["repo_dir"]):
+    logger.error("Critical, repo_dir does not exist.\n\nExiting.")
+    exit("MissingRepoDir")
+if config["inputs"]["poolsheet"] is None or not os.path.exists(config["inputs"]["poolsheet"]):
+    logger.error("Critical, poolsheet file does not exist.\n\nExiting.")
+    exit("MissingsingPoolSheet")
+if config["inputs"]["psam"] is None or not os.path.exists(config["inputs"]["psam"]):
+    logger.error("Critical, psam file does not exist.\n\nExiting.")
+    exit("MissingsingPSAM")
+if config["inputs"]["cell_annotation"] is None or not os.path.exists(config["inputs"]["cell_annotation"]):
+    logger.error("Critical, cell annotation file does not exist.\n\nExiting.")
+    exit("MissingsingCellAnnotation")
+if config["inputs"]["droplet_type_annotation"] is None or not os.path.exists(config["inputs"]["droplet_type_annotation"]):
+    logger.error("Critical, droplet type annotation file does not exist.\n\nExiting.")
+    exit("MissingsingDropletTypeAnnotation")
+if config["inputs"]["cell_type_annotation"] is None or not os.path.exists(config["inputs"]["cell_type_annotation"]):
+    logger.error("Critical, cell type annotation file does not exist.\n\nExiting.")
+    exit("MissingsingCellTypeAnnotation")
+if config["inputs"]["rb_genes"] is None or not os.path.exists(config["inputs"]["rb_genes"]):
+    logger.error("Critical, RB genes does file not exist.\n\nExiting.")
+    exit("MissingsingRBGenes")
+if config["inputs"]["mt_genes"] is None or not os.path.exists(config["inputs"]["mt_genes"]):
+    logger.error("Critical, MT genes does file not exist.\n\nExiting.")
+    exit("MissingsingMTGenes")
+if config["outputs"]["output_dir"] is None:
+    logger.error("Critical, the output_dir cannot be empty.\n\nExiting.")
+    exit("MissingOutputDir")
+
+# Add trailing /.
+if not config["outputs"]["output_dir"].endswith("/"):
+    config["outputs"]["output_dir"] += "/"
+
+# Loading poolsheet.
+logger.info("Loading the input poolsheet")
+POOL_DF = pd.read_csv(config["inputs"]["poolsheet"], sep="\t", dtype=str)
+POOL_DF.fillna("NA", inplace=True)
+POOL_DF.index = POOL_DF["Pool"]
+
+if "Pool" not in POOL_DF.columns:
+    logger.info("\tError, missing 'Pool' column in poolsheet file for the selected methods.\n\nExiting.")
+    stop("InvalidPoolSheetFile")
+if not POOL_DF["Pool"].is_unique:
+    logger.info("\tError, your 'Pool' column contains duplicates, please make sure all values are unique.\n\nExiting.")
+    stop("InvalidPoolSheetFile")
+
+logger.info("\tValid.")
+POOLS = POOL_DF["Pool"].tolist()
+
+
+wildcard_constraints:
+    ancestry = "\w+",
+    pool = "[\w-]+",
+    cell_level = "\w+",
+    cell_type = "[A-Za-z.]+",
+    malat1 = "[0-9]+",
+    ncount_rna = "[0-9]+",
+    percent_mt = "[0-9]+",
+
+
+rule all:
+    input: expand(config["outputs"]["output_dir"] + "expression/{cell_type}.pseudobulk.tsv.gz", cell_type=config["settings"]["cell_type"])
+
+
+rule pseudobulk_pool:
+    input:
+        poolsheet = config["inputs"]["poolsheet"],
+        psam = config["inputs"]["psam"],
+        cell_annotation = config["inputs"]["cell_annotation"],
+        droplet_type_annotation = config["inputs"]["droplet_type_annotation"],
+        cell_type_annotation = config["inputs"]["cell_type_annotation"],
+        rb_genes = config["inputs"]["rb_genes"],
+        mt_genes = config["inputs"]["mt_genes"]
+    output:
+        metadata = config["outputs"]["output_dir"] + "expression/pools/{pool}.metadata.tsv.gz",
+        qc_metrics = config["outputs"]["output_dir"] + "expression/pools/{pool}.qc_metrics.tsv.gz",
+        full_metadata = config["outputs"]["output_dir"] + "expression/pools/{pool}.full.metadata.tsv.gz",
+        exp = config["outputs"]["output_dir"] + "expression/pools/{pool}.pseudobulk.tsv.gz",
+        cells = config["outputs"]["output_dir"] + "expression/pools/{pool}.pseudobulk.cells.tsv.gz",
+        done = config["outputs"]["output_dir"] + "expression/pools/{pool}.done",
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["pseudobulk_pool_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["pseudobulk_pool_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["pseudobulk_pool_time"]],
+    threads: config["pseudobulk_pool_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/pseudobulk.py",
+        ct_pairing = "--wg2_pairing " + config["inputs"]["cell_type_pairing"] if config["inputs"]["cell_type_pairing"] is not None else "",
+        sample_aggregate = config["settings_extra"]["sample_aggregate"],
+        ancestry = config["settings"]["ancestry"],
+        cell_level = config["settings"]["cell_level"],
+        ncount_rna = config["settings"]["ncount_rna"],
+        nfeature_rna = config["settings"]["nfeature_rna"],
+        percent_rb = config["settings"]["percent_rb"],
+        percent_mt = config["settings"]["percent_mt"],
+        malat1 = config["settings"]["malat1"],
+        feature_name = config["settings_extra"]["feature_name"],
+        aggregate_method = config["settings_extra"]["aggregate_method"],
+        out = config["outputs"]["output_dir"] + "expression_input/pools/"
+    log: config["outputs"]["output_dir"] + "log/pseudobulk_pool.{pool}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --poolsheet {input.poolsheet} \
+            --pool {wildcards.pool} \
+            --psam {input.psam} \
+            --cell_annotation {input.cell_annotation} \
+            --droplet_type_annotation {input.droplet_type_annotation} \
+            --cell_type_annotation {input.cell_type_annotation} \
+            {params.ct_pairing} \
+            --rb_genes {input.rb_genes} \
+            --mt_genes {input.mt_genes} \
+            --sample_aggregate {params.sample_aggregate} \
+            --ancestry {params.ancestry} \
+            --cell_level {params.cell_level} \
+            --ncount_rna {params.ncount_rna} \
+            --nfeature_rna {params.nfeature_rna} \
+            --percent_rb {params.percent_rb} \
+            --percent_mt {params.percent_mt} \
+            --malat1 {params.malat1} \
+            --feature_name {params.feature_name} \
+            --aggregate_method {params.aggregate_method} \
+            --out {params.out}
+        singularity exec --bind {params.bind} {params.sif} touch {output.done}
+        """
+
+
+rule merge:
+    input:
+        poolsheet = config["inputs"]["poolsheet"],
+        expr = expand(config["outputs"]["output_dir"] + "expression/pools/{pool}.pseudobulk.tsv.gz", pool=POOLS)
+    output:
+        exp = config["outputs"]["output_dir"] + "expression/{cell_type}.pseudobulk.tsv.gz",
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["merge_time"]],
+    threads: config["merge_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/merge.py",
+        indir = config["outputs"]["output_dir"] + "expression_input/",
+        aggregate_method = config["settings_extra"]["aggregate_method"],
+        out = config["outputs"]["output_dir"] + "expression_input/pools/"
+    log: config["outputs"]["output_dir"] + "log/merge.{cell_type}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --poolsheet {input.poolsheet} \
+            --indir {params.indir} \
+            --cell_type {wildcards.cell_type} \
+            --aggregate_method {params.aggregate_method} \
+            --out {params.out}
+        """
