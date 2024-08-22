@@ -1,0 +1,67 @@
+##############################################################################################################
+##### The following arguments need to be changed by the user to indicating file locations on your system #####
+##############################################################################################################
+inputs:
+  bind_path:
+  singularity_image:
+  repo_dir:
+  poolsheet:
+  psam:
+  cell_annotation:
+  droplet_type_annotation:
+  cell_type_annotation:
+  rb_genes:
+  mt_genes:
+
+  # optional
+  cell_type_pairing:
+
+outputs:
+  output_dir:
+
+settings:
+  ancestry: "EUR"
+  cell_level: "L1"
+  cell_type: ["EX"]
+
+  # pseudobulk pool: filter barcodes
+  ncount_rna: [ 500 ]
+  nfeature_rna: [ 0 ]
+  percent_rb: [ 0 ]
+  percent_mt: [ 5 ]
+  malat1: [ 0 ]
+  min_cells: [ 5 ]
+
+  # normalise: filter genes
+  min_ind_expr: [ 10 ]
+  min_cpm: [ 1 ]
+
+cluster_time: {0: "00:59:00", 1: "23:59:00", 2: "6-23:59:00"}
+
+##############################################################################################################
+##### The following arguments are common parameters that may need to be changed depending on the dataset #####
+##############################################################################################################
+pseudobulk_pool_memory: 8
+pseudobulk_pool_threads: 1
+pseudobulk_pool_time: 0
+
+merge_expr_memory: 16
+merge_expr_threads: 1
+merge_expr_time: 0
+
+normalise_memory: 16
+normalise_threads: 1
+normalise_time: 0
+
+merge_stats_memory: 16
+merge_stats_threads: 1
+merge_stats_time: 0
+
+############################################################################################################################################
+##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####
+############################################################################################################################################
+settings_extra:
+  feature_name: "HGNC"
+  sample_aggregate: "Assignment"
+  aggregate_fun: "sum"
+  debug: True
