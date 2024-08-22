@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import pandas as pd
+import hashlib
 import os
 
 # Set logger level.
@@ -42,9 +43,14 @@ if config["outputs"]["output_dir"] is None:
 if not config["outputs"]["output_dir"].endswith("/"):
     config["outputs"]["output_dir"] += "/"
 
+# Create the output directory.
+os.makedirs(config["outputs"]["output_dir"], exist_ok=True)
+
 # Loading poolsheet.
 logger.info("Loading the input poolsheet")
 POOL_DF = pd.read_csv(config["inputs"]["poolsheet"], sep="\t", dtype=str)
+logger.info("\tLoaded {} with shape: {}".format(os.path.basename(config["inputs"]["poolsheet"]), POOL_DF.shape))
+
 POOL_DF.fillna("NA", inplace=True)
 POOL_DF.index = POOL_DF["Pool"]
 
@@ -58,19 +64,70 @@ if not POOL_DF["Pool"].is_unique:
 logger.info("\tValid.")
 POOLS = POOL_DF["Pool"].tolist()
 
+def get_md5_hash(s):
+    return hashlib.md5(s.encode()).hexdigest()
+
+# Define the input files.
+logger.info("Loading settings")
+SETTINGS = {}
+logger.debug("Loading settings from yaml:")
+for ncount_rna in config["settings"]["ncount_rna"]:
+    for nfeature_rna in config["settings"]["nfeature_rna"]:
+        for percent_rb in config["settings"]["percent_rb"]:
+            for percent_mt in config["settings"]["percent_mt"]:
+                for malat1 in config["settings"]["malat1"]:
+                    for min_cells in config["settings"]["min_cells"]:
+                        settings = {
+                            "nCount_RNA": ncount_rna,
+                            "nFeature_RNA": nfeature_rna,
+                            "percent.rb": percent_rb,
+                            "percent.mt": percent_mt,
+                            "MALAT1": malat1,
+                            "minCells": min_cells
+                        }
+                        md5_hash = get_md5_hash(str(settings))
+                        SETTINGS[md5_hash] = settings
+                        logger.debug("\t{}: {}".format(md5_hash, settings))
+
+settings_df = pd.DataFrame(SETTINGS).T
+logger.debug("\nActive settings:")
+logger.debug(settings_df)
+
+# Save settings as hash.
+settings_fpath = config["outputs"]["output_dir"] + "settings.tsv"
+if os.path.exists(settings_fpath):
+    old_settings_df = pd.read_csv(settings_fpath, sep="\t", header=0, index_col=0)
+    if not old_settings_df.equals(settings_df):
+        logger.debug("\nPrevious settings:")
+        logger.debug(old_settings_df)
+
+        settings_df = pd.concat([settings_df, old_settings_df], axis=0).drop_duplicates()
+        if len(set(settings_df.index)) != settings_df.shape[0]:
+            logger.error("Error, duplicate hash values for unique settings.")
+            exit()
+
+        logger.debug("\nAll settings:")
+        logger.debug(settings_df)
+
+logger.info("\tSaving settings")
+settings_df.to_csv(settings_fpath, sep="\t", header=True, index=True)
+
+# Define the output hashes.
+HASHES = SETTINGS.keys()
+
 
 wildcard_constraints:
-    ancestry = "\w+",
+    hash = "[A-Za-z0-9]+",
     pool = "[\w-]+",
-    cell_level = "\w+",
     cell_type = "[A-Za-z.]+",
-    malat1 = "[0-9]+",
-    ncount_rna = "[0-9]+",
-    percent_mt = "[0-9]+",
+    min_ind_expr = "[0-9]+",
+    min_cpm = "[0-9]+"
 
 
 rule all:
-    input: expand(config["outputs"]["output_dir"] + "expression/{cell_type}.pseudobulk.tsv.gz", cell_type=config["settings"]["cell_type"])
+    input:
+        exp = expand(config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.{min_ind_expr}Expr{min_cpm}CPM.TMM.tsv.gz", hash=HASHES, cell_type=config["settings"]["cell_type"], min_ind_expr=config["settings"]["min_ind_expr"], min_cpm=config["settings"]["min_cpm"]),
+        stats = expand(config["outputs"]["output_dir"] + "expression/{hash}/pseudobulk.stats.tsv.gz", hash=HASHES)
 
 
 rule pseudobulk_pool:
@@ -83,12 +140,12 @@ rule pseudobulk_pool:
         rb_genes = config["inputs"]["rb_genes"],
         mt_genes = config["inputs"]["mt_genes"]
     output:
-        metadata = config["outputs"]["output_dir"] + "expression/pools/{pool}.metadata.tsv.gz",
-        qc_metrics = config["outputs"]["output_dir"] + "expression/pools/{pool}.qc_metrics.tsv.gz",
-        full_metadata = config["outputs"]["output_dir"] + "expression/pools/{pool}.full.metadata.tsv.gz",
-        exp = config["outputs"]["output_dir"] + "expression/pools/{pool}.pseudobulk.tsv.gz",
-        cells = config["outputs"]["output_dir"] + "expression/pools/{pool}.pseudobulk.cells.tsv.gz",
-        done = config["outputs"]["output_dir"] + "expression/pools/{pool}.done",
+        metadata = config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.metadata.tsv.gz",
+        qc_metrics = config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.qc_metrics.tsv.gz",
+        full_metadata = config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.full.metadata.tsv.gz",
+        exp = config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.pseudobulk.tsv.gz",
+        stats = config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.pseudobulk.stats.tsv.gz",
+        done = config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.done",
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["pseudobulk_pool_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["pseudobulk_pool_memory"],
@@ -98,19 +155,20 @@ rule pseudobulk_pool:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/pseudobulk.py",
-        ct_pairing = "--wg2_pairing " + config["inputs"]["cell_type_pairing"] if config["inputs"]["cell_type_pairing"] is not None else "",
+        ct_pairing = "--ct_pairing " + config["inputs"]["cell_type_pairing"] if config["inputs"]["cell_type_pairing"] is not None else "",
         sample_aggregate = config["settings_extra"]["sample_aggregate"],
         ancestry = config["settings"]["ancestry"],
         cell_level = config["settings"]["cell_level"],
-        ncount_rna = config["settings"]["ncount_rna"],
-        nfeature_rna = config["settings"]["nfeature_rna"],
-        percent_rb = config["settings"]["percent_rb"],
-        percent_mt = config["settings"]["percent_mt"],
-        malat1 = config["settings"]["malat1"],
+        ncount_rna = lambda wildcards: SETTINGS[wildcards.hash]["nCount_RNA"],
+        nfeature_rna = lambda wildcards: SETTINGS[wildcards.hash]["nFeature_RNA"],
+        percent_rb = lambda wildcards: SETTINGS[wildcards.hash]["percent.rb"],
+        percent_mt = lambda wildcards: SETTINGS[wildcards.hash]["percent.mt"],
+        malat1 = lambda wildcards: SETTINGS[wildcards.hash]["MALAT1"],
         feature_name = config["settings_extra"]["feature_name"],
-        aggregate_method = config["settings_extra"]["aggregate_method"],
-        out = config["outputs"]["output_dir"] + "expression_input/pools/"
-    log: config["outputs"]["output_dir"] + "log/pseudobulk_pool.{pool}.log"
+        aggregate_fun = config["settings_extra"]["aggregate_fun"],
+        min_cells = lambda wildcards: SETTINGS[wildcards.hash]["minCells"],
+        out = config["outputs"]["output_dir"] + "expression/{hash}/pools/"
+    log: config["outputs"]["output_dir"] + "log/pseudobulk_pool.{hash}.{pool}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} python {params.script} \
@@ -132,37 +190,91 @@ rule pseudobulk_pool:
             --percent_mt {params.percent_mt} \
             --malat1 {params.malat1} \
             --feature_name {params.feature_name} \
-            --aggregate_method {params.aggregate_method} \
-            --out {params.out}
+            --min_cells {params.min_cells} \
+            --aggregate_fun {params.aggregate_fun} \
+            --out {params.out} > {log} 2>&1
         singularity exec --bind {params.bind} {params.sif} touch {output.done}
         """
 
 
-rule merge:
+rule merge_expr:
     input:
         poolsheet = config["inputs"]["poolsheet"],
-        expr = expand(config["outputs"]["output_dir"] + "expression/pools/{pool}.pseudobulk.tsv.gz", pool=POOLS)
+        expr = expand(config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.pseudobulk.tsv.gz", pool=POOLS, allow_missing=True)
     output:
-        exp = config["outputs"]["output_dir"] + "expression/{cell_type}.pseudobulk.tsv.gz",
+        exp = config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.tsv.gz",
+        smf = config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.smf",
     resources:
-        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_memory"],
-        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_memory"],
-        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["merge_time"]],
-    threads: config["merge_threads"]
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_expr_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_expr_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["merge_expr_time"]],
+    threads: config["merge_expr_threads"]
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/merge.py",
-        indir = config["outputs"]["output_dir"] + "expression_input/",
-        aggregate_method = config["settings_extra"]["aggregate_method"],
-        out = config["outputs"]["output_dir"] + "expression_input/pools/"
-    log: config["outputs"]["output_dir"] + "log/merge.{cell_type}.log"
+        script = config["inputs"]["repo_dir"] + "scripts/merge_expr.py",
+        indir = config["outputs"]["output_dir"] + "expression/{hash}/pools/",
+        aggregate_fun = config["settings_extra"]["aggregate_fun"],
+        out = config["outputs"]["output_dir"] + "expression/{hash}/"
+    log: config["outputs"]["output_dir"] + "log/merge.{hash}.{cell_type}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --poolsheet {input.poolsheet} \
             --indir {params.indir} \
             --cell_type {wildcards.cell_type} \
-            --aggregate_method {params.aggregate_method} \
-            --out {params.out}
+            --aggregate_fun {params.aggregate_fun} \
+            --out {params.out} > {log} 2>&1
+        """
+
+
+rule normalise:
+    input:
+        exp = config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.tsv.gz",
+    output:
+        exp = config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.{min_ind_expr}Expr{min_cpm}CPM.TMM.tsv.gz",
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["normalise_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["normalise_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["normalise_time"]]
+    threads: config["normalise_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/normalise.R"
+    log: config["outputs"]["output_dir"] + "log/normalise.{hash}.{cell_type}.{min_ind_expr}Expr{min_cpm}CPM.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} Rscript {params.script} \
+            --exp {input.exp} \
+            --min_ind_expr {wildcards.min_ind_expr} \
+            --min_cpm {wildcards.min_cpm} \
+            --out {output.exp} > {log} 2>&1
+        """
+
+
+rule merge_stats:
+    input:
+        poolsheet = config["inputs"]["poolsheet"],
+        stats = expand(config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.pseudobulk.stats.tsv.gz", pool=POOLS, allow_missing=True)
+    output:
+        stats = config["outputs"]["output_dir"] + "expression/{hash}/pseudobulk.stats.tsv.gz"
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_expr_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_expr_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["merge_expr_time"]],
+    threads: config["merge_expr_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/merge_stats.py",
+        indir = config["outputs"]["output_dir"] + "expression/{hash}/pools/",
+        out = config["outputs"]["output_dir"] + "expression/{hash}/"
+    log: config["outputs"]["output_dir"] + "log/merge.{hash}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --poolsheet {input.poolsheet} \
+            --indir {params.indir} \
+            --out {params.out} > {log} 2>&1
         """

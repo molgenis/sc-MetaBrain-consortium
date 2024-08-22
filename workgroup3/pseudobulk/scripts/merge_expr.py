@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser(description="")
 parser.add_argument("--poolsheet", required=True, type=str, help="")
 parser.add_argument("--indir", required=True, type=str, help="")
 parser.add_argument("--cell_type", required=True, type=str, help="")
-parser.add_argument("--aggregate_method", required=False, type=str, default="sum", choices=["sum", "mean"], help="")
+parser.add_argument("--aggregate_fun", required=False, type=str, default="sum", choices=["sum", "mean"], help="")
 parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
 
@@ -60,15 +60,15 @@ def load_file(fpath, sep="\t", header=0, index_col=None, must_contain=None):
     print("\tLoaded {} with shape: {}".format(os.path.basename(fpath), df.shape))
     return df
 
-print("\nExtracting input fpaths from poolsheet ...")
+print("\nLoading poolsheet ...")
 poolsheet = load_file(args.poolsheet)
 
 print("\nLoading expression data ...")
 data = []
 for pool in poolsheet["Pool"]:
-    fpath =os.path.join(args.indir, pool + ".pseudobulk.tsv.gz")
+    fpath = os.path.join(args.indir, pool + ".pseudobulk.tsv.gz")
     if not os.path.exists(fpath):
-        print("Warning, {} does not exist".format(fpath))
+        print("\tWarning, {} does not exist".format(fpath))
         continue
     df = load_file(fpath, index_col=0, must_contain=args.cell_type)
     df.index = str(pool) + "_" + df.index
@@ -87,16 +87,17 @@ df.index = indices.loc[mask, :].iloc[:, -2]
 
 if len(set(df.index)) != df.shape[0]:
     print("\nAggregating expression data ...")
-    if args.aggregate_method == "sum":
+    if args.aggregate_fun == "sum":
         df = df.groupby(df.index).sum()
-    elif args.aggregate_method == "mean":
+    elif args.aggregate_fun == "mean":
         df = df.groupby(df.index).mean()
     else:
-        print("Error, unexpected aggregate_method type {}".format(args.aggregate_method))
+        print("Error, unexpected aggregate_fun type {}".format(args.aggregate_fun))
         exit()
     print("\tAggregated expression to shape: {}".format(df.shape))
 
-print("\tSaving transposed file")
-df.T.to_csv(os.path.join(args.out, "pseudobulk.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
+print("\tSaving files")
+df.T.to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
+pd.DataFrame({0: df.columns, 1: df.columns}).to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.smf"), sep="\t", header=False, index=False)
 
 print("Done")

@@ -30,7 +30,8 @@ parser.add_argument("--percent_rb", required=False, type=int, default=0, help=""
 parser.add_argument("--percent_mt", required=False, type=int, default=5, help="")
 parser.add_argument("--malat1", required=False, type=int, default=0, help="")
 parser.add_argument("--feature_name", required=False, type=str, default="HGNC", choices=["HGNC", "ENSG", "HGNC_ENSG"], help="")
-parser.add_argument("--aggregate_method", required=False, type=str, default="sum", choices=["sum", "mean"], help="")
+parser.add_argument("--min_cells", required=False, type=int, default=5, help="")
+parser.add_argument("--aggregate_fun", required=False, type=str, default="sum", choices=["sum", "mean"], help="")
 parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
 
@@ -113,8 +114,9 @@ def load_metadata(barcodes_fpath):
     metadata = metadata.sort_values(by="index", ascending=True).drop(["index"], axis=1)
 
     # Check if all barcodes are unique.
-    if len(metadata["Barcode"].uniuqe()) != metadata.shape[0]:
+    if len(metadata["Barcode"].unique()) != metadata.shape[0]:
         print("Error, not all barcodes are unique in the metadata.")
+        exit()
 
     print("\tLoaded metadata with shape: {}".format(metadata.shape))
     return metadata
@@ -305,16 +307,16 @@ def pseudobulk_per_ct(counts, features, metadata):
             print("\t{} has {:,} cells pass QC [{:.2f}%]\n".format(cell_type, np.sum(mask), (100 / n_sample_ct_cells) * np.sum(mask)))
 
             n_sample_ct_pass_cells = np.sum(mask)
-            cell_data.append([sample, cell_type, n_sample_ct_pass_cells])
-            if n_sample_ct_pass_cells == 0:
+            cell_data.append([sample, cell_type, ncells, n_sample_cells, np.sum(mask1), np.sum(mask2), np.sum(mask3), np.sum(mask4), n_sample_ct_pass_cells])
+            if n_sample_ct_pass_cells < args.min_cells:
                 continue
 
-            if args.aggregate_method == "sum":
+            if args.aggregate_fun == "sum":
                 expr_data.append(np.sum(counts[mask, :], axis=0))
-            elif args.aggregate_method == "mean":
+            elif args.aggregate_fun == "mean":
                 expr_data.append(np.mean(counts[mask, :], axis=0))
             else:
-                print("Error, unexpected aggregate_method type {}".format(args.aggregate_method))
+                print("Error, unexpected aggregate_fun type {}".format(args.aggregate_fun))
                 exit()
 
             expr_columns.append(sample + "_" + cell_type)
@@ -325,13 +327,13 @@ def pseudobulk_per_ct(counts, features, metadata):
 
     cell_df = None
     if len(cell_data) > 0:
-        cell_df = pd.DataFrame(cell_data, columns=["sample", "cell type", "cells"])
-        print("\tCombined {:,} cells over {:,} samples.".format(cell_df["cells"].sum(), expr_df.shape[1] if expr_df is not None else 0))
+        cell_df = pd.DataFrame(cell_data, columns=["sample", "cell type", "ncells_pool", "ncells_sample", "ncells_singlet", "ncells_pass_qc", "ncells_ancestry", "ncells_treatment", "ncells"])
+        print("\tCombined {:,} cells over {:,} samples.".format(cell_df["ncells"].sum(), expr_df.shape[1] if expr_df is not None else 0))
         print(cell_df)
 
-        for cell_type in cell_df["cell type"].unique():
-            ncells = cell_df.loc[cell_df["cell type"] == cell_type, "cells"].sum()
-            print("\t  Cell type: {} has {:,} cells over all samples".format(cell_type, ncells))
+        sumstats_df = cell_df.loc[:, [col for col in cell_df.columns if col not in ["sample", "ncells_pool", "ncells_sample"]]].groupby("cell type").sum()
+        sumstats_df.sort_values(by="ncells", ascending=False, inplace=True)
+        print(sumstats_df)
 
     return expr_df, cell_df
 
@@ -355,7 +357,7 @@ print("\nCreating metadata ...")
 metadata = load_metadata(barcodes_fpath=barcodes_fpath)
 
 print("\tSaving file")
-metadata.to_csv(os.path.join(args.out, str(args.pool) + ".full.metadata.tsv.gz"), sep="\t", header=True, index=False, compression="gzip")
+metadata.to_csv(os.path.join(args.out, str(args.pool) + ".metadata.tsv.gz"), sep="\t", header=True, index=False, compression="gzip")
 
 print("\nLoading counts matrix ...")
 counts, barcodes, features = load_counts(counts_fpath=counts_fpath)
@@ -390,6 +392,6 @@ print("\tSaving file")
 if expr is not None:
     expr.to_csv(os.path.join(args.out, str(args.pool) + ".pseudobulk.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
 if cell is not None:
-    cell.to_csv(os.path.join(args.out, str(args.pool) + ".pseudobulk.cells.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
+    cell.to_csv(os.path.join(args.out, str(args.pool) + ".pseudobulk.stats.tsv.gz"), sep="\t", header=True, index=False, compression="gzip")
 
 print("Done")
