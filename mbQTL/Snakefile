@@ -135,6 +135,16 @@ if config["qtl_settings"]["nrdatasets"] > 1:
     logger.error("Error, setting the minimum number of datasets required in "
                   "meta-analysis (nrdatasets) > 1 will result in no results "
                   "if your input GTE only contains one dataset.")
+if config["inputs"]["gte"].endswith(".smf"):
+    logger.warning("Warning, your input gte ends with '.smf'. If there is any datasets info in "
+                   "the third column it will be ignored and all analyses will be performed over "
+                   "all samples at once. This is equivalent to setting force_mega: all.")
+else:
+    logger.warning("Warning, your input gte ends with '.txt'. The info in the third column will "
+                   "be used as dataset. The principal component calculations and corrections "
+                   "will be performed per dataset. If there is only one dataset, all analyses will "
+                   "be performed over all samples at once. Use force_mega: cov to force the "
+                   "program to perform PCA correction over all samples.")
 if config["inputs"]["snpgenelimit"] != "" and config["run_qtl_time"] != 0:
     logger.warning("Warning, you are only testing a select number of effects but the runtime for each "
                    "job is max {}. If you tink this is too long you should decrease "
@@ -243,21 +253,25 @@ def get_input(wildcards):
                 logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor'")
                 input.append(config["outputs"]["output_dir"] + "pca/all/" + get_basename(config["inputs"]["exp"]) + ".cov.CovariatesRemovedOLS.done")
 
-            # Per dataset PCA output is not required if (1) the number of PCs removed is >0, (2) force_mega for
-            # covariate correction is False, and (3) the input file is not smf since those filetypes are
-            # guaranteed to have 1 dataset.
+            # Per dataset PCA output is not required if (1) the number of PCs removed is >0, and
+            # (2) the input file is not smf since those filetypes are guaranteed to have 1 dataset.
             ds_corr_covariates = [cov for cov in covariates if cov not in ["default", "cov", "0Pcs", "cov0Pcs"]]
-            if len(ds_corr_covariates) > 0 and not "cov" in config["general_settings"]["force_mega"] and not config["inputs"]["gte"].endswith(".smf"):
+            if len(ds_corr_covariates) > 0 and not config["inputs"]["gte"].endswith(".smf"):
                 datasets = get_datasets(wildcards)
 
-                logger.debug("\trequesting output of rule 'pca' on the output of rule 'filter_exp' for a specific dataset")
-                input.extend(expand(config["outputs"]["output_dir"] + "pca/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".done", dataset=datasets))
+                # No need to merge if there is only one dataset.
+                if len(get_datasets(wildcards)) == 1:
+                    logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor' since there is 1 dataset")
+                    input.extend(expand(config["outputs"]["output_dir"] + "pca/all/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", cov=ds_corr_covariates))
+                else:
+                    logger.debug("\trequesting output of rule 'pca' on the output of rule 'filter_exp' for a specific dataset")
+                    input.extend(expand(config["outputs"]["output_dir"] + "pca/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".done", dataset=datasets))
 
-                logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor' for a specific dataset")
-                input.extend(expand(config["outputs"]["output_dir"] + "pca/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", dataset=datasets, cov=ds_corr_covariates))
+                    logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor' for a specific dataset")
+                    input.extend(expand(config["outputs"]["output_dir"] + "pca/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", dataset=datasets, cov=ds_corr_covariates))
 
-                logger.debug("\trequesting output of rule 'pca' on the output of rule 'merge_exps'")
-                input.extend(expand(config["outputs"]["output_dir"] + "pca/merged/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", cov=ds_corr_covariates))
+                    logger.debug("\trequesting output of rule 'pca' on the output of rule 'merge_exps'")
+                    input.extend(expand(config["outputs"]["output_dir"] + "pca/merged/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", cov=ds_corr_covariates))
 
     # Output of mbQTL.
     logger.debug("\trequesting output of rule 'run_qtl'")
@@ -267,6 +281,10 @@ def get_input(wildcards):
     if covariates:
         logger.debug("\trequesting output of rule 'results'")
         input.append(config["outputs"]["output_dir"] + "output/" + config["outputs"]["output_prefix"] + "-results.txt")
+
+    logger.debug("Input files for rule 'all':")
+    for fpath in input:
+        logger.debug("\t" + fpath)
 
     return input
 
@@ -312,7 +330,7 @@ def get_pca_expr(wildcards):
     if raw_infile:
         # i.e. no covariate correction is needed. Only need to pick between the
         # full input matrix or a subset of the input matrix.
-        if wildcards.dataset == "raw" or "cov" in config["general_settings"]["force_mega"]:
+        if wildcards.dataset in ["raw", "all"] or "cov" in config["general_settings"]["force_mega"]:
             logger.debug("\treturning input 'exp'")
             return config["inputs"]["exp"]
 
@@ -320,7 +338,7 @@ def get_pca_expr(wildcards):
         return config["outputs"]["output_dir"] + "exp/" + wildcards.dataset + "/" + wildcards.infile + ".txt.gz"
 
     # covariate corrected per dataset merged into one file.
-    elif wildcards.dataset == "merged":
+    if wildcards.dataset == "merged":
         logger.debug("\treturning output of rule 'merge_exps'")
         return config["outputs"]["output_dir"] + "regressor/merged." + wildcards.infile + ".txt.gz"
 
@@ -365,7 +383,11 @@ def get_exp(wildcards):
     if wildcards.cov == "default" or wildcards.cov == "0Pcs":
         logger.debug("\treturning input 'exp'")
         return config["inputs"]["exp"]
-    elif wildcards.cov == "cov" or "cov" in config["general_settings"]["force_mega"]:
+    elif wildcards.cov == "cov" or "cov" in config["general_settings"]["force_mega"] or config["inputs"]["gte"].endswith(".smf") or len(get_datasets(wildcards)) == 1:
+        # wildcards == cov means there are no PCs so no per dataset correction needed
+        # force_mega == cov means we want to force to regress everthing together so no per dataset correction needed
+        # gte endswith '.smf' means there are no datasets so no per dataset correction needed
+        # n datasets == 1 means there are no other datasets so no per dataset correction needed
         logger.debug("\treturning output of rule 'regressor'")
         return config["outputs"]["output_dir"] + "regressor/all/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.txt.gz"
 
