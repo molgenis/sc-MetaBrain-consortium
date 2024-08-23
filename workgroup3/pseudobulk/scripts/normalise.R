@@ -63,7 +63,7 @@ expression <- DGEList(counts = expression) %>% #TMM normalize the data using edg
     as.data.frame()
 
 print("Writing output")
-write.table(expression, gzfile(args$out), quote = F, sep = "\t")
+write.table(expression, gzfile(args$out), quote = F, sep = "\t", row.names=TRUE, col.names=NA)
 print(paste0("  Written expression with shape (", nrow(expression), ", ", ncol(expression), ")"))
 
 print("Done")
