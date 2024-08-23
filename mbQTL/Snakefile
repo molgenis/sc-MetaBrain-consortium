@@ -85,8 +85,6 @@ if config["general_settings"]["n_pcs"] is None:
     config["general_settings"]["n_pcs"] = []
 if not isinstance(config["general_settings"]["n_pcs"], list):
     config["general_settings"]["n_pcs"] = [config["general_settings"]["n_pcs"]]
-if 0 in config["general_settings"]["n_pcs"]:
-    config["general_settings"]["n_pcs"].remove(0)
 
 # Reformat force mega.
 if config["general_settings"]["force_mega"] == "all":
@@ -195,6 +193,9 @@ if "XPcs" in selected_modes:
         logger.warning("Warning, you requested to run mode 'XPcs' but the 'n_pcs' input is empty. Skipping mode.")
     else:
         for n_pcs in config["general_settings"]["n_pcs"]:
+            if n_pcs == 0 and "default" not in covariates:
+                covariates.append("default")
+                continue
             covariates.append(str(n_pcs) + "Pcs")
 if "covXPcs" in selected_modes:
     if config["inputs"]["cov"] == "":
@@ -203,6 +204,9 @@ if "covXPcs" in selected_modes:
         logger.warning("Warning, you requested to run mode 'covXPcs' but the 'n_pcs' input is empty. Skipping mode.")
     else:
         for n_pcs in config["general_settings"]["n_pcs"]:
+            if n_pcs == 0 and "cov" not in covariates:
+                covariates.append("cov")
+                continue
             covariates.append("cov" + str(n_pcs) + "Pcs")
 if len(covariates) > 0:
     logger.info("Generating output for the following modes: {}.".format(", ".join(covariates)))
@@ -239,8 +243,11 @@ def get_input(wildcards):
                 logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor'")
                 input.append(config["outputs"]["output_dir"] + "pca/all/" + get_basename(config["inputs"]["exp"]) + ".cov.CovariatesRemovedOLS.done")
 
+            # Per dataset PCA output is not required if (1) the number of PCs removed is >0, (2) force_mega for
+            # covariate correction is False, and (3) the input file is not smf since those filetypes are
+            # guaranteed to have 1 dataset.
             ds_corr_covariates = [cov for cov in covariates if cov not in ["default", "cov", "0Pcs", "cov0Pcs"]]
-            if len(ds_corr_covariates) > 0 and not "cov" in config["general_settings"]["force_mega"]:
+            if len(ds_corr_covariates) > 0 and not "cov" in config["general_settings"]["force_mega"] and not config["inputs"]["gte"].endswith(".smf"):
                 datasets = get_datasets(wildcards)
 
                 logger.debug("\trequesting output of rule 'pca' on the output of rule 'filter_exp' for a specific dataset")
