@@ -104,6 +104,6 @@ if len(set(df.index)) != df.shape[0]:
 
 print("\tSaving files")
 df.T.to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
-pd.DataFrame({0: df.columns, 1: df.columns}).to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.smf"), sep="\t", header=False, index=False)
+pd.DataFrame({0: df.index, 1: df.index}).to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.smf"), sep="\t", header=False, index=False)
 
 print("Done")

@@ -67,7 +67,45 @@ POOLS = POOL_DF["Pool"].tolist()
 def get_md5_hash(s):
     return hashlib.md5(s.encode()).hexdigest()
 
-# Define the input files.
+def save_settings(settings_df):
+    # Check if the current settings are not run before. If not, add them and update
+    # the settings file.
+    settings_fpath = config["outputs"]["output_dir"] + "settings.tsv"
+    if not os.path.exists(settings_fpath):
+        # No settings file exists so any setting is always new.
+        logger.info("\tSaving settings")
+        settings_df.to_csv(settings_fpath,sep="\t",header=True,index=True)
+        return
+
+    # Load the old settings.
+    old_settings_df = pd.read_csv(settings_fpath,sep="\t",header=0,index_col=0)
+    logger.debug("\nPrevious settings:")
+    logger.debug(old_settings_df)
+
+    # Stop if they are identical.
+    if old_settings_df.equals(settings_df):
+        logger.debug("\nPrevious and current settings are identical.")
+        return
+
+    # Merge the old and new settings together, remove duplicates and sort.
+    new_settings_df = pd.concat([settings_df, old_settings_df],axis=0).drop_duplicates().sort_index()
+    logger.debug("\nUpdated settings:")
+    logger.debug(new_settings_df)
+
+    # Stop if this yields the same result as the old settings.
+    if new_settings_df.equals(old_settings_df):
+        logger.debug("\nUpdated and old settings are identical.")
+        return
+
+    # Make sure the hashes are unique, should never happen.
+    if len(set(settings_df.index)) != settings_df.shape[0]:
+        logger.error("Error, duplicate hash values for unique settings.")
+        exit()
+
+    logger.info("\tSaving updated settings")
+    new_settings_df.to_csv(settings_fpath,sep="\t",header=True,index=True)
+
+# Define the input settings and store their hashes.
 logger.info("Loading settings from yaml:")
 SETTINGS = {}
 for ncount_rna in config["settings"]["ncount_rna"]:
@@ -88,37 +126,12 @@ for ncount_rna in config["settings"]["ncount_rna"]:
                         SETTINGS[md5_hash] = settings
                         logger.info("\t{}: {}".format(md5_hash, settings))
 
-settings_df = pd.DataFrame(SETTINGS).T
+settings_df = pd.DataFrame(SETTINGS).T.sort_index()
 logger.debug("\nActive settings:")
 logger.debug(settings_df)
 
-# Check if the current settings are not run before. If not, add them and update
-# the settings file.
-settings_fpath = config["outputs"]["output_dir"] + "settings.tsv"
-if not os.path.exists(settings_fpath):
-    # No settings file exists so any setting is always new.
-    logger.info("\tSaving settings")
-    settings_df.to_csv(settings_fpath, sep="\t", header=True, index=True)
-else:
-    old_settings_df = pd.read_csv(settings_fpath, sep="\t", header=0, index_col=0)
-    new_settings_df = pd.concat([settings_df, old_settings_df], axis=0).drop_duplicates()
-
-    # Skip if old settings is identical to the current settings or if the current settings
-    # is already present in the old settings.
-    if not old_settings_df.equals(settings_df) and not new_settings_df.equals(old_settings_df):
-        logger.debug("\nPrevious settings:")
-        logger.debug(old_settings_df)
-
-        # Make sure the hashes are unique, should never happen.
-        if len(set(settings_df.index)) != settings_df.shape[0]:
-            logger.error("Error, duplicate hash values for unique settings.")
-            exit()
-
-        logger.debug("\nUpdated settings:")
-        logger.debug(new_settings_df)
-
-        logger.info("\tSaving updated settings")
-        new_settings_df.to_csv(settings_fpath, sep="\t", header=True, index=True)
+# Save the settings to people can look up what hash is what setting.
+save_settings(settings_df=settings_df)
 
 # Define the output hashes.
 HASHES = SETTINGS.keys()
@@ -135,6 +148,7 @@ wildcard_constraints:
 rule all:
     input:
         exp = expand(config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.{min_ind_expr}Expr{min_cpm}CPM.TMM.tsv.gz", hash=HASHES, cell_type=config["settings"]["cell_type"], min_ind_expr=config["settings"]["min_ind_expr"], min_cpm=config["settings"]["min_cpm"]),
+        smf = expand(config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.smf", hash=HASHES, cell_type=config["settings"]["cell_type"]),
         stats = expand(config["outputs"]["output_dir"] + "expression/{hash}/pseudobulk.sumstats.tsv.gz", hash=HASHES),
         qc_metrics = expand(config["outputs"]["output_dir"] + "figures/{hash}/ncount_rna_vs_percent_mt.png", hash=HASHES)
 
