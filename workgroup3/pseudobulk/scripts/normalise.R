@@ -32,7 +32,7 @@ shhh(library(dplyr))
 shhh(library(edgeR))
 
 print("Loading expression data")
-expression <- read.table(file = args$exp, row.names = 1)
+expression <- read.table(file = args$exp, row.names = 1, check.names = FALSE)
 print(paste0("  Loaded expression with shape (", nrow(expression), ", ", ncol(expression), ")"))
 
 ##Filter based on gene variance
