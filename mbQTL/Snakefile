@@ -114,6 +114,9 @@ else:
     if config["inputs"]["snpgenelimit"] != "" and not config["qtl_settings"]["perm"] == 0:
         logger.warning("Warning, setting perm to 0 since snpgenelimit is used.")
         config["qtl_settings"]["perm"] = 0
+    if config["inputs"]["gte"].endswith(".smf") and config["qtl_settings"]["nrdatasets"] > 1:
+        logger.warning("Warning, setting nrdatasets to 1 since the input gte is a single dataset ('.smf').")
+        config["qtl_settings"]["nrdatasets"] = 1
     if "qtl" in config["general_settings"]["force_mega"] and config["qtl_settings"]["nrdatasets"] > 1:
         logger.warning("Warning, setting nrdatasets to 1 since force_mega for QTL mapping is True.")
         config["qtl_settings"]["nrdatasets"] = 1
