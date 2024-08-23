@@ -13,10 +13,10 @@ parser = argparse.ArgumentParser(
 parser.add_argument("--workdir", type=str, required=True, help="")
 parser.add_argument("--disc_name", type=str, required=True, help="")
 parser.add_argument("--disc_cell_types", nargs="*", type=str, required=False, default=["AST", "END", "EX", "IN", "MIC", "OLI", "OPC", "PER"], help="")
-parser.add_argument("--disc_settings", nargs="*", type=str, required=False, default=["Main"], help="")
+parser.add_argument("--disc_settings", type=str, required=False, default=["Main"], help="")
 parser.add_argument("--repl_name", type=str, required=True, help="")
 parser.add_argument("--repl_cell_types", nargs="*", type=str, required=False, default=["AST", "END", "EX", "IN", "MIC", "OLI", "OPC", "PER"], help="")
-parser.add_argument("--repl_settings", nargs="*", type=str, required=False, default=["Main"], help="")
+parser.add_argument("--repl_settings", type=str, required=False, default=["Main"], help="")
 parser.add_argument("--standardise", action='store_true', help="")
 parser.add_argument("--palette", type=str, required=False, default=None, help="A color palette file.")
 parser.add_argument("--extensions", nargs="+", type=str, choices=["png", "pdf", "eps"], default=["png"], help="The figure file extension.. Default: 'png'.")
@@ -53,12 +53,19 @@ def plot(df, title="", filename="heatmap"):
     ncols = 4
     ncolumn_cells = len(df["discovery_id"].unique())
     nrow_cells = len(df["replication_id"].unique())
-    sns.set(rc={'figure.figsize': (ncols * ncolumn_cells, nrows * nrow_cells if nrow_cells > 1 else 9)})
     sns.set_style("ticks")
-    fig, axes = plt.subplots(nrows=nrows,
-                             ncols=ncols,
-                             sharex='none',
-                             sharey='none')
+    if ncolumn_cells > 1 and nrow_cells > 1:
+        sns.set(rc={'figure.figsize': (ncols * ncolumn_cells, nrows * nrow_cells)})
+        fig, axes = plt.subplots(nrows=nrows,
+                                 ncols=ncols,
+                                 sharex='none',
+                                 sharey='none')
+    else:
+        sns.set(rc={'figure.figsize': (ncols * 6, nrows * max(nrow_cells, ncolumn_cells))})
+        fig, axes = plt.subplots(nrows=nrows,
+                                 ncols=ncols,
+                                 sharex='none',
+                                 sharey='row')
 
     for col_index, (metric, vmin, center, vmax) in enumerate([("AC", -100, 0, 100),
                                                               ("Coef", -1, 0, 1),
@@ -97,28 +104,41 @@ def plot(df, title="", filename="heatmap"):
                 title=metric
             )
         elif (ncolumn_cells > 1 and nrow_cells == 1) or (ncolumn_cells == 1 and nrow_cells > 1):
-            plot_df = df.loc[df["Disc significant"] & ~df["Repl significant"], :].copy()
+            coi = ["discovery_id", "replication_id", "N", metric]
+            if metric + "SE" in df.columns:
+                coi.append(metric + "SE")
+
+            plot_df = df.loc[df["Disc significant"] & ~df["Repl significant"], coi].copy()
+            if not metric + "SE" in plot_df.columns:
+                if metric == "Coef":
+                    plot_df[metric + "SE"] = 1.0 / np.sqrt(plot_df["N"] - 3)
+                else:
+                    plot_df[metric + "SE"] = 0
+            plot_df.columns = ["discovery", "replication", "n", metric, "se"]
+            plot_df["lower"] = plot_df[metric] - (1.96 * plot_df["se"])
+            plot_df["upper"] = plot_df[metric] + (1.96 * plot_df["se"])
 
             if ncolumn_cells > 1 and nrow_cells == 1:
-                x = "discovery_ct"
-                xlabel = args.disc_name + " discovery"
-                ylabel = args.repl_cell_types[0]
+                label = "discovery"
+                hue = "replication"
+                xlabel = args.repl_name + " discovery"
+                ylabel = "discovery"
             else:
-                x = "replication_ct"
-                xlabel = args.repl_name + " replication"
-                ylabel = args.disc_cell_types[0]
+                label = "replication"
+                hue = "discovery"
+                xlabel = args.disc_name + " discovery"
+                ylabel = "replication"
 
-            # TODO: this plot does not look great.
-            plot_barplot(
-                fig=fig,
+            plot_df["label"] = plot_df[label] + " [n=" + plot_df["n"].astype(str) + "]"
+
+            plot_stripplot(
                 ax=axes[col_index],
                 df=plot_df,
-                x=x,
-                y=metric,
-                n="N",
-                xlabel=xlabel,
-                ylabel=ylabel if col_index == 0 else "",
-                title=metric
+                label="label",
+                value=metric,
+                hue=hue,
+                xlabel=metric,
+                ylabel=ylabel if col_index == 0 else ""
             )
 
     fig.suptitle(title,
@@ -143,23 +163,6 @@ def create_pivot_table(df, index_col, column_col, value_col, n_digits=2):
         value_df.loc[row[index_col], row[column_col]] = row[value_col]
         annot_df.loc[row[index_col], row[column_col]] = "{:,}\n{} = {:.{}f}".format(row["N"], value_col, row[value_col], n_digits)
 
-    # TODO: this might not be the most relevant info to show.
-    # ss_df = df.loc[df[index_col] == df[column_col], [index_col, column_col, "N"]].copy()
-    # if ss_df.shape[0] > 0:
-    #     index_ss = list(zip(ss_df[index_col], ss_df["N"]))
-    #     index_ss.sort(key = lambda x: -x[1])
-    #     index_order = [ss[0] for ss in index_ss]
-    #
-    #     columns_ss = list(zip(ss_df[column_col], ss_df["N"]))
-    #     columns_ss.sort(key = lambda x: -x[1])
-    #     columns_order = [ss[0] for ss in index_ss]
-    #
-    #     value_df = value_df.loc[index_order, columns_order]
-    #     annot_df = annot_df.loc[index_order, columns_order]
-    #
-    #     for out_df in [value_df, annot_df]:
-    #         out_df.index = ['{}\n[N={:,}]'.format(index, n) for index, n in index_ss]
-    #         out_df.columns = ['{}\n[N={:,}]'.format(column, n) for column, n in columns_ss]
     return value_df, annot_df
 
 
@@ -192,28 +195,39 @@ def plot_heatmap(ax, df, annot_df, vmin=None, vmax=None, center=None, xlabel="",
     ax.set_title(title, fontsize=12)
 
 
-def plot_barplot(fig, ax, df, x="x", y="y", n="n", xlabel="", ylabel="", title=""):
-    sns.despine(fig=fig, ax=ax)
+def plot_stripplot(ax, df, label="x", value="y", hue="y", xlabel="", ylabel="", title=""):
+    dfm = df.melt(id_vars=[label, hue], value_vars=["lower", "upper"])
+    sns.pointplot(x="value",
+                  y=label,
+                  data=dfm,
+                  hue=hue,
+                  color="#000000",
+                  join=False,
+                  ax=ax)
 
-    df.sort_values(by=y, inplace=True)
+    sns.stripplot(x=value,
+                  y=label,
+                  data=df,
+                  hue=hue,
+                  size=12,
+                  dodge=False,
+                  orient="h",
+                  palette='dark:#000000',
+                  linewidth=1,
+                  edgecolor="w",
+                  jitter=0,
+                  legend=False,
+                  ax=ax)
 
-    g = sns.barplot(x=x,
-                    y=y,
-                    data=df,
-                    dodge=False,
-                    order=df[x],
-                    ax=ax)
+    # ax.tick_params(axis='x', labelsize=10)
+    # ax.tick_params(axis='y', labelsize=10)
+    ax.get_legend().remove()
 
-    for i, (index, row) in enumerate(df.iterrows()):
-        g.text(i,
-               row[y],
-               "{:.2f}\n[N={:,}]\n ".format(row[y], row[n]),
-               fontsize=14,
-               color='black',
-               ha="center")
+    ax.xaxis.grid(False)
+    ax.yaxis.grid(True)
 
     ax.set_title(title,
-                 fontsize=22,
+                 fontsize=14,
                  fontweight='bold')
     ax.set_ylabel(ylabel,
                   fontsize=14,
@@ -223,15 +237,15 @@ def plot_barplot(fig, ax, df, x="x", y="y", n="n", xlabel="", ylabel="", title="
                   fontweight='bold')
 
 df_list = []
-for disc_settings in args.disc_settings:
+for disc_settings in args.disc_settings.split(","):
     for disc_ct in args.disc_cell_types:
-        for repl_settings in args.repl_settings:
+        for repl_settings in args.repl_settings.split(","):
             for repl_ct in args.repl_cell_types:
                 fpath = os.path.join(args.workdir, "replication_data", args.disc_name + disc_settings + "discovery_" + args.repl_name + repl_settings + "replication", args.disc_name + disc_settings  + "_" + disc_ct + "_Disc_" + args.repl_name + repl_settings + "_" + repl_ct + "_Repl_ReplicationStats.txt.gz")
                 if not os.path.exists(fpath):
                     continue
 
-                df = pd.read_csv(fpath, sep="\t", header=0, index_col=None)
+                df = pd.read_csv(fpath, sep="\t", header=0, index_col=0)
                 df["discovery_name"] = args.disc_name
                 df["discovery_folder"] = disc_settings
                 df["discovery_ct"] = disc_ct
@@ -241,7 +255,7 @@ for disc_settings in args.disc_settings:
                 df["replication_ct"] = repl_ct
                 df["replication_id"] = repl_settings + "_" + repl_ct
                 df_list.append(df)
-df = pd.concat(df_list, axis=0)
+df = pd.concat(df_list, axis=0).sort_values(by="Rb", ascending=False)
 print(df)
 
 filename = args.disc_name + "_Disc_" + args.repl_name + "_Repl_ReplicationStats"
