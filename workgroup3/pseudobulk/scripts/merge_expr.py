@@ -14,8 +14,7 @@ parser.add_argument("--aggregate_fun", required=False, type=str, default="sum", 
 parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
 
-if not os.path.isdir(args.out):
-    os.makedirs(args.out, exist_ok=True)
+os.makedirs(args.out, exist_ok=True)
 
 print("Options in effect:")
 for arg in vars(args):
@@ -32,6 +31,7 @@ def gzopen(file, mode="r"):
 def load_file(fpath, sep="\t", header=0, index_col=None, must_contain=None):
     data = []
     columns = None
+    index = 0
     with gzopen(fpath, mode="r") as fh:
         for index, line in enumerate(fh):
             if index == 0 or (index + 1) % 1e5 == 0:
@@ -46,6 +46,10 @@ def load_file(fpath, sep="\t", header=0, index_col=None, must_contain=None):
                 continue
             data.append(values)
     print("\tParsed {:,} lines".format(index + 1), end='\n')
+
+    if len(data) == 0:
+        print("\tFailed to load {}: no data".format(os.path.basename(fpath)))
+        return None
 
     df = pd.DataFrame(data, columns=columns)
     if index_col is not None:
@@ -71,6 +75,8 @@ for pool in poolsheet["Pool"]:
         print("\tWarning, {} does not exist".format(fpath))
         continue
     df = load_file(fpath, index_col=0, must_contain=args.cell_type)
+    if df is None:
+        continue
     df.index = str(pool) + "_" + df.index
     data.append(df)
 if len(data) == 0:

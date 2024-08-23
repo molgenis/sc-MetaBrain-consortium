@@ -18,6 +18,7 @@ inputs:
 
 outputs:
   output_dir:
+  palette:
 
 settings:
   ancestry: "EUR"
@@ -45,23 +46,27 @@ pseudobulk_pool_memory: 8
 pseudobulk_pool_threads: 1
 pseudobulk_pool_time: 0
 
-merge_expr_memory: 16
+merge_expr_memory: 8
 merge_expr_threads: 1
 merge_expr_time: 0
 
-normalise_memory: 16
+normalise_memory: 8
 normalise_threads: 1
 normalise_time: 0
 
-merge_stats_memory: 16
+merge_stats_memory: 4
 merge_stats_threads: 1
 merge_stats_time: 0
+
+visualise_barcode_qc_memory: 4
+visualise_barcode_qc_threads: 1
+visualise_barcode_qc_time: 0
 
 ############################################################################################################################################
 ##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####
 ############################################################################################################################################
 settings_extra:
   feature_name: "HGNC"
-  sample_aggregate: "Assignment"
+  sample_aggregate: "Assignment_Run_Lane"
   aggregate_fun: "sum"
   debug: True

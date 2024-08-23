@@ -68,9 +68,8 @@ def get_md5_hash(s):
     return hashlib.md5(s.encode()).hexdigest()
 
 # Define the input files.
-logger.info("Loading settings")
+logger.info("Loading settings from yaml:")
 SETTINGS = {}
-logger.debug("Loading settings from yaml:")
 for ncount_rna in config["settings"]["ncount_rna"]:
     for nfeature_rna in config["settings"]["nfeature_rna"]:
         for percent_rb in config["settings"]["percent_rb"]:
@@ -87,30 +86,39 @@ for ncount_rna in config["settings"]["ncount_rna"]:
                         }
                         md5_hash = get_md5_hash(str(settings))
                         SETTINGS[md5_hash] = settings
-                        logger.debug("\t{}: {}".format(md5_hash, settings))
+                        logger.info("\t{}: {}".format(md5_hash, settings))
 
 settings_df = pd.DataFrame(SETTINGS).T
 logger.debug("\nActive settings:")
 logger.debug(settings_df)
 
-# Save settings as hash.
+# Check if the current settings are not run before. If not, add them and update
+# the settings file.
 settings_fpath = config["outputs"]["output_dir"] + "settings.tsv"
-if os.path.exists(settings_fpath):
+if not os.path.exists(settings_fpath):
+    # No settings file exists so any setting is always new.
+    logger.info("\tSaving settings")
+    settings_df.to_csv(settings_fpath, sep="\t", header=True, index=True)
+else:
     old_settings_df = pd.read_csv(settings_fpath, sep="\t", header=0, index_col=0)
-    if not old_settings_df.equals(settings_df):
+    new_settings_df = pd.concat([settings_df, old_settings_df], axis=0).drop_duplicates()
+
+    # Skip if old settings is identical to the current settings or if the current settings
+    # is already present in the old settings.
+    if not old_settings_df.equals(settings_df) and not new_settings_df.equals(old_settings_df):
         logger.debug("\nPrevious settings:")
         logger.debug(old_settings_df)
 
-        settings_df = pd.concat([settings_df, old_settings_df], axis=0).drop_duplicates()
+        # Make sure the hashes are unique, should never happen.
         if len(set(settings_df.index)) != settings_df.shape[0]:
             logger.error("Error, duplicate hash values for unique settings.")
             exit()
 
-        logger.debug("\nAll settings:")
-        logger.debug(settings_df)
+        logger.debug("\nUpdated settings:")
+        logger.debug(new_settings_df)
 
-logger.info("\tSaving settings")
-settings_df.to_csv(settings_fpath, sep="\t", header=True, index=True)
+        logger.info("\tSaving updated settings")
+        new_settings_df.to_csv(settings_fpath, sep="\t", header=True, index=True)
 
 # Define the output hashes.
 HASHES = SETTINGS.keys()
@@ -127,7 +135,8 @@ wildcard_constraints:
 rule all:
     input:
         exp = expand(config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.{min_ind_expr}Expr{min_cpm}CPM.TMM.tsv.gz", hash=HASHES, cell_type=config["settings"]["cell_type"], min_ind_expr=config["settings"]["min_ind_expr"], min_cpm=config["settings"]["min_cpm"]),
-        stats = expand(config["outputs"]["output_dir"] + "expression/{hash}/pseudobulk.stats.tsv.gz", hash=HASHES)
+        stats = expand(config["outputs"]["output_dir"] + "expression/{hash}/pseudobulk.sumstats.tsv.gz", hash=HASHES),
+        qc_metrics = expand(config["outputs"]["output_dir"] + "figures/{hash}/ncount_rna_vs_percent_mt.png", hash=HASHES)
 
 
 rule pseudobulk_pool:
@@ -193,6 +202,8 @@ rule pseudobulk_pool:
             --min_cells {params.min_cells} \
             --aggregate_fun {params.aggregate_fun} \
             --out {params.out} > {log} 2>&1
+        singularity exec --bind {params.bind} {params.sif} touch {output.exp}
+        singularity exec --bind {params.bind} {params.sif} touch {output.stats}
         singularity exec --bind {params.bind} {params.sif} touch {output.done}
         """
 
@@ -258,7 +269,8 @@ rule merge_stats:
         poolsheet = config["inputs"]["poolsheet"],
         stats = expand(config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.pseudobulk.stats.tsv.gz", pool=POOLS, allow_missing=True)
     output:
-        stats = config["outputs"]["output_dir"] + "expression/{hash}/pseudobulk.stats.tsv.gz"
+        stats = config["outputs"]["output_dir"] + "expression/{hash}/pseudobulk.stats.tsv.gz",
+        sumstats = config["outputs"]["output_dir"] + "expression/{hash}/pseudobulk.sumstats.tsv.gz"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_expr_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_expr_memory"],
@@ -278,3 +290,48 @@ rule merge_stats:
             --indir {params.indir} \
             --out {params.out} > {log} 2>&1
         """
+
+
+rule visualise_barcode_qc:
+    input:
+        poolsheet = config["inputs"]["poolsheet"],
+        qc_metrics = expand(config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.full.metadata.tsv.gz", pool=POOLS, allow_missing=True)
+    output:
+        qc_metrics = config["outputs"]["output_dir"] + "expression/{hash}/qc_metrics.tsv.gz",
+        smf = config["outputs"]["output_dir"] + "figures/{hash}/ncount_rna_vs_percent_mt.png",
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["visualise_barcode_qc_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["visualise_barcode_qc_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["visualise_barcode_qc_time"]],
+    threads: config["visualise_barcode_qc_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/visualise_barcode_qc.py",
+        indir = config["outputs"]["output_dir"] + "expression/{hash}/pools/",
+        cell_level = config["settings"]["cell_level"],
+        ncount_rna = lambda wildcards: SETTINGS[wildcards.hash]["nCount_RNA"],
+        nfeature_rna = lambda wildcards: SETTINGS[wildcards.hash]["nFeature_RNA"],
+        percent_rb = lambda wildcards: SETTINGS[wildcards.hash]["percent.rb"],
+        percent_mt = lambda wildcards: SETTINGS[wildcards.hash]["percent.mt"],
+        malat1 = lambda wildcards: SETTINGS[wildcards.hash]["MALAT1"],
+        palette = "--palette " + config["inputs"]["palette"] if config["inputs"]["palette"] is not None else "",
+        data_out = config["outputs"]["output_dir"] + "expression/{hash}/",
+        plot_out = config["outputs"]["output_dir"] + "figures/{hash}/"
+    log: config["outputs"]["output_dir"] + "log/visualise_barcode_qc.{hash}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --poolsheet {input.poolsheet} \
+            --indir {params.indir} \
+            --cell_level {params.cell_level} \
+            --ncount_rna {params.ncount_rna} \
+            --nfeature_rna {params.nfeature_rna} \
+            --percent_rb {params.percent_rb} \
+            --percent_mt {params.percent_mt} \
+            --malat1 {params.malat1} \
+            {params.palette} \
+            --data_out {params.data_out} \
+            --plot_out {params.plot_out} > {log} 2>&1
+        """
+

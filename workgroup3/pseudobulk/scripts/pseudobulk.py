@@ -35,8 +35,7 @@ parser.add_argument("--aggregate_fun", required=False, type=str, default="sum", 
 parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
 
-if not os.path.isdir(args.out):
-    os.makedirs(args.out, exist_ok=True)
+os.makedirs(args.out, exist_ok=True)
 
 print("Options in effect:")
 for arg in vars(args):
@@ -49,10 +48,10 @@ def gzopen(file, mode="r"):
     else:
         return open(file, mode)
 
-
 def load_file(fpath, sep="\t", header=0, index_col=None, must_contain=None):
     data = []
     columns = None
+    index = 0
     with gzopen(fpath, mode="r") as fh:
         for index, line in enumerate(fh):
             if index == 0 or (index + 1) % 1e5 == 0:
@@ -67,6 +66,10 @@ def load_file(fpath, sep="\t", header=0, index_col=None, must_contain=None):
                 continue
             data.append(values)
     print("\tParsed {:,} lines".format(index + 1), end='\n')
+
+    if len(data) == 0:
+        print("\tError, failed to load {}: no data".format(os.path.basename(fpath)))
+        exit()
 
     df = pd.DataFrame(data, columns=columns)
     if index_col is not None:
@@ -110,6 +113,9 @@ def load_metadata(barcodes_fpath):
     if ct_pairs is not None:
         metadata = metadata.merge(ct_pairs, on=ct_pairs.columns[1], how="left")
 
+    # Adding extra columns.
+    metadata["Assignment_Run_Lane"] = metadata["Assignment"].astype(str) + ";;" + metadata["sequencing_run"].astype(str) + "_" + metadata["sequencing_lane"].astype(str)
+
     # Rorder back into original order.
     metadata = metadata.sort_values(by="index", ascending=True).drop(["index"], axis=1)
 
@@ -149,16 +155,7 @@ def load_counts(counts_fpath):
         exit()
 
     # Set gene names.
-    features = None
-    if args.feature_name == "HGNC":
-        features = gene_ids[:, 0]
-    elif args.feature_name == "ENSG":
-        features = gene_ids[:, 1]
-    elif args.feature_name == "HGNC_ENSG":
-        features = np.char.add(np.char.add(gene_ids[:, 0], "_"), gene_ids[:, 1])
-    else:
-        print("Unexpected feature name '{}'".format(args.feature_name))
-        exit()
+    features = get_features(m=gene_ids, indices={"HGNC": 0, "ENSG": 1})
 
     # Remove duplicates.
     u, c = np.unique(features, return_counts=True)
@@ -169,42 +166,36 @@ def load_counts(counts_fpath):
         count_matrix = count_matrix[:, ~features_mask]
         features = features[~features_mask]
 
-
     # Parse the barcode info.
     # barcode_ids = count_data.var['feature_types'].to_numpy()
 
     print("\tLoaded expression with shape: {}".format(count_matrix.shape))
     return count_matrix, barcodes, features
 
-def load_features(fpath):
-    gene_ids = load_file(fpath=fpath).to_numpy()
-
+def get_features(m, indices):
     if args.feature_name == "HGNC":
-        features = gene_ids[:, 1]
+        return m[:, indices["HGNC"]]
     elif args.feature_name == "ENSG":
-        features = gene_ids[:, 0]
+        return m[:, indices["ENSG"]]
     elif args.feature_name == "HGNC_ENSG":
-        features = np.char.add(np.char.add(gene_ids[:, 1], "_"), gene_ids[:, 0])
+        return np.char.add(np.char.add(m[:, indices["HGNC"]], "_"), m[:, indices["ENSG"]])
     else:
         print("Unexpected feature name '{}'".format(args.feature_name))
         exit()
 
+def load_features(fpath):
+    gene_ids = load_file(fpath=fpath).to_numpy()
+    features = get_features(m=gene_ids, indices={"HGNC": 1, "ENSG": 0})
     return features
 
 def get_malat1_feature():
-    if args.feature_name == "HGNC":
-        return "MALAT1"
-    elif args.feature_name == "ENSG":
-        return "ENSG00000251562"
-    elif args.feature_name == "HGNC_ENSG":
-        return "MALAT1_ENSG00000251562"
-    else:
-        print("Unexpected feature name '{}'".format(args.feature_name))
-        exit()
+    features = get_features(m=np.array([["ENSG00000251562", "MALAT1"]]), indices={"HGNC": 1, "ENSG": 0})
+    return features[0]
 
 def calc_barcode_qc(counts, barcodes, features):
-    # First calculate the total number of counts and features per barcode.
-    info = pd.DataFrame(np.hstack((np.sum(counts, axis=1), np.sum(counts != 0, axis=1))), columns=["nCount_RNA", "nFeature_RNA"], index=barcodes)
+    print("  Adding UMI and feature counts")
+    info = pd.DataFrame(np.hstack((np.sum(counts, axis=1), np.sum(counts != 0, axis=1))), 
+                        columns=["nCount_RNA", "nFeature_RNA"], index=barcodes)
 
     print("  Adding complexity")
     info["complexity"] = np.nan
@@ -237,6 +228,7 @@ def calc_barcode_qc(counts, barcodes, features):
     malat1_feature = get_malat1_feature()
     malat1_mask = features == malat1_feature
     info["MALAT1"] = counts[:, malat1_mask].toarray()
+    del malat1_feature, malat1_mask
 
     return info
 
@@ -254,7 +246,7 @@ def apply_barcode_qc(barcode_qc):
     print("\tpercent_rb <= {} yields {:,} [{:.2f}%] barcodes".format(args.percent_rb, np.sum(percent_rb_mask), (100 / n_barcodes) * np.sum(percent_rb_mask)))
 
     percent_mt_mask = barcode_qc["percent.mt"] <= args.percent_mt
-    print("\tpercent_rb <= {} yields {:,} [{:.2f}%] barcodes".format(args.percent_mt, np.sum(percent_mt_mask), (100 / n_barcodes) * np.sum(percent_mt_mask)))
+    print("\tpercent_mt <= {} yields {:,} [{:.2f}%] barcodes".format(args.percent_mt, np.sum(percent_mt_mask), (100 / n_barcodes) * np.sum(percent_mt_mask)))
 
     malat1_mask = barcode_qc["MALAT1"] >= args.malat1
     print("\tMALAT1 >= {} yields {:,} [{:.2f}%] barcodes".format(args.malat1, np.sum(malat1_mask), (100 / n_barcodes) * np.sum(malat1_mask)))
@@ -272,28 +264,37 @@ def pseudobulk_per_ct(counts, features, metadata):
 
     expr_data = []
     expr_columns = []
-    cell_data = []
+    stats_data = []
     samples = metadata[args.sample_aggregate].unique()
     for sample in samples:
         if sample == "doublet" or sample == "unassigned":
             continue
 
+        # Filter on the cells from the current samples.
         sample_mask = metadata[args.sample_aggregate] == sample
         n_sample_cells = np.sum(sample_mask)
         print("  {} has {:,} input cells [{:.2f}%]".format(sample, n_sample_cells, (100 / ncells) * n_sample_cells))
 
         if n_sample_cells == 0:
+            stats_data.append([sample, np.nan, ncells, n_sample_cells, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan])
             continue
 
+        # Loop over the different cell types that this sample has.
         cell_types = metadata.loc[sample_mask, args.cell_level].unique()
         for cell_type in cell_types:
             if pd.isnull(cell_type):
                 continue
 
+            # Filter on both sample and cel type.
             sample_ct_mask = (metadata[args.sample_aggregate] == sample) & (metadata[args.cell_level] == cell_type)
             n_sample_ct_cells = np.sum(sample_ct_mask)
             print("\t{} has {:,} input cells".format(cell_type, n_sample_ct_cells))
 
+            if n_sample_ct_cells == 0:
+                stats_data.append([sample, cell_type, ncells, n_sample_cells, n_sample_ct_cells, np.nan, np.nan, np.nan, np.nan, np.nan])
+                continue
+
+            # Filter on the other characteristics.
             mask1 = sample_ct_mask & (metadata["DropletType"] == "singlet")
             mask2 = sample_ct_mask & (metadata["tag"] == "NotOutlier")
             mask3 = sample_ct_mask & (metadata["Provided_Ancestry"] == args.ancestry)
@@ -307,10 +308,13 @@ def pseudobulk_per_ct(counts, features, metadata):
             print("\t{} has {:,} cells pass QC [{:.2f}%]\n".format(cell_type, np.sum(mask), (100 / n_sample_ct_cells) * np.sum(mask)))
 
             n_sample_ct_pass_cells = np.sum(mask)
-            cell_data.append([sample, cell_type, ncells, n_sample_cells, np.sum(mask1), np.sum(mask2), np.sum(mask3), np.sum(mask4), n_sample_ct_pass_cells])
+            stats_data.append([sample, cell_type, ncells, n_sample_cells, n_sample_ct_cells, np.sum(mask1), np.sum(mask2), np.sum(mask3), np.sum(mask4), n_sample_ct_pass_cells])
+            
+            # Stop if there are not enough cells.
             if n_sample_ct_pass_cells < args.min_cells:
                 continue
 
+            # Aggregate the cells.
             if args.aggregate_fun == "sum":
                 expr_data.append(np.sum(counts[mask, :], axis=0))
             elif args.aggregate_fun == "mean":
@@ -319,27 +323,24 @@ def pseudobulk_per_ct(counts, features, metadata):
                 print("Error, unexpected aggregate_fun type {}".format(args.aggregate_fun))
                 exit()
 
+            # Add the column.
             expr_columns.append(sample + "_" + cell_type)
 
+    # Merge the data.
     expr_df = None
     if len(expr_data) > 0:
         expr_df = pd.DataFrame(np.vstack(expr_data), columns=features, index=expr_columns)
 
-    cell_df = None
-    if len(cell_data) > 0:
-        cell_df = pd.DataFrame(cell_data, columns=["sample", "cell type", "ncells_pool", "ncells_sample", "ncells_singlet", "ncells_pass_qc", "ncells_ancestry", "ncells_treatment", "ncells"])
-        print("\tCombined {:,} cells over {:,} samples.".format(cell_df["ncells"].sum(), expr_df.shape[1] if expr_df is not None else 0))
-        print(cell_df)
+    stats_df = None
+    if len(stats_data) > 0:
+        stats_df = pd.DataFrame(stats_data, columns=["sample", "cell type", "ncells_pool", "ncells_sample", "ncells_sample_cell_type", "ncells_singlet", "ncells_pass_qc", "ncells_ancestry", "ncells_treatment", "ncells"])
+        print("\tCombined {:,} cells over {:,} samples.".format(stats_df["ncells"].sum(), expr_df.shape[0] if expr_df is not None else 0))
 
-        sumstats_df = cell_df.loc[:, [col for col in cell_df.columns if col not in ["sample", "ncells_pool", "ncells_sample"]]].groupby("cell type").sum()
-        sumstats_df.sort_values(by="ncells", ascending=False, inplace=True)
-        print(sumstats_df)
-
-    return expr_df, cell_df
+    return expr_df, stats_df
 
 #############################################
 
-print("\nExtracting input fpaths from poolsheet ...")
+print("\nLoading poolsheet ...")
 fpaths = load_file(args.poolsheet, must_contain=args.pool).to_dict("index")
 if len(fpaths) != 1:
     print("Error, pool is not unique.")
@@ -384,14 +385,27 @@ print("\tSaving file")
 metadata.to_csv(os.path.join(args.out, str(args.pool) + ".full.metadata.tsv.gz"), sep="\t", header=True, index=False, compression="gzip")
 
 print("\nPseudobulking per cell type ...")
-expr, cell = pseudobulk_per_ct(counts=counts, features=features, metadata=metadata)
+expr, stats = pseudobulk_per_ct(counts=counts, features=features, metadata=metadata)
+
+print("\nExpression output:")
 print(expr)
-print(cell)
+
+print("\nBarcode selection stats output:")
+print(stats)
+
+if stats is not None:
+    print("\nBarcode selection summary stats:")
+    sumstats = stats.loc[:, [col for col in stats.columns if col not in ["sample", "ncells_pool", "ncells_sample"]]].groupby("cell type").sum()
+    sumstats.sort_values(by="ncells", ascending=False, inplace=True)
+    sumstats = sumstats.T
+    sumstats["Total"] = sumstats.sum(axis=1)
+    print(sumstats)
+    del sumstats
 
 print("\tSaving file")
 if expr is not None:
     expr.to_csv(os.path.join(args.out, str(args.pool) + ".pseudobulk.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
-if cell is not None:
-    cell.to_csv(os.path.join(args.out, str(args.pool) + ".pseudobulk.stats.tsv.gz"), sep="\t", header=True, index=False, compression="gzip")
+if stats is not None:
+    stats.to_csv(os.path.join(args.out, str(args.pool) + ".pseudobulk.stats.tsv.gz"), sep="\t", header=True, index=False, compression="gzip")
 
 print("Done")

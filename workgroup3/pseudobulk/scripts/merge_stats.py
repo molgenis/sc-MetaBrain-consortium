@@ -11,8 +11,7 @@ parser.add_argument("--indir", required=True, type=str, help="")
 parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
 
-if not os.path.isdir(args.out):
-    os.makedirs(args.out, exist_ok=True)
+os.makedirs(args.out, exist_ok=True)
 
 print("Options in effect:")
 for arg in vars(args):
@@ -29,20 +28,33 @@ for pool in poolsheet["Pool"]:
     if not os.path.exists(fpath):
         print("\tWarning, {} does not exist".format(fpath))
         continue
-    df = pd.read_csv(fpath, sep="\t")
-    df.insert(0, "pool", str(pool))
-    data.append(df)
+
+    try:
+        stats = pd.read_csv(fpath, sep="\t")
+        print("\tLoaded {} with shape: {}".format(os.path.basename(fpath), stats.shape))
+    except pd.errors.EmptyDataError:
+        print("\tFailed to load {}: no data".format(os.path.basename(fpath)))
+        continue
+
+    stats.insert(0, "pool", str(pool))
+    data.append(stats)
 if len(data) == 0:
     exit()
-df = pd.concat(data, axis=0)
-print("\tLoaded cell stats with shape: {}".format(df.shape))
+stats = pd.concat(data, axis=0)
+print("\tLoaded cell stats with shape: {}".format(stats.shape))
 
-print("\nSummary stats per cell type:")
-sumstats_df = df.loc[:, [col for col in df.columns if col not in ["pool", "sample", "ncells_pool", "ncells_sample"]]].groupby("cell type").sum()
-sumstats_df.sort_values(by="ncells", ascending=False, inplace=True)
-print(sumstats_df)
+print("\nBarcode selection stats output:")
+print(stats)
+
+print("\nBarcode selection summary stats:")
+sumstats = stats.loc[:, [col for col in stats.columns if col not in ["pool", "sample", "ncells_pool", "ncells_sample"]]].groupby("cell type").sum()
+sumstats.sort_values(by="ncells", ascending=False, inplace=True)
+sumstats = sumstats.T
+sumstats["Total"] = sumstats.sum(axis=1)
+print(sumstats)
 
 print("\tSaving files")
-df.to_csv(os.path.join(args.out, "pseudobulk.stats.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
+stats.to_csv(os.path.join(args.out, "pseudobulk.stats.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
+sumstats.to_csv(os.path.join(args.out, "pseudobulk.sumstats.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
 
 print("Done")
