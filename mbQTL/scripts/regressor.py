@@ -46,8 +46,16 @@ def load_file(inpath, header_only=False):
     colnames = []
     rownames = []
     data = []
+    n_values = None
     for i, line in enumerate(fhin):
         values = line.rstrip("\n").split(sep)
+        if n_values is None:
+            n_values = len(values)
+        if len(values) != n_values:
+            print("  Error, unequal number of columns in the input file.")
+            fhin.close()
+            exit()
+
         if args.allow_na:
             values = ["nan" if value == '' else value for value in values]
 
@@ -101,11 +109,19 @@ def regress_data(inpath, outpath, covariates, sample_mask):
     fhout = gzopen(outpath, mode="w")
 
     i = 0
+    n_values = None
     for i, line in enumerate(fhin):
         if i % 1000 == 0:
             print("  Processed {:,} rows".format(i), end='\r')
 
         values = line.rstrip("\n").split(sep)
+        if n_values is None:
+            n_values = len(values)
+        if len(values) != n_values:
+            print("  Error, unequal number of columns in the input file.")
+            fhin.close()
+            exit()
+
         if args.allow_na:
             values = ["nan" if value == '' else value for value in values]
 
