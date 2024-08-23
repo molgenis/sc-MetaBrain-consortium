@@ -44,10 +44,10 @@ def print_dict(wildcards):
         return ""
 
     out = []
-    for key, value in wildcards.items():
-        if not isinstance(value, list):
-            value = [value]
-        out.append(key + "=" + ", ".join(value))
+    for key, values in wildcards.items():
+        if not isinstance(values, list):
+            values = [values]
+        out.append(key + "=" + ", ".join([str(value) for value in values]))
     return ", ".join(out)
 
 
@@ -69,7 +69,7 @@ def build_paths(ref_path, inputs=None):
         updated_paths = []
         for value in values:
             for (settings, path) in paths:
-                updated_paths.append((settings + value + "_", path.replace(label, value)))
+                updated_paths.append((settings + str(value) + "_", path.replace(label, str(value))))
 
         paths = updated_paths
         label_index += 1
@@ -121,10 +121,10 @@ rule plot_replication_stats:
         script = config["inputs"]["repo_dir"] + "scripts/plot_replication_stats.py",
         workdir = config["outputs"]["output_dir"],
         disc_name = config["inputs"]["discovery_name"],
-        disc_settings = " ".join(DISC_FPATHS.keys()),
+        disc_settings = ",".join(DISC_FPATHS.keys()),
         disc_cell_types = " ".join(config["settings"]["disc_cell_types"]),
         repl_name = config["inputs"]["replication_name"],
-        repl_settings = " ".join(REPL_FPATHS.keys()),
+        repl_settings = ",".join(REPL_FPATHS.keys()),
         repl_cell_types = " ".join(config["settings"]["repl_cell_types"]),
         palette = "--palette " + config["inputs"]["palette"] if config["inputs"]["palette"] is not None else "",
         extensions = " ".join(config["settings"]["extensions"]),
@@ -134,10 +134,10 @@ rule plot_replication_stats:
         singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --workdir {params.workdir} \
             --disc_name {params.disc_name} \
-            --disc_settings {params.disc_settings} \
+            --disc_settings '{params.disc_settings}' \
             --disc_cell_types {params.disc_cell_types} \
             --repl_name {params.repl_name} \
-            --repl_settings {params.repl_settings} \
+            --repl_settings '{params.repl_settings}' \
             --repl_cell_types {params.repl_cell_types} \
             {params.palette} \
             --extension {params.extensions} > {log} 2>&1
