@@ -50,7 +50,7 @@ def plot(df, title="", filename="heatmap"):
     sns.set_style("ticks")
 
     nrows = 1
-    ncols = 4
+    ncols = 5
     ncolumn_cells = len(df["discovery_id"].unique())
     nrow_cells = len(df["replication_id"].unique())
     sns.set_style("ticks")
@@ -70,7 +70,8 @@ def plot(df, title="", filename="heatmap"):
     for col_index, (metric, vmin, center, vmax) in enumerate([("AC", -100, 0, 100),
                                                               ("Coef", -1, 0, 1),
                                                               ("pi1", -1, 0, 1),
-                                                              ("Rb", -1, 0, 1)]):
+                                                              ("Rb", -1, 0, 1),
+                                                              ("%repl", 0, 0, 100)]):
 
         if ncolumn_cells > 1 and nrow_cells > 1:
             value_df, annot_df = create_pivot_table(
@@ -255,20 +256,30 @@ for disc_settings in args.disc_settings.split(","):
                 df["replication_ct"] = repl_ct
                 df["replication_id"] = repl_settings + "_" + repl_ct
                 df_list.append(df)
-df = pd.concat(df_list, axis=0).sort_values(by="Rb", ascending=False)
+df = pd.concat(df_list, axis=0)
 print(df)
 
+print("Replication stats:")
+# Add % replication column.
+pcnt_rpl_df = df.loc[df["Disc significant"] & ~df["Repl significant"], ["N", "discovery_id", "replication_id"]].merge(
+df.loc[df["Disc significant"] & df["Repl significant"], ["N", "discovery_id", "replication_id"]], on=["discovery_id", "replication_id"], suffixes=('_discovery', '_replicating'))
+pcnt_rpl_df["Disc significant"] = True
+pcnt_rpl_df["Repl significant"] = False
+pcnt_rpl_df["%repl"] = (100 / pcnt_rpl_df["N_discovery"]) * pcnt_rpl_df["N_replicating"]
+pcnt_rpl_df.sort_values(by="%repl", ascending=False, inplace=True)
+for _, row in pcnt_rpl_df.iterrows():
+    print("\t{} - {}:\t{:,} / {:,} ({:.0f}%)".format(row["discovery_id"], row["replication_id"], row["N_replicating"], row["N_discovery"], row["%repl"]))
+print("")
+
+# Sort on %repl.
+pcnt_rpl_df.drop(["N_discovery", "N_replicating"], axis=1, inplace=True)
+df = df.merge(pcnt_rpl_df, how="left").sort_values(["%repl", "Rb"], ascending=[False, False])
+
+print("Saving output.")
 filename = args.disc_name + "_Disc_" + args.repl_name + "_Repl_ReplicationStats"
 df.to_csv(os.path.join(data_outdir, filename + ".txt.gz"), sep="\t", header=True, index=False)
 
-print("Replication stats:")
-replication_df = df.loc[df["Disc significant"] & ~df["Repl significant"], ["N", "discovery_id", "replication_id"]].merge(
-df.loc[df["Disc significant"] & df["Repl significant"], ["N", "discovery_id", "replication_id"]], on=["discovery_id", "replication_id"], suffixes=('_discovery', '_replicating')
-)
-for _, row in replication_df.iterrows():
-    print("\t{} - {}:\t{:,} / {:,} ({:.0f}%)".format(row["discovery_id"], row["replication_id"], row["N_replicating"], row["N_discovery"], (100 / row["N_discovery"]) * row["N_replicating"]))
-print("")
-
+print("Plotting output.")
 plot(df=df,
      title="{} vs {}".format(args.disc_name, args.repl_name),
      filename=filename)

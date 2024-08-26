@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import os
+import json
 
 # Set logger level.
 if config["settings_extra"]["debug"]:
@@ -26,6 +27,14 @@ if not os.path.exists(config["inputs"]["singularity_image"]):
 if config["inputs"]["discovery_name"] == config["inputs"]["replication_name"]:
     logger.error("Critical, discovery and replication name are the same.")
     exit("InvalidDiscReplName")
+
+# Set logger level.
+cell_type_names = None
+if config["settings"]["only_matching"] and config["inputs"]["cell_type_names"] is not None and os.path.exists(config["inputs"]["cell_type_names"]):
+    logger.info("loading 'cell_type_names'.")
+    with open(config["inputs"]["cell_type_names"]) as f:
+        cell_type_names = json.load(f)
+    f.close()
 
 
 wildcard_constraints:
@@ -90,9 +99,20 @@ def get_plot_replication_stats_input(wildcards):
     input_files = []
     for disc_settings, disc_fpath in DISC_FPATHS.items():
         for disc_ct in config["settings"]["disc_cell_types"]:
+            disc_standard_ct = None
+            if cell_type_names is not None:
+                disc_standard_ct = cell_type_names[disc_ct] if disc_ct in cell_type_names else None
             for repl_settings, repl_fpath in REPL_FPATHS.items():
                 for repl_ct in config["settings"]["repl_cell_types"]:
-                    if config["settings"]["only_matching"] and disc_ct != repl_ct:
+                    repl_standard_ct = None
+                    if cell_type_names is not None:
+                        repl_standard_ct = cell_type_names[repl_ct] if repl_ct in cell_type_names else None
+
+                    # Check if cell types match.
+                    ct_match = disc_ct == repl_ct
+                    standard_ct_match = disc_standard_ct is not None and repl_standard_ct is not None and disc_standard_ct == repl_standard_ct
+
+                    if config["settings"]["only_matching"] and not ct_match and not standard_ct_match:
                         logger.debug("\tskipping 'disc_settings={}, disc_ct={}, repl_settings={}, repl_ct={}' due to only_matching.".format(disc_settings,disc_ct,repl_settings,repl_ct))
                         continue
                     if not os.path.exists(disc_fpath.replace("<CT>", disc_ct)) or not os.path.exists(repl_fpath.replace("<CT>", repl_ct)):
@@ -134,10 +154,10 @@ rule plot_replication_stats:
         singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --workdir {params.workdir} \
             --disc_name {params.disc_name} \
-            --disc_settings '{params.disc_settings}' \
+            --disc_settings='{params.disc_settings}' \
             --disc_cell_types {params.disc_cell_types} \
             --repl_name {params.repl_name} \
-            --repl_settings '{params.repl_settings}' \
+            --repl_settings='{params.repl_settings}' \
             --repl_cell_types {params.repl_cell_types} \
             {params.palette} \
             --extension {params.extensions} > {log} 2>&1
