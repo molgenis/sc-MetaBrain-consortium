@@ -34,7 +34,7 @@ settings:
   min_cells: [ 5 ]
 
   # normalise: filter genes
-  min_ind_expr: [ 10 ]
+  min_ind_expr: [ 10 ] ### applies only to Bryois normalisation
   min_cpm: [ 1 ]
 
 cluster_time: {0: "00:59:00", 1: "23:59:00", 2: "6-23:59:00"}
