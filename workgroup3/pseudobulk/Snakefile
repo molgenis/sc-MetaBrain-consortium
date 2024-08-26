@@ -147,7 +147,8 @@ wildcard_constraints:
 
 rule all:
     input:
-        exp = expand(config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.{min_ind_expr}Expr{min_cpm}CPM.TMM.tsv.gz", hash=HASHES, cell_type=config["settings"]["cell_type"], min_ind_expr=config["settings"]["min_ind_expr"], min_cpm=config["settings"]["min_cpm"]),
+        exp_bryois = expand(config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.{min_ind_expr}Expr{min_cpm}CPM.TMM.tsv.gz", hash=HASHES, cell_type=config["settings"]["cell_type"], min_ind_expr=config["settings"]["min_ind_expr"], min_cpm=config["settings"]["min_cpm"]),
+        exp_fujita = expand(config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.{min_cpm}CPM.log2CPM_QN.tsv.gz", hash=HASHES, cell_type=config["settings"]["cell_type"], min_cpm=config["settings"]["min_cpm"]),
         smf = expand(config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.smf", hash=HASHES, cell_type=config["settings"]["cell_type"]),
         stats = expand(config["outputs"]["output_dir"] + "expression/{hash}/pseudobulk.sumstats.tsv.gz", hash=HASHES),
         qc_metrics = expand(config["outputs"]["output_dir"] + "figures/{hash}/ncount_rna_vs_percent_mt.png", hash=HASHES)
@@ -253,7 +254,7 @@ rule merge_expr:
         """
 
 
-rule normalise:
+rule normalise_bryois:
     input:
         exp = config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.tsv.gz",
     output:
@@ -266,13 +267,38 @@ rule normalise:
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/normalise.R"
-    log: config["outputs"]["output_dir"] + "log/normalise.{hash}.{cell_type}.{min_ind_expr}Expr{min_cpm}CPM.log"
+        script = config["inputs"]["repo_dir"] + "scripts/normalise_bryois.R"
+    log: config["outputs"]["output_dir"] + "log/normalise_bryois.{hash}.{cell_type}.{min_ind_expr}Expr{min_cpm}CPM.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} Rscript {params.script} \
             --exp {input.exp} \
             --min_ind_expr {wildcards.min_ind_expr} \
+            --min_cpm {wildcards.min_cpm} \
+            --out {output.exp} > {log} 2>&1
+        """
+
+
+rule normalise_fujita:
+    input:
+        exp = config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.tsv.gz",
+        # batches = ""
+    output:
+        exp = config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.{min_cpm}CPM.log2CPM_QN.tsv.gz",
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["normalise_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["normalise_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["normalise_time"]]
+    threads: config["normalise_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/normalise_fujita.R"
+    log: config["outputs"]["output_dir"] + "log/normalise_fujita.{hash}.{cell_type}.{min_cpm}CPM.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} Rscript {params.script} \
+            --exp {input.exp} \
             --min_cpm {wildcards.min_cpm} \
             --out {output.exp} > {log} 2>&1
         """

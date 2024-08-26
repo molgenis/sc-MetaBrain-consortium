@@ -43,7 +43,6 @@ expression <- expression[which(rowVarInfo != 0),]
 n_genes_after = dim(expression)[1]
 print(paste0("  Removed ", n_genes_before - n_genes_after, " genes due to no variance"))
 
-
 ##Filter on expressed in 10 individuals
 n_genes_before = dim(expression)[1]
 expression <- expression[which(rowSums(expression > 0) > args$min_ind_expr), ]
