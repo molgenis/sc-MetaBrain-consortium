@@ -336,6 +336,7 @@ def get_variants(wildcards):
     logger.debug("\treturning []")
     return []
 
+
 def get_dataset_gte(wildcards):
     """
     :rule: pca and filter_exp
@@ -421,7 +422,7 @@ def get_cov(wildcards):
     if wildcards.cov == "default" or wildcards.cov == "0Pcs":
         logger.error("Critical, unexpected covariate '{}' wildcard in get_cov.\n\nExiting.".format(wildcards.cov))
         exit()
-    if wildcards.cov == "cov" or wildcards.cov == "cov0Pcs":
+    elif wildcards.cov == "cov" or wildcards.cov == "cov0Pcs":
         # Only cov, no PCs.
         fpath = config["inputs"]["cov"]
         logger.debug("\treturning input 'cov': " + fpath)
@@ -476,6 +477,7 @@ def get_genes(wildcards):
     logger.debug("\treturning: " + fpath)
     return fpath
 
+
 def get_genes_file(wildcards):
     """
     :rule: run_qtl and merge
@@ -489,6 +491,7 @@ def get_genes_file(wildcards):
         fpath += (str(config["general_settings"]["n_genes"]) + "Genes")
     logger.debug("\treturning: " + fpath)
     return fpath
+
 
 def get_annotation(wildcards):
     """
@@ -547,7 +550,7 @@ def get_exp(wildcards):
     """
     :rule: run_qtl
     :param wildcards:
-    :return: depending on the covariates the input is selected. If no covariates are removed (i.e. default or 0Pcs) the originak
+    :return: depending on the covariates the input is selected. If no covariates are removed (i.e. default or 0Pcs) the original
     input file can be returned. If covariates should be removed, we need to determine if this is done per dataset
     (output rule merge_exps) or not (output rule regressor).
     """
@@ -629,7 +632,7 @@ def get_genelimit(wildcards):
         logger.debug("\treturning output of checkpoint 'create_batches': " + fpath)
         return prefix + config["outputs"]["output_dir"] + fpath
     elif config["inputs"]["genelimit"] != "":
-        # Only if ngenes is None: i.e. all genes are tested in 1 job
+        # Only if n_genes is None: i.e. all genes are tested in 1 job
         fpath = config["inputs"]["genelimit"]
         logger.debug("\treturning input 'genelimit': " + fpath)
         return prefix + fpath
