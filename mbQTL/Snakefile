@@ -478,6 +478,24 @@ def get_genes(wildcards):
     return fpath
 
 
+def get_annotation(wildcards):
+    """
+    :rule: run_qtl
+    :param wildcards:
+    :return: return the gene annotation file. If the input is a gtf we need to convert this first using
+    create_gene_annotation, else we return the input annotation file.
+    """
+    logger.debug("rule run_qtl, create_batches - get_annotation({})".format(print_wildcards(wildcards)))
+    if config["inputs"]["annotation"].endswith(".gtf"):
+        fpath = "create_annotation/refdata-gex-GeneAnnotation.txt.gz"
+        logger.debug("\treturning output of rule 'create_gene_annotation': " + fpath)
+        return config["outputs"]["output_dir"] + fpath
+
+    fpath = config["inputs"]["annotation"]
+    logger.debug("\treturning input 'annotation': " + fpath)
+    return fpath
+
+
 def get_genes_file(wildcards):
     """
     :rule: run_qtl and merge
@@ -490,24 +508,6 @@ def get_genes_file(wildcards):
     if config["general_settings"]["n_genes"] is not None:
         fpath += (str(config["general_settings"]["n_genes"]) + "Genes")
     logger.debug("\treturning: " + fpath)
-    return fpath
-
-
-def get_annotation(wildcards):
-    """
-    :rule: run_qtl
-    :param wildcards:
-    :return: return the gene annotation file. If the input is a gtf we need to convert this first using
-    create_gene_annotation, else we return the input annotation file.
-    """
-    logger.debug("rule run_qtl - get_annotation({})".format(print_wildcards(wildcards)))
-    if config["inputs"]["annotation"].endswith(".gtf"):
-        fpath = "create_annotation/refdata-gex-GeneAnnotation.txt.gz"
-        logger.debug("\treturning output of rule 'create_gene_annotation': " + fpath)
-        return config["outputs"]["output_dir"] + fpath
-
-    fpath = config["inputs"]["annotation"]
-    logger.debug("\treturning input 'annotation': " + fpath)
     return fpath
 
 
@@ -1080,7 +1080,8 @@ rule remove_gte_dataset:
 checkpoint create_batches:
     priority: 50
     input:
-        genes = get_genes
+        genes = get_genes,
+        annotation = get_annotation
     output:
         batches = directory(config["outputs"]["output_dir"] + "batches/{genes_file}/{cov}/")
     resources:
@@ -1100,6 +1101,7 @@ checkpoint create_batches:
         mkdir -p {output.batches}
         singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --genes {input.genes} \
+            --annotation {input.annotation} \
             --n_genes {params.n_genes} \
             --out {params.out} > {log} 2>&1
         """
