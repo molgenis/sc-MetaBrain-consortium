@@ -73,9 +73,9 @@ split_gte_memory: 4 ### Amount of gigs that will be used for memory and disk spa
 split_gte_threads: 1 ### Number of threads to use
 split_gte_time: 0 ### The time setting to use
 
-snpgenelimit_to_vars_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
-snpgenelimit_to_vars_threads: 1 ### Number of threads to use
-snpgenelimit_to_vars_time: 0 ### The time setting to use
+split_snpgenelimit_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+split_snpgenelimit_threads: 1 ### Number of threads to use
+split_snpgenelimit_time: 0 ### The time setting to use
 
 index_vcf_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 index_vcf_threads: 1 ### Number of threads to use

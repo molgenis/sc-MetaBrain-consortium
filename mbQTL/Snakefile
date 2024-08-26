@@ -6,9 +6,6 @@ if config["settings_extra"]["debug"]:
     logger.set_level("DEBUG")
 
 # Validate input.
-if sum([x is not None for x in [config["inputs"]["genelimit"], config["inputs"]["snplimit"], config["inputs"]["snpgenelimit"]]]) > 1:
-    logger.error("Critical, selected multiple limitation files. Use genelimit, snplimit, snpgenelimit or none.\n\nExiting.")
-    exit("InvalidInput")
 if config["general_settings"]["n_genes"] is not None and config["general_settings"]["n_genes"] <= 0:
     logger.error("Critical, n_genes needs to be larger than zero.\n\nExiting.")
     exit("InvalidInput")
@@ -53,13 +50,6 @@ if config["inputs"]["snpgenelimit"] is not None and not os.path.exists(config["i
     logger.error("Critical, snpgenelimit does not exist.\n\nExiting.")
     exit("InvalidSNPGeneLimit")
 
-if config["inputs"]["genelimit"] is not None and not os.path.exists(config["inputs"]["genelimit"]):
-    logger.error("Critical, the genelimit file does not exist.\n\nExiting.")
-    exit("MissingGeneLimitFile")
-if config["inputs"]["snpgenelimit"] is not None and not os.path.exists(config["inputs"]["snpgenelimit"]):
-    logger.error("Critical, the snpgenelimit file does not exist.\n\nExiting.")
-    exit("MissingSNPGeneLimitFile")
-
 # Checking settings with options to be valid.
 if config["general_settings"]["force_mega"] not in ["all", "cov", "qtl", "none", None]:
     logger.error("Critical, force_mega must be 'all', 'cov', 'qtl', 'none', or empty.\n\nExiting.")
@@ -80,13 +70,13 @@ for input_variable in ["cov", "genelimit", "snplimit", "snpgenelimit"]:
 if config["outputs"]["output_prefix"] is None:
     config["outputs"]["output_prefix"] = "mbQTL"
 
-# Reformat the selected number of PCs into a list and remove 0 Pcs.
+# Reformat the selected number of PCs into a list.
 if config["general_settings"]["n_pcs"] is None:
     config["general_settings"]["n_pcs"] = []
 if not isinstance(config["general_settings"]["n_pcs"], list):
     config["general_settings"]["n_pcs"] = [config["general_settings"]["n_pcs"]]
 
-# Reformat force mega.
+# Reformat force mega in a list and replace 'all' with all options.
 if config["general_settings"]["force_mega"] == "all":
     config["general_settings"]["force_mega"] = ["cov", "qtl"]
 else:
@@ -124,13 +114,13 @@ else:
 # Check setting combinations that are not allowed.
 if config["qtl_settings"]["nrdatasets"] > 1 and config["inputs"]["gte"].endswith(".smf"):
     logger.error("Critical, setting the minimum number of datasets required in "
-                    "meta-analysis (nrdatasets) > 1 will result in no results "
-                    "since your input GTE has no dataset column.")
+                 "meta-analysis (nrdatasets) > 1 will result in no results "
+                 "since your input GTE has no dataset column.")
     exit()
 if config["qtl_settings"]["replacemissinggenotypes"] and config["qtl_settings"]["perm"] == 0:
     logger.error("Critical, replacemissinggenotypes is True while perm is 0. This setting should "
-                    "only be True when both genotypes and expression data have missing "
-                    "values and perm > 0.\n\nExiting.")
+                 "only be True when both genotypes and expression data have missing "
+                 "values and perm > 0.\n\nExiting.")
     exit()
 
 # Some friendly reminders.
@@ -169,6 +159,9 @@ elif config["inputs"]["cov"] != "" and config["general_settings"]["n_pcs"]:
     input_mode = "covXPcs"
 elif config["inputs"]["cov"] == "" and config["general_settings"]["n_pcs"]:
     input_mode = "XPcs"
+else:
+    logger.error("Critical, could not determine input mode.\n\nExiting")
+    exit()
 logger.info("Your input is in mode: {}.".format(input_mode))
 
 # Define the tests that the user wants to run.
@@ -230,7 +223,7 @@ wildcard_constraints:
 
 
 def get_basename(fpath):
-    return os.path.basename(fpath).rstrip(".gz").rstrip(".txt").rstrip(".tsv").rstrip(".csv").rstrip(".vcf")
+    return os.path.basename(fpath).rstrip(".bgz").rstrip(".gz").rstrip(".txt").rstrip(".tsv").rstrip(".csv").rstrip(".vcf")
 
 
 def print_wildcards(wildcards):
@@ -241,20 +234,29 @@ def print_wildcards(wildcards):
 
 
 def get_input(wildcards):
-    logger.debug("get_input(" + print_wildcards(wildcards) + ")")
+    """
+    :rule: all
+    :param wildcards:
+    :return: the required input files.
+    """
+    logger.debug("rule all - get_input({})".format(print_wildcards(wildcards)))
     input = []
+    exp_basename = get_basename(config["inputs"]["exp"])
 
     if config["general_settings"]["plot_pca"]:
-        logger.debug("\trequesting output of rule 'pca' on the input 'exp'")
-        input.append(config["outputs"]["output_dir"] + "pca/all/" + get_basename(config["inputs"]["exp"]) + ".done")
+        input_fpath = "pca/all/{exp_basename}.done".format(**wildcards, exp_basename=exp_basename)
+        logger.debug("\trequesting output of rule 'pca' on the input 'exp': " + input_fpath)
+        input.append(config["outputs"]["output_dir"] + input_fpath)
 
         if "cov" in config["general_settings"]["force_mega"]:
-            logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor'")
-            input.extend(expand(config["outputs"]["output_dir"] + "pca/all/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", cov=covariates))
+            input_fpaths = expand(config["outputs"]["output_dir"] + "pca/all/{exp_basename}.{cov}.CovariatesRemovedOLS.done", exp_basename=exp_basename, cov=covariates)
+            logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
+            input.extend(input_fpaths)
         else:
             if "cov" in covariates:
-                logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor'")
-                input.append(config["outputs"]["output_dir"] + "pca/all/" + get_basename(config["inputs"]["exp"]) + ".cov.CovariatesRemovedOLS.done")
+                input_fpath = "pca/all/{exp_basename}.cov.CovariatesRemovedOLS.done".format(**wildcards, exp_basename=exp_basename)
+                logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor': " + input_fpath)
+                input.append(config["outputs"]["output_dir"] + input_fpath)
 
             # Per dataset PCA output is not required if (1) the number of PCs removed is >0, and
             # (2) the input file is not smf since those filetypes are guaranteed to have 1 dataset.
@@ -264,116 +266,185 @@ def get_input(wildcards):
 
                 # No need to merge if there is only one dataset.
                 if len(get_datasets(wildcards)) == 1:
-                    logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor' since there is 1 dataset")
-                    input.extend(expand(config["outputs"]["output_dir"] + "pca/all/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", cov=ds_corr_covariates))
+                    input_fpaths = expand(config["outputs"]["output_dir"] + "pca/all/{exp_basename}.{cov}.CovariatesRemovedOLS.done", exp_basename=exp_basename, cov=ds_corr_covariates)
+                    logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor' since there is 1 dataset: " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
+                    input.extend(input_fpaths)
                 else:
-                    logger.debug("\trequesting output of rule 'pca' on the output of rule 'filter_exp' for a specific dataset")
-                    input.extend(expand(config["outputs"]["output_dir"] + "pca/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".done", dataset=datasets))
+                    input_fpaths = expand(config["outputs"]["output_dir"] + "pca/{dataset}/{exp_basename}.done", dataset=datasets, exp_basename=exp_basename)
+                    logger.debug("\trequesting output of rule 'pca' on the output of rule 'filter_exp' for a specific dataset: " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
+                    input.extend(input_fpaths)
 
-                    logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor' for a specific dataset")
-                    input.extend(expand(config["outputs"]["output_dir"] + "pca/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", dataset=datasets, cov=ds_corr_covariates))
+                    input_fpaths = expand(config["outputs"]["output_dir"] + "pca/{dataset}/{exp_basename}.{cov}.CovariatesRemovedOLS.done", dataset=datasets, exp_basename=exp_basename, cov=ds_corr_covariates)
+                    logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor' for a specific dataset: " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
+                    input.extend(input_fpaths)
 
-                    logger.debug("\trequesting output of rule 'pca' on the output of rule 'merge_exps'")
-                    input.extend(expand(config["outputs"]["output_dir"] + "pca/merged/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.done", cov=ds_corr_covariates))
+                    input_fpaths = expand(config["outputs"]["output_dir"] + "pca/merged/{exp_basename}.{cov}.CovariatesRemovedOLS.done", exp_basename=exp_basename, cov=ds_corr_covariates)
+                    logger.debug("\trequesting output of rule 'pca' on the output of rule 'merge_exps': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
+                    input.extend(input_fpaths)
 
     # Output of mbQTL.
-    logger.debug("\trequesting output of rule 'run_qtl'")
-    input.extend(expand(config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffectsWithqval.txt", cov=covariates))
+    input_fpaths = expand(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithqval.txt", cov=covariates, output_prefix=config["outputs"]["output_prefix"])
+    logger.debug("\trequesting output of rule 'run_qtl': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
+    input.extend(input_fpaths)
 
     # Output of results.
     if covariates:
-        logger.debug("\trequesting output of rule 'results'")
-        input.append(config["outputs"]["output_dir"] + "output/" + config["outputs"]["output_prefix"] + "-results.txt")
-
-    logger.debug("Input files for rule 'all':")
-    for fpath in input:
-        logger.debug("\t" + fpath)
+        input_fpath = "output/{output_prefix}-results.txt".format(**wildcards, output_prefix=config["outputs"]["output_prefix"])
+        logger.debug("\trequesting output of rule 'results': " + input_fpath)
+        input.append(config["outputs"]["output_dir"] + input_fpath)
 
     return input
 
 
 def get_gte(wildcards):
-    logger.debug("get_gte(" + print_wildcards(wildcards) + ")")
+    """
+    :rule: split_gte, filter_exp, pca, remove_gte_dataset, and run_qtl
+    :param wildcards:
+    :return: return the output of smf_to_gte if the inpu gte is a '.smf' file, else return the input gte.
+    """
+    logger.debug("rule split_gte, filter_exp, pca, remove_gte_dataset, run_qtl - get_gte({})".format(print_wildcards(wildcards)))
     if config["inputs"]["gte"].endswith(".smf"):
-        logger.debug("\treturn output of rule 'smf_to_gte'")
-        return config["outputs"]["output_dir"] + "gte/gte.txt"
+        fpath = "gte/gte.txt"
+        logger.debug("\treturn output of rule 'smf_to_gte': " + fpath)
+        return config["outputs"]["output_dir"] + fpath
 
-    logger.debug("\treturn input 'gte'")
-    return config["inputs"]["gte"]
+    fpath = config["inputs"]["gte"]
+    logger.debug("\treturn input 'gte': " + fpath)
+    return fpath
 
 
 def get_variants(wildcards):
-    logger.debug("get_variants(" + print_wildcards(wildcards) + ")")
-    if config["inputs"]["snplimit"] == "" and config["inputs"]["snpgenelimit"] != "":
-        logger.debug("\treturn output of rule 'snpgenelimit_to_vars'")
-        return config["outputs"]["output_dir"] + "genotype/variants.txt"
-    elif config["inputs"]["snplimit"] != "" and config["inputs"]["snpgenelimit"] == "":
-        logger.debug("\treturn input 'snplimit'")
-        return config["inputs"]["snplimit"]
+    """
+    :rule: filter_vcf
+    :param wildcards:
+    :return: return the snpgenelimit if it is given, else the snplimit if it is given.
+    """
+    logger.debug("rule filter_vcf - get_variants({})".format(print_wildcards(wildcards)))
+
+    if wildcards.limit_file == get_basename(config["inputs"]["snpgenelimit"]):
+        fpath = "limit/{sgl_basename}_variants.txt".format(**wildcards, sgl_basename=get_basename(config["inputs"]["snpgenelimit"]))
+        logger.debug("\treturn output of rule 'split_snpgenelimit': " + fpath)
+        return config["outputs"]["output_dir"] + fpath
+    elif wildcards.limit_file == get_basename(config["inputs"]["snplimit"]):
+        fpath = config["inputs"]["snplimit"]
+        logger.debug("\treturn input 'snplimit': " + fpath)
+        return fpath
     else:
-        logger.error("Error in get_variants")
+        logger.error("Critical, Unexpected value for limit_file in get_variants: {}\n\nExiting.".format(wildcards.limit_file))
         exit()
 
-    return None
+    logger.debug("\treturning []")
+    return []
 
 def get_dataset_gte(wildcards):
-    logger.debug("get_dataset_gte(" + print_wildcards(wildcards) + ")")
-    if wildcards.dataset in ["raw", "merged", "all"]:
+    """
+    :rule: pca and filter_exp
+    :param wildcards:
+    :return: return the gte filtered on a specific dataset unless the dataset is merged / all in which case the whole gte
+    is returned.
+    """
+    logger.debug("rule pca, filter_exp - get_dataset_gte({})".format(print_wildcards(wildcards)))
+    if wildcards.dataset in ["merged", "all"]:
         logger.debug("\tcalling 'get_gte' function")
-        return get_gte(wildcards)
+        fpath = get_gte(wildcards)
+        logger.debug("\treturning: " + fpath)
+        return fpath
 
-    logger.debug("\treturn output of checkpoint 'split_gte'")
-    return config["outputs"]["output_dir"] + "gte/split/gte_" + wildcards.dataset + ".txt"
+    fpath = "gte/split/gte_{dataset}.txt".format(**wildcards)
+    logger.debug("\treturn output of checkpoint 'split_gte': " + fpath)
+    return config["outputs"]["output_dir"] + fpath
 
 
 def get_pca_expr(wildcards):
-    raw_infile = wildcards.infile == get_basename(config["inputs"]["exp"])
-    logger.debug("get_pca_expr(" + print_wildcards(wildcards) + ")")
+    """
+    :rule: pca
+    :param wildcards:
+    :return: determine the input expression file over which to perform PCA. If the infile is the input exp basename
+    we know that no covariates should be corrected so we can return either the whole matrix (exp input) or a filtered
+    version based on the dataset (filter_exp). Else, we need a covariate corrected matrix. If the dataset is merged this
+    means we need to combine the regressor output of multiple datasets from merge_exps. Else, we turn the regressor output
+    directly for that dataset.
+    """
+    logger.debug("rule pca - get_pca_expr({})".format(print_wildcards(wildcards)))
 
-    if raw_infile:
+    if wildcards.infile == get_basename(config["inputs"]["exp"]):
         # i.e. no covariate correction is needed. Only need to pick between the
         # full input matrix or a subset of the input matrix.
-        if wildcards.dataset == "all" or "cov" in config["general_settings"]["force_mega"]:
-            logger.debug("\treturning input 'exp'")
-            return config["inputs"]["exp"]
+        if wildcards.dataset == "all" or "cov" in config["general_settings"]["force_mega"] or config["inputs"]["gte"].endswith(".smf") or len(get_datasets(wildcards)) == 1:
+            fpath = config["inputs"]["exp"]
+            logger.debug("\treturning input 'exp': " + fpath)
+            return fpath
 
-        logger.debug("\treturning output of rule 'filter_exp' for a specific dataset")
-        return config["outputs"]["output_dir"] + "exp/" + wildcards.dataset + "/" + wildcards.infile + ".txt.gz"
+        fpath = "exp/{dataset}/{infile}.txt.gz".format(**wildcards)
+        logger.debug("\treturning output of rule 'filter_exp' for a specific dataset: " + fpath)
+        return config["outputs"]["output_dir"] + fpath
 
     # covariate corrected per dataset merged into one file.
     if wildcards.dataset == "merged":
-        logger.debug("\treturning output of rule 'merge_exps'")
-        return config["outputs"]["output_dir"] + "regressor/merged." + wildcards.infile + ".txt.gz"
+        fpath = "regressor/merged.{infile}.txt.gz".format(**wildcards)
+        logger.debug("\treturning output of rule 'merge_exps': " + fpath)
+        return config["outputs"]["output_dir"] + fpath
 
     # else, covariate corrected per dataset.
-    logger.debug("\treturning output of rule 'regressor'")
-    return config["outputs"]["output_dir"] + "regressor/" + wildcards.dataset + "/" + wildcards.infile + ".txt.gz"
+    fpath = "regressor/{dataset}/{infile}.txt.gz".format(**wildcards)
+    logger.debug("\treturning output of rule 'regressor': " + fpath)
+    return config["outputs"]["output_dir"] + fpath
+
 
 def get_regressor_exp(wildcards):
-    logger.debug("get_regressor_exp(" + print_wildcards(wildcards) + ")")
+    """
+    :rule: regressor
+    :param wildcards:
+    :return: return the input expression. If dataset is all we return the input exp file. Else, we return the
+    output of filter_exp for that dataset.
+    """
+    logger.debug("rule regressor - get_regressor_exp({})".format(print_wildcards(wildcards)))
     if wildcards.dataset == "all":
-        logger.debug("\treturning input 'exp'")
-        return config["inputs"]["exp"]
+        fpath = config["inputs"]["exp"]
+        logger.debug("\treturning input 'exp': " + fpath)
+        return fpath
 
-    logger.debug("\treturning output of rule 'filter_exp' for a specific dataset")
-    return config["outputs"]["output_dir"] + "exp/" + wildcards.dataset + "/" + get_basename(config["inputs"]["exp"]) + ".txt.gz"
+    fpath = "exp/{dataset}/{exp_basename}.txt.gz".format(**wildcards, exp_basename=get_basename(config["inputs"]["exp"]))
+    logger.debug("\treturning output of rule 'filter_exp' for a specific dataset: " + fpath)
+    return config["outputs"]["output_dir"] + fpath
 
 
 def get_cov(wildcards):
-    logger.debug("get_cov(" + print_wildcards(wildcards) + ")")
+    """
+    :rule: regressor
+    :param wildcards:
+    :return: depending on the covariates the input is selected. No covariates should not happen so an error is thrown. If
+    cov contains only covariates and no PCs (i.e. cov or cov0Pcs) the input covariate file is returned. If cov contains only
+    Pcs and no covariates the output of pca is returned. If cov contains both covariates and PCs the output of merge_covs is returned.
+    """
+    logger.debug("rule regressor - get_cov({})".format(print_wildcards(wildcards)))
+    if wildcards.cov == "default" or wildcards.cov == "0Pcs":
+        logger.error("Critical, unexpected covariate '{}' wildcard in get_cov.\n\nExiting.".format(wildcards.cov))
+        exit()
     if wildcards.cov == "cov" or wildcards.cov == "cov0Pcs":
-        logger.debug("\treturning input 'cov'")
-        return config["inputs"]["cov"]
+        # Only cov, no PCs.
+        fpath = config["inputs"]["cov"]
+        logger.debug("\treturning input 'cov': " + fpath)
+        return fpath
     elif not wildcards.cov.startswith("cov") and wildcards.cov.endswith("Pcs"):
-        logger.debug("\treturning output of rule 'pca' for a specific dataset")
-        return config["outputs"]["output_dir"] + "pca/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".{cov}.txt.gz"
+        # No Cov, only PCs.
+        fpath = "pca/{dataset}/{exp_basename}.{cov}.txt.gz".format(**wildcards, exp_basename=get_basename(config["inputs"]["exp"]))
+        logger.debug("\treturning output of rule 'pca' for a specific dataset: " + fpath)
+        return config["outputs"]["output_dir"] + fpath
 
-    logger.debug("\treturning output of rule 'merge_covs' for a specific dataset")
-    return config["outputs"]["output_dir"] + "cov/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".{cov}.txt.gz"
+    # Cov and PCs.
+    fpath = "cov/{dataset}/{exp_basename}.{cov}.txt.gz".format(**wildcards, exp_basename=get_basename(config["inputs"]["exp"]))
+    logger.debug("\treturning output of rule 'merge_covs' for a specific dataset: " + fpath)
+    return config["outputs"]["output_dir"] + fpath
 
 
 def get_datasets(wildcards):
-    logger.debug("get_datasets(" + print_wildcards(wildcards) + ")")
+    """
+    :rule: run_qtl and merge_exps
+    :param wildcards:
+    :return: Extract the datasets we created in the checkpoint split_gte.
+    """
+    logger.debug("rule run_qtl, merge_exps - get_datasets({})".format(print_wildcards(wildcards)))
     out_dir = checkpoints.split_gte.get(**wildcards).output[0]
     datasets = glob_wildcards(os.path.join(out_dir, "gte_{dataset}.txt"))
     logger.debug("\tfound datasets: '" + ", ".join(datasets.dataset) + "'")
@@ -381,119 +452,260 @@ def get_datasets(wildcards):
     return datasets.dataset
 
 
-def get_exp(wildcards):
-    logger.debug("get_exp(" + print_wildcards(wildcards) + ")")
-    if wildcards.cov == "default" or wildcards.cov == "0Pcs":
-        logger.debug("\treturning input 'exp'")
-        return config["inputs"]["exp"]
-    elif wildcards.cov == "cov" or "cov" in config["general_settings"]["force_mega"] or config["inputs"]["gte"].endswith(".smf") or len(get_datasets(wildcards)) == 1:
-        # wildcards == cov means there are no PCs so no per dataset correction needed
-        # force_mega == cov means we want to force to regress everthing together so no per dataset correction needed
-        # gte endswith '.smf' means there are no datasets so no per dataset correction needed
-        # n datasets == 1 means there are no other datasets so no per dataset correction needed
-        logger.debug("\treturning output of rule 'regressor'")
-        return config["outputs"]["output_dir"] + "regressor/all/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.txt.gz"
+def get_genes(wildcards):
+    """
+    :rule: create_batches and merge
+    :param wildcards:
+    :return: the set of genes over which to create the batches. If snpgenelimit is given, return the gene column, else if
+    genelimit is given return that, else return the QTL expression matrix.
+    """
+    logger.debug("rule create_batches - get_genes({})".format(print_wildcards(wildcards)))
 
-    logger.debug("\treturning outout of rule 'merge_exps'")
-    return config["outputs"]["output_dir"] + "regressor/merged." + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.txt.gz"
+    # Creating gene batches based on snpgenelimit has prio over genelimit.
+    if config["inputs"]["snpgenelimit"] != "":
+        fpath = "limit/{sgl_basename}_genes.txt".format(**wildcards, sgl_basename=get_basename(config["inputs"]["snpgenelimit"]))
+        logger.debug("\treturn output of rule 'split_snpgenelimit': " + fpath)
+        return config["outputs"]["output_dir"] + fpath
+    elif config["inputs"]["genelimit"] != "":
+        fpath = config["inputs"]["genelimit"]
+        logger.debug("\treturn input 'genelimit': " + fpath)
+        return fpath
 
+    logger.debug("\tcalling 'get_exp' function")
+    fpath = get_exp(wildcards)
+    logger.debug("\treturning: " + fpath)
+    return fpath
+
+def get_genes_file(wildcards):
+    """
+    :rule: run_qtl and merge
+    :param wildcards:
+    :return: return the basename of the file that was used to create the chunks
+    """
+    logger.debug("rule run_qtl, merge - get_genes_file({})".format(print_wildcards(wildcards)))
+    logger.debug("\tcalling 'get_genes' function")
+    fpath = get_basename(get_genes(wildcards))
+    if config["general_settings"]["n_genes"] is not None:
+        fpath += (str(config["general_settings"]["n_genes"]) + "Genes")
+    logger.debug("\treturning: " + fpath)
+    return fpath
 
 def get_annotation(wildcards):
-    logger.debug("get_annotation(" + print_wildcards(wildcards) + ")")
+    """
+    :rule: run_qtl
+    :param wildcards:
+    :return: return the gene annotation file. If the input is a gtf we need to convert this first using
+    create_gene_annotation, else we return the input annotation file.
+    """
+    logger.debug("rule run_qtl - get_annotation({})".format(print_wildcards(wildcards)))
     if config["inputs"]["annotation"].endswith(".gtf"):
-        logger.debug("\treturning output of rule 'create_gene_annotation'")
-        return config["outputs"]["output_dir"] + "create_annotation/refdata-gex-GeneAnnotation.txt.gz"
+        fpath = "create_annotation/refdata-gex-GeneAnnotation.txt.gz"
+        logger.debug("\treturning output of rule 'create_gene_annotation': " + fpath)
+        return config["outputs"]["output_dir"] + fpath
 
-    logger.debug("\treturning input 'annotation'")
-    return config["inputs"]["annotation"]
-
-
-def get_snpannotation(wildcards):
-    logger.debug("get_snpannotation(" + print_wildcards(wildcards) + ")")
-    if config["general_settings"]["use_snpannotation"]:
-        logger.debug("\treturning output of rule 'create_snp_annotation'")
-        return config["outputs"]["output_dir"] + "create_annotation/snp_annotation.txt.gz"
-
-    logger.debug("\treturning nothing")
-    return []
+    fpath = config["inputs"]["annotation"]
+    logger.debug("\treturning input 'annotation': " + fpath)
+    return fpath
 
 
 def get_vcf(wildcards):
-    logger.debug("get_vcf(" + print_wildcards(wildcards) + ")")
-    if config["inputs"]["snpgenelimit"] != "" and config["general_settings"]["filter_vcf"]:
-        logger.debug("\treturning output of rule 'filter_vcf'")
-        return config["outputs"]["output_dir"] + "genotype/" + get_basename(config["inputs"]["vcf"]) + "_" + get_basename(config["inputs"]["snpgenelimit"]) + ".vcf.bgz"
+    """
+    :rule: run_qtl
+    :param wildcards:
+    :return: return the filtered vcf if filter_vcf is True. To differentiate between snpgenelimit and snplimit based filtered VCF
+    the basename of the file is added to the filtered VCF file. Else return the original VCF.
+    """
+    logger.debug("rule run_qtl - get_vcf({})".format(print_wildcards(wildcards)))
+    if config["general_settings"]["filter_vcf"] and config["inputs"]["snpgenelimit"] != "":
+        fpath = "genotype/{vcf_basename}_{sgl_basename}.vcf.bgz".format(**wildcards, vcf_basename=get_basename(config["inputs"]["vcf"]), sgl_basename=get_basename(config["inputs"]["snpgenelimit"]))
+        logger.debug("\treturning output of rule 'filter_vcf' with snpgenelimit: " + fpath)
+        return config["outputs"]["output_dir"] + fpath
+    elif config["general_settings"]["filter_vcf"] and config["inputs"]["snplimit"] != "":
+        fpath = "genotype/{vcf_basename}_{snp_basename}.vcf.bgz".format(**wildcards, vcf_basename=get_basename(config["inputs"]["vcf"]), snp_basename=get_basename(config["inputs"]["snplimit"]))
+        logger.debug("\treturning output of rule 'filter_vcf' with snplimit: " + fpath)
+        return config["outputs"]["output_dir"] + fpath
 
-    logger.debug("\treturning input 'vcf'")
-    return config["inputs"]["vcf"]
+    fpath = config["inputs"]["vcf"]
+    logger.debug("\treturning input 'vcf': " + fpath)
+    return fpath
 
 
 def get_vcf_index(wildcards):
-    logger.debug("get_vcf_index(" + print_wildcards(wildcards) + ")")
+    """
+    :rule: run_qtl
+    :param wildcards:
+    :return: return the input vcf and add a 'tbi' suffix.
+    """
+    logger.debug("rule run_qtl - get_vcf_index({})".format(print_wildcards(wildcards)))
     logger.debug("\tcalling 'get_vcf' function")
-    return get_vcf(wildcards) + ".tbi"
+    fpath = get_vcf(wildcards) + ".tbi"
+    logger.debug("\treturning: " + fpath)
+    return fpath
+
+
+def get_exp(wildcards):
+    """
+    :rule: run_qtl
+    :param wildcards:
+    :return: depending on the covariates the input is selected. If no covariates are removed (i.e. default or 0Pcs) the originak
+    input file can be returned. If covariates should be removed, we need to determine if this is done per dataset
+    (output rule merge_exps) or not (output rule regressor).
+    """
+    logger.debug("rule run_qtl - get_exp({})".format(print_wildcards(wildcards)))
+    if wildcards.cov == "default" or wildcards.cov == "0Pcs":
+        fpath = config["inputs"]["exp"]
+        logger.debug("\treturning input 'exp': " + fpath)
+        return fpath
+    elif wildcards.cov == "cov" or "cov" in config["general_settings"]["force_mega"] or config["inputs"]["gte"].endswith(".smf") or len(get_datasets(wildcards)) == 1:
+        # wildcards == cov means there are no PCs so no per dataset correction needed
+        # force_mega == cov means we want to force to regress everything together so no per dataset correction needed
+        # gte endswith '.smf' means there are no datasets so no per dataset correction needed
+        # n datasets == 1 means there are no other datasets so no per dataset correction needed
+        fpath = "regressor/all/{exp_basename}.{cov}.CovariatesRemovedOLS.txt.gz".format(**wildcards, exp_basename=get_basename(config["inputs"]["exp"]))
+        logger.debug("\treturning output of rule 'regressor': " + fpath)
+        return config["outputs"]["output_dir"] + fpath
+
+    fpath = "regressor/merged.{exp_basename}.{cov}.CovariatesRemovedOLS.txt.gz".format(**wildcards, exp_basename=get_basename(config["inputs"]["exp"]))
+    logger.debug("\treturning output of rule 'merge_exps': " + fpath)
+    return config["outputs"]["output_dir"] + fpath
 
 
 def get_qtl_gte(wildcards):
-    logger.debug("get_qtl_gte(" + print_wildcards(wildcards) + ")")
+    """
+    :rule: run_qtl
+    :param wildcards:
+    :return: if force_mega should be applied over the QTL analysis we return a gte file where the dataset
+    column is equal to 'Dataset' for all samples, else we return the original gte.
+    """
+    logger.debug("rule run_qtl - get_qtl_gte({})".format(print_wildcards(wildcards)))
     if "qtl" in config["general_settings"]["force_mega"]:
-        logger.debug("\treturn output of rule 'remove_gte_dataset'")
-        return config["outputs"]["output_dir"] + "gte/gte_noDataset.txt"
+        fpath = "gte/gte_noDataset.txt"
+        logger.debug("\treturn output of rule 'remove_gte_dataset': " + fpath)
+        return config["outputs"]["output_dir"] + fpath
 
     logger.debug("\tcalling 'get_gte' function")
-    return get_gte(wildcards)
+    fpath = get_gte(wildcards)
+    logger.debug("\treturning: " + fpath)
+    return fpath
+
+
+def get_snpannotation(wildcards):
+    """
+    :rule: run_qtl
+    :param wildcards:
+    :return: '--snpannotation <snpannotation>' if use_snpannotation is True, else return an empty string.
+    """
+    logger.debug("rule run_qtl - get_snpannotation({})".format(print_wildcards(wildcards)))
+    prefix = "--snpannotation "
+
+    if config["general_settings"]["use_snpannotation"]:
+        logger.debug("\tcalling 'get_vcf' function")
+        fpath = "create_annotation/{vcf_basename}_snpannotation.txt.gz".format(**wildcards, vcf_basename=get_basename(get_vcf(wildcards)))
+        logger.debug("\treturning output of rule 'create_snp_annotation': " + fpath)
+        return prefix + config["outputs"]["output_dir"] + fpath
+
+    logger.debug("\treturning ''")
+    return ""
 
 
 def get_genelimit(wildcards):
-    logger.debug("get_genelimit(" + print_wildcards(wildcards) + ")")
+    """
+    :rule: run_qtl
+    :param wildcards:
+    :return: '--genelimit <batch/genelimit>', if n_genes is higher than 1 fill in the set of genes of the
+    current batch from 'create_batches', else fill in the '--genelimit <genelimit>' if it is given, else
+    return an empty string.
+    """
+    logger.debug("rule run_qtl - get_genelimit({})".format(print_wildcards(wildcards)))
     prefix = "--genelimit "
-    if config["inputs"]["genelimit"] != "":
-        logger.debug("\treturning input 'genelimit'")
-        return prefix + config["inputs"]["genelimit"]
-    elif config["general_settings"]["n_genes"] is not None:
-        logger.debug("\treturning output of checkpoint 'create_batches'")
-        return prefix + config["outputs"]["output_dir"] + "batches/" + wildcards.cov + "/" + wildcards.batch + "-genes.txt"
 
-    logger.debug("\treturning nothing")
+    if config["general_settings"]["n_genes"] is not None and config["general_settings"]["n_genes"] > 1:
+        # The create_batches rule takes into account the genes from genelimit
+        # if they are given.
+        logger.debug("\tcalling 'get_genes_file' function")
+        genes_file = get_genes_file(wildcards)
+
+        fpath = "batches/{genes_file}/{cov}/{batch}-genes.txt".format(**wildcards, genes_file=genes_file)
+        logger.debug("\treturning output of checkpoint 'create_batches': " + fpath)
+        return prefix + config["outputs"]["output_dir"] + fpath
+    elif config["inputs"]["genelimit"] != "":
+        # Only if ngenes is None: i.e. all genes are tested in 1 job
+        fpath = config["inputs"]["genelimit"]
+        logger.debug("\treturning input 'genelimit': " + fpath)
+        return prefix + fpath
+
+    logger.debug("\treturning ''")
     return ""
 
 def get_snplimit(wildcards):
-    logger.debug("get_snplimit(" + print_wildcards(wildcards) + ")")
+    """
+    :rule: run_qtl
+    :param wildcards:
+    :return: '--snplimit <snplimit>' if it is given, else return an empty string.
+    """
+    logger.debug("rule run_qtl - get_snplimit({})".format(print_wildcards(wildcards)))
     prefix = "--snplimit "
     if config["inputs"]["snplimit"] != "":
-        logger.debug("\treturning input 'snplimit'")
-        return prefix + config["inputs"]["snplimit"]
+        fpath = config["inputs"]["snplimit"]
+        logger.debug("\treturning input 'snplimit': " + fpath)
+        return prefix + fpath
 
-    logger.debug("\treturning nothing")
+    logger.debug("\treturning ''")
     return ""
 
 def get_snpgenelimit(wildcards):
-    logger.debug("get_snpgenelimit(" + print_wildcards(wildcards) + ")")
+    """
+    :rule: run_qtl
+    :param wildcards:
+    :return: '--snpgenelimit <snpgenelimit>' if it is given, else return an empty string.
+    """
+    logger.debug("rule run_qtl - get_snpgenelimit({})".format(print_wildcards(wildcards)))
     prefix = "--snpgenelimit "
     if config["inputs"]["snpgenelimit"] != "":
-        logger.debug("\treturning input 'snpgenelimit'")
-        return prefix + config["inputs"]["snpgenelimit"]
+        fpath = config["inputs"]["snpgenelimit"]
+        logger.debug("\treturning input 'snpgenelimit': " + fpath)
+        return prefix + fpath
 
-    logger.debug("\treturning nothing")
+    logger.debug("\treturning ''")
     return ""
 
 def get_batches(wildcards):
-    logger.debug("get_batches(" + print_wildcards(wildcards) + ")")
-    out_dir = checkpoints.create_batches.get(**wildcards).output[0]
+    """
+    :rule: merge
+    :param wildcards:
+    :return: Extract the batches we created in the checkpoint create_batches.
+    """
+    logger.debug("rule merge - get_batches({})".format(print_wildcards(wildcards)))
+    logger.debug("\tcalling 'get_genes_file' function")
+    genes_file = get_genes_file(wildcards)
+
+    out_dir = checkpoints.create_batches.get(**wildcards, genes_file=genes_file).output[0]
     batches = glob_wildcards(os.path.join(out_dir, "{batch}-genes.txt"))
     logger.debug("\tfound batches: '" + ", ".join(batches.batch) + "'")
+
+    if len(batches.batch) == 0:
+        logger.error("Critical, no batches found.")
+        exit()
 
     return batches.batch
 
 
 def get_top_hits(wildcards):
-    logger.debug("get_top_hits(" + print_wildcards(wildcards) + ")")
-    if config["general_settings"]["n_genes"] is None:
-        logger.debug("\treturning output of rule 'run_qtl'")
-        return config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffects.txt"
+    """
+    :rule: qvalues
+    :param wildcards:
+    :return: If the program is executed with a single batch we can return the output of rule run_qtl directly,
+    otherwise we first need to combine all top effects by requesting the output of rule merge.
+    """
+    logger.debug("rule run_qtl - get_top_hits({})".format(print_wildcards(wildcards)))
+    if config["general_settings"]["n_genes"] is None or config["general_settings"]["n_genes"] == 1:
+        fpath = "output/{cov}/{output_prefix}-TopEffects.txt".format(**wildcards, output_prefix=config["outputs"]["output_prefix"])
+        logger.debug("\treturning output of rule 'run_qtl': " + fpath)
+        return config["outputs"]["output_dir"] + fpath
 
-    logger.debug("\treturning output of rule 'merge'")
-    return config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-merged.txt"
+    fpath = "output/{cov}/{output_prefix}-merged.txt".format(**wildcards, output_prefix=config["outputs"]["output_prefix"])
+    logger.debug("\treturning output of rule 'merge': " + fpath)
+    return config["outputs"]["output_dir"] + fpath
 
 
 rule all:
@@ -531,9 +743,9 @@ rule create_gene_annotation:
 
 rule create_snp_annotation:
     input:
-        vcf = config["inputs"]["vcf"]
+        vcf = get_vcf
     output:
-        annotation = config["outputs"]["output_dir"] + "create_annotation/snp_annotation.txt.gz"
+        annotation = config["outputs"]["output_dir"] + "create_annotation/{vcf_basename}_snpannotation.txt.gz"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["create_snp_annotation_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["create_snp_annotation_memory"],
@@ -542,7 +754,7 @@ rule create_snp_annotation:
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
-    log: config["outputs"]["output_dir"] + "log/create_snp_annotation.log"
+    log: config["outputs"]["output_dir"] + "log/create_snp_annotation.{vcf_basename}.log"
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} zcat {input.vcf} | grep "^[^#;]" | awk -v OFS='\t' '{{print $3,$1,$2}}' | gzip -c > {output.annotation}
@@ -595,24 +807,26 @@ checkpoint split_gte:
         """
 
 
-rule snpgenelimit_to_vars:
+rule split_snpgenelimit:
     input:
         sgl = config["inputs"]["snpgenelimit"]
     output:
-        vars = temp(config["outputs"]["output_dir"] + "genotype/variants.txt")
+        vars = config["outputs"]["output_dir"] + "limit/" + get_basename(config["inputs"]["snpgenelimit"]) + "_variants.txt",
+        genes = config["outputs"]["output_dir"] + "limit/" + get_basename(config["inputs"]["snpgenelimit"]) + "_genes.txt"
     resources:
-        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["snpgenelimit_to_vars_memory"],
-        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["snpgenelimit_to_vars_memory"],
-        time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["snpgenelimit_to_vars_time"]]
-    threads: config["snpgenelimit_to_vars_threads"]
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["split_snpgenelimit_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["split_snpgenelimit_memory"],
+        time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["split_snpgenelimit_time"]]
+    threads: config["split_snpgenelimit_threads"]
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         cat = "zcat" if config["inputs"]["snpgenelimit"].endswith(".gz") else "cat",
-    log: config["outputs"]["output_dir"] + "log/snpgenelimit_to_vars.log"
+    log: config["outputs"]["output_dir"] + "log/split_snpgenelimit.log"
     shell:
         """
-        singularity exec --bind {params.bind} {params.sif} {params.cat} {input.sgl} | awk 'BEGIN{{ FS = OFS = "\\t" }} {{ print $1 }}' > {output.vars}
+        singularity exec --bind {params.bind} {params.sif} {params.cat} {input.sgl} | awk 'BEGIN{{ FS = OFS = "\\t" }} {{ print $1 }}' > {output.vars} 
+        singularity exec --bind {params.bind} {params.sif} {params.cat} {input.sgl} | awk 'BEGIN{{ FS = OFS = "\\t" }} {{ print $2 }}' > {output.genes}
         """
 
 
@@ -639,14 +853,13 @@ rule index_vcf:
 rule filter_vcf:
     input:
         vcf = config["inputs"]["vcf"],
-        sgl = config["inputs"]["snpgenelimit"],
         gte = get_gte,
         vars = get_variants
     output:
-        samples = temp(config["outputs"]["output_dir"] + "genotype/samples.txt"),
-        vcf_gz = temp(config["outputs"]["output_dir"] + "genotype/" + get_basename(config["inputs"]["vcf"]) + "_" + get_basename(config["inputs"]["snpgenelimit"]) + ".vcf.gz"),
-        vcf_bgz = config["outputs"]["output_dir"] + "genotype/" + get_basename(config["inputs"]["vcf"]) + "_" + get_basename(config["inputs"]["snpgenelimit"]) + ".vcf.bgz",
-        index = config["outputs"]["output_dir"] + "genotype/" + get_basename(config["inputs"]["vcf"]) + "_" + get_basename(config["inputs"]["snpgenelimit"]) + ".vcf.bgz.tbi"
+        samples = temp(config["outputs"]["output_dir"] + "genotype/samples_{limit_file}.txt"),
+        vcf_gz = temp(config["outputs"]["output_dir"] + "genotype/" + get_basename(config["inputs"]["vcf"]) + "_{limit_file}.vcf.gz"),
+        vcf_bgz = config["outputs"]["output_dir"] + "genotype/" + get_basename(config["inputs"]["vcf"]) + "_{limit_file}.vcf.bgz",
+        index = config["outputs"]["output_dir"] + "genotype/" + get_basename(config["inputs"]["vcf"]) + "_{limit_file}.vcf.bgz.tbi"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["filter_vcf_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["filter_vcf_memory"],
@@ -656,7 +869,7 @@ rule filter_vcf:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/filter_vcf.py"
-    log: config["outputs"]["output_dir"] + "log/filter_vcf.log"
+    log: config["outputs"]["output_dir"] + "log/filter_vcf.{limit_file}.log"
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} awk 'BEGIN{{ FS = OFS = "\\t" }} {{ print $1 }}' {input.gte} > {output.samples}
@@ -861,13 +1074,12 @@ rule remove_gte_dataset:
         """
 
 
-# TODO: perhaps better to use the genelimit / snpgenelimit file here if it is given so the jobs are more
-#   equally distributed.
 checkpoint create_batches:
+    priority: 50
     input:
-        exp = get_exp
+        genes = get_genes
     output:
-        batches = directory(config["outputs"]["output_dir"] + "batches/{cov}/")
+        batches = directory(config["outputs"]["output_dir"] + "batches/{genes_file}/{cov}/")
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["create_batches_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["create_batches_memory"],
@@ -878,13 +1090,13 @@ checkpoint create_batches:
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/create_batches.py",
         n_genes = config["general_settings"]["n_genes"],
-        out = config["outputs"]["output_dir"] + "batches/{cov}/" + config["outputs"]["output_prefix"]
-    log: config["outputs"]["output_dir"] + "log/create_batches.{cov}.log"
+        out = config["outputs"]["output_dir"] + "batches/{genes_file}/{cov}/" + config["outputs"]["output_prefix"]
+    log: config["outputs"]["output_dir"] + "log/create_batches.{genes_file}.{cov}.log"
     shell:
         """
         mkdir -p {output.batches}
         singularity exec --bind {params.bind} {params.sif} python {params.script} \
-            --exp {input.exp} \
+            --genes {input.genes} \
             --n_genes {params.n_genes} \
             --out {params.out} > {log} 2>&1
         """
@@ -893,7 +1105,6 @@ checkpoint create_batches:
 rule run_qtl:
     input:
         annotation = get_annotation,
-        snpannotation = get_snpannotation,
         vcf = get_vcf,
         index = get_vcf_index,
         exp = get_exp,
@@ -919,7 +1130,7 @@ rule run_qtl:
         analysis_type = config["qtl_settings"]["analysis_type"],
         meta_analysis_method = config["qtl_settings"]["meta_analysis_method"],
         seed = config["qtl_settings"]["seed"],
-        snpannotation = lambda wildcards: "--snpannotation " + get_snpannotation(wildcards) if config["general_settings"]["use_snpannotation"] else "",
+        snpannotation = get_snpannotation,
         genelimit = get_genelimit,
         snplimit = get_snplimit,
         snpgenelimit = get_snpgenelimit,
@@ -938,7 +1149,7 @@ rule run_qtl:
         outputall = "--outputall" if config["qtl_settings"]["outputall"] else "",
         outputallpermutations = "--outputallpermutations" if config["qtl_settings"]["outputallpermutations"]  else "",
         snplog = "--snplog" if config["qtl_settings"]["snplog"] else "",
-        out = lambda wildcards: config["outputs"]["output_dir"] + "output/" + wildcards.cov + "/" + wildcards.batch
+        out = config["outputs"]["output_dir"] + "output/{cov}/{batch}"
     log: config["outputs"]["output_dir"] + "log/run_qtl.{cov}.{batch}.log"
     shell:
         """
@@ -989,7 +1200,7 @@ rule run_qtl:
 
 rule merge:
     input:
-        top = lambda wildcards: expand(config["outputs"]["output_dir"] + "output/{cov}/" + "{batch}-TopEffects.txt", batch=get_batches(wildcards), allow_missing=True)
+        top = lambda wildcards: expand(config["outputs"]["output_dir"] + "output/{cov}/{batch}-TopEffects.txt", batch=get_batches(wildcards), allow_missing=True)
     output:
         top = config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-merged.txt"
     resources:

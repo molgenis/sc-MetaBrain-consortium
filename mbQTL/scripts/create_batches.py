@@ -6,7 +6,9 @@ import os
 import gzip
 
 parser = argparse.ArgumentParser(description="")
-parser.add_argument("--exp", required=True, type=str, help="")
+parser.add_argument("--genes", required=True, type=str, help="")
+parser.add_argument("--header_index", required=False, type=int, default=None, help="")
+parser.add_argument("--gene_index", required=False, type=int, default=0, help="")
 parser.add_argument("--n_genes", required=False, type=int, default=200, help="")
 parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
@@ -22,21 +24,19 @@ def gzopen(file, mode="r"):
     else:
         return open(file, mode)
 
-fhin = gzopen(args.exp, mode='r')
+fhin = gzopen(args.genes, mode='r')
 
 print("Filtering genes...")
-pos = {}
 genes = set()
 chunk_id = 0
 chunk = []
 for i, line in enumerate(fhin):
     values = line.rstrip("\n").split("\t")
-    if i == 0:
-        pos = {label: index for index, label in enumerate(values)}
+    if args.header_index is not None and i == args.header_index:
         continue
 
     # Save the gene.
-    gene = values[0]
+    gene = values[args.gene_index]
     if gene in genes:
         print("Warning, duplicate genes.")
     chunk.append(gene)

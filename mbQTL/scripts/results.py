@@ -63,7 +63,7 @@ for fpath in glob.glob(args.data):
     data.append([cov, n, n_nom, n_perm, n_qval])
 
 colnames = ["Cov", "N-effects", args.nom_pvalue_column, args.perm_pvalue_column, args.qvalue_column]
-df = pd.DataFrame(data, columns=colnames).sort_values(by=[args.qvalue_column, "N-effects", "Cov"], ascending=[False, True, True])
+df = pd.DataFrame(data, columns=colnames).sort_values(by=[args.nom_pvalue_column, "N-effects", "Cov"], ascending=[False, True, True])
 print(df)
 
 print("Writing output")
