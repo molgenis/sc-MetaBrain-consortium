@@ -711,6 +711,23 @@ def get_top_hits(wildcards):
     return config["outputs"]["output_dir"] + fpath
 
 
+def get_top_hits_finished(wildcards):
+    """
+    :rule: qvalues
+    :param wildcards:
+    :return: If the program is executed with a single batch we need to check if the finished file exits, else
+    there is no need sing the 'merge' rule checks this.
+    """
+    logger.debug("rule run_qtl - get_top_hits_finished({})".format(print_wildcards(wildcards)))
+    if config["general_settings"]["n_genes"] is None or config["general_settings"]["n_genes"] == 1:
+        fpath = "output/{cov}/{output_prefix}-TopEffects.finished".format(**wildcards, output_prefix=config["outputs"]["output_prefix"])
+        logger.debug("\treturning output of rule 'run_qtl': " + fpath)
+        return config["outputs"]["output_dir"] + fpath
+
+    logger.debug("\treturning []")
+    return []
+
+
 rule all:
     input: get_input
 
@@ -1205,7 +1222,8 @@ rule run_qtl:
 
 rule merge:
     input:
-        top = lambda wildcards: expand(config["outputs"]["output_dir"] + "output/{cov}/{batch}-TopEffects.txt", batch=get_batches(wildcards), allow_missing=True)
+        top = lambda wildcards: expand(config["outputs"]["output_dir"] + "output/{cov}/{batch}-TopEffects.txt", batch=get_batches(wildcards), allow_missing=True),
+        finished = lambda wildcards: expand(config["outputs"]["output_dir"] + "output/{cov}/{batch}-TopEffects.finished", batch=get_batches(wildcards), allow_missing=True)
     output:
         top = config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-merged.txt"
     resources:
@@ -1230,7 +1248,8 @@ rule merge:
 
 rule qvalues:
     input:
-        top_hits = get_top_hits
+        top_hits = get_top_hits,
+        finished = get_top_hits_finished
     output:
         top_hits = config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffectsWithqval.txt",
         fig1 = config["outputs"]["output_dir"] + "figures/{cov}/" + config["outputs"]["output_prefix"] + "_overview.pdf",

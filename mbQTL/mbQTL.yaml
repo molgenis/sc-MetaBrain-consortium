@@ -51,7 +51,7 @@ qtl_settings:
   outputallpermutations: False ### output all permuted associations, not just top association per gene. Default 'False'.
   snplog: False ### output SNP summary stats per snp/gene pair. Default 'False'.
 
-cluster_time: {0: "00:59:00", 1: "23:59:00", 2: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
+cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
 
 ##############################################################################################################
 ##### The following arguments are common parameters that may need to be changed depending on the dataset #####
