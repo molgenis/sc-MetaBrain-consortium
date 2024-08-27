@@ -1207,12 +1207,6 @@ rule run_qtl:
             {params.outputallpermutations} \
             {params.snplog} \
             --out {params.out} > {log} 2>&1
-            
-        if [[ "$(singularity exec --bind {params.bind} {params.sif} cat {output.top} | wc -l)" -le "1" ]]; 
-        then
-           echo "Error, no results in {output.top}"
-           rm {output.top}
-        fi
         
         singularity exec --bind {params.bind} {params.sif} touch {output.all}
         singularity exec --bind {params.bind} {params.sif} touch {output.all_perm}
