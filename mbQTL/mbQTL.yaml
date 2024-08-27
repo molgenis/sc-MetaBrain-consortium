@@ -27,7 +27,7 @@ general_settings:
   force_mega: null ### force the covariate correction and / or eQTL mapping to be done over all samples at once (options: 'all', 'cov', 'qtl').
   n_pcs: null ### how many PCs should be removed from the expression matrix (e.g. `[0, 5, 10]`).
   filter_vcf: False ### whether or not the input VCF should be filtered on variants / samples of interest before running QTL analysis.
-  n_genes: 200 ### how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk. Default `200`.
+  n_genes: 100 ### how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk. Default `100`.
   use_snpannotation: False ### whether or not the `snpannotation` option should be used. Default `False`.
   alpha: 0.05 ### QTL significance threshold. Default '0.05'.
 
