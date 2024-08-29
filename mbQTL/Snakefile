@@ -152,13 +152,14 @@ if config["inputs"]["snpgenelimit"] == "" and config["general_settings"]["n_gene
                    "run_qtl_time to e.g. 0.".format(config["cluster_time"][config["run_qtl_time"]]))
 
 # Automatically determine the mode of the input.
-input_mode = "default"
-if config["inputs"]["cov"] != "" and not config["general_settings"]["n_pcs"]:
+if config["inputs"]["cov"] == "" and not config["general_settings"]["n_pcs"]:
+    input_mode = "default"
+elif config["inputs"]["cov"] != "" and not config["general_settings"]["n_pcs"]:
     input_mode = "cov"
-elif config["inputs"]["cov"] != "" and config["general_settings"]["n_pcs"]:
-    input_mode = "covXPcs"
 elif config["inputs"]["cov"] == "" and config["general_settings"]["n_pcs"]:
     input_mode = "XPcs"
+elif config["inputs"]["cov"] != "" and config["general_settings"]["n_pcs"]:
+    input_mode = "covXPcs"
 else:
     logger.error("Critical, could not determine input mode.\n\nExiting")
     exit()
