@@ -30,7 +30,6 @@ parser.add_argument("--percent_rb", required=False, type=int, default=0, help=""
 parser.add_argument("--percent_mt", required=False, type=int, default=5, help="")
 parser.add_argument("--malat1", required=False, type=int, default=0, help="")
 parser.add_argument("--feature_name", required=False, type=str, default="HGNC", choices=["HGNC", "ENSG", "HGNC_ENSG"], help="")
-parser.add_argument("--min_cells", required=False, type=int, default=5, help="")
 parser.add_argument("--aggregate_fun", required=False, type=str, default="sum", choices=["sum", "mean"], help="")
 parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
@@ -108,8 +107,13 @@ def load_metadata(barcodes_fpath):
         print("  Loading cell type pairing")
         ct_pairs = load_file(args.ct_pairing, sep=";")
 
+    merge_incl = []
+    if "Dataset" in cell_annot.columns and "Dataset" in droplet_annot.columns and "Dataset" in type_annot.columns and "Dataset" in psam.columns:
+        print("  Warning, found 'Dataset' column. Will include this as key in merge.")
+        merge_incl = ["Dataset"]
+
     print("\nMerging metadata ...")
-    metadata = barcodes.merge(cell_annot, on="Barcode", how="inner").merge(droplet_annot, on=["Pool", "Barcode"], how="inner").merge(type_annot, on=["Pool", "Barcode"], how="left").merge(psam, left_on="Assignment", right_on="IID", how="left")
+    metadata = barcodes.merge(cell_annot, on="Barcode", how="inner").merge(droplet_annot, on=["Pool", "Barcode"] + merge_incl, how="inner").merge(type_annot, on=["Pool", "Barcode"] + merge_incl, how="left").merge(psam, left_on=["Assignment"] + merge_incl, right_on=["IID"] + merge_incl, how="left")
     if ct_pairs is not None:
         metadata = metadata.merge(ct_pairs, on=ct_pairs.columns[1], how="left")
 
@@ -267,7 +271,7 @@ def pseudobulk_per_ct(counts, features, metadata):
     stats_data = []
     samples = metadata[args.sample_aggregate].unique()
     for sample in samples:
-        if sample == "doublet" or sample == "unassigned":
+        if sample == "doublet" or sample == "unassigned" or sample == "":
             continue
 
         # Filter on the cells from the current samples.
@@ -311,7 +315,7 @@ def pseudobulk_per_ct(counts, features, metadata):
             stats_data.append([sample, cell_type, ncells, n_sample_cells, n_sample_ct_cells, np.sum(mask1), np.sum(mask2), np.sum(mask3), np.sum(mask4), n_sample_ct_pass_cells])
             
             # Stop if there are not enough cells.
-            if n_sample_ct_pass_cells < args.min_cells:
+            if n_sample_ct_pass_cells == 0:
                 continue
 
             # Aggregate the cells.

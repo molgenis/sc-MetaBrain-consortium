@@ -43,8 +43,9 @@ conda activate wg1_snakemake
  * `percent_mt`:
  * `malat1`:
  * `min_cells`:
- * `min_ind_expr`:
- * `min_cpm`:
+ * `min_obs`:
+ * `min_cpm_bryois`:
+ * `min_cpm_fujita`:
  * `feature_name`:
  * `sample_aggregate`:
  * `aggregate_fun`:

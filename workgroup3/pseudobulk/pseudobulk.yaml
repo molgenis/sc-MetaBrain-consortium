@@ -31,11 +31,14 @@ settings:
   percent_rb: [ 0 ]
   percent_mt: [ 5 ]
   malat1: [ 0 ]
+
+  # Merge
   min_cells: [ 5 ]
 
   # normalise: filter genes
-  min_ind_expr: [ 10 ] ### applies only to Bryois normalisation
-  min_cpm: [ 1 ]
+  min_obs_bryois: [ 10 ] ### applies only to Bryois gene filter
+  min_cpm_bryois: [ 1 ] ### applies only to Bryois gene filter
+  min_cpm_fujita: [ 2 ] ### applies only to Fujita gene filter
 
 cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
 
@@ -57,6 +60,10 @@ normalise_time: 0
 merge_stats_memory: 4
 merge_stats_threads: 1
 merge_stats_time: 0
+
+merge_ncells_memory: 4
+merge_ncells_threads: 1
+merge_ncells_time: 0
 
 visualise_barcode_qc_memory: 4
 visualise_barcode_qc_threads: 1

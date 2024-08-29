@@ -10,6 +10,7 @@ parser = argparse.ArgumentParser(description="")
 parser.add_argument("--poolsheet", required=True, type=str, help="")
 parser.add_argument("--indir", required=True, type=str, help="")
 parser.add_argument("--cell_type", required=True, type=str, help="")
+parser.add_argument("--min_cells", required=False, type=int, default=0, help="")
 parser.add_argument("--aggregate_fun", required=False, type=str, default="sum", choices=["sum", "mean"], help="")
 parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
@@ -64,32 +65,83 @@ def load_file(fpath, sep="\t", header=0, index_col=None, must_contain=None):
     print("\tLoaded {} with shape: {}".format(os.path.basename(fpath), df.shape))
     return df
 
+
+def load_file_full(inpath, header, index_col, sep="\t", low_memory=True,
+              nrows=None, skiprows=None):
+    df = pd.read_csv(inpath, sep=sep, header=header, index_col=index_col,
+                     low_memory=low_memory, nrows=nrows, skiprows=skiprows)
+    print("\tLoaded dataframe: {} "
+          "with shape: {}".format(os.path.basename(inpath),
+                                  df.shape))
+    return df
+
+
 print("\nLoading poolsheet ...")
 poolsheet = load_file(args.poolsheet)
 
 print("\nLoading expression data ...")
 data = []
+samples = []
+n_cells = 0
 for pool in poolsheet["Pool"]:
-    fpath = os.path.join(args.indir, pool + ".pseudobulk.tsv.gz")
-    if not os.path.exists(fpath):
-        print("\tWarning, {} does not exist".format(fpath))
+    # Define input filepaths and check if they exist.
+    expr_fpath = os.path.join(args.indir, pool + ".pseudobulk.tsv.gz")
+    stats_fpath = os.path.join(args.indir, pool + ".pseudobulk.stats.tsv.gz")
+    all_exist = True
+    for fpath in [expr_fpath, stats_fpath]:
+        if not os.path.exists(fpath):
+            print("\tWarning, {} does not exist".format(fpath))
+            all_exist = False
+    if not all_exist:
         continue
-    df = load_file(fpath, index_col=0, must_contain=args.cell_type)
-    if df is None:
+
+    # Load data and pre-process data.
+    expr_df = load_file(expr_fpath, index_col=0, must_contain=args.cell_type)
+    if expr_df is None:
         continue
-    df.index = str(pool) + "_" + df.index
-    data.append(df)
+    if len(set(expr_df.index)) != expr_df.shape[0]:
+        print("\tError, expression indices are not unique.")
+        exit()
+    mask = expr_df.index.str.endswith("_" + args.cell_type)
+    expr_df = expr_df.loc[mask, :]
+    expr_df.index = expr_df.index.str.removesuffix("_" + args.cell_type)
+    # print(expr_df)
+
+    stats_df = load_file_full(stats_fpath, header=0, index_col=None)
+    mask = stats_df["cell type"] == args.cell_type
+    stats_df = stats_df.loc[mask, :]
+    stats_df.index = stats_df["sample"]
+    if len(set(stats_df.index)) != stats_df.shape[0]:
+        print("\tError, expression indices are not unique.")
+        exit()
+    stats_df = stats_df.loc[expr_df.index, :]
+    # print(stats_df)
+
+    # Remove samples with too few cells.
+    mask = stats_df["ncells"] >= args.min_cells
+    if mask.sum() != stats_df.shape[0]:
+        for sample, ncells in zip(expr_df.index[~mask], stats_df["ncells"][~mask]):
+            print("\tExcluding sample '{}' with {:,} cells".format(sample, ncells))
+    if mask.sum() == 0:
+        continue
+    expr_df = expr_df.loc[mask, :]
+    stats_df = stats_df.loc[mask, :]
+    # print(expr_df)
+    # print(stats_df)
+
+    # Post-process.
+    samples.extend(expr_df.index.values)
+    expr_df.index = str(pool) + "_" + expr_df.index
+    data.append(expr_df)
+    n_cells += stats_df["ncells"].sum()
+    # print(samples)
+    # print(expr_df)
+
 if len(data) == 0:
+    print("\tError, no data.")
     exit()
 df = pd.concat(data, axis=0).astype(float)
-print("\tLoaded expression with shape: {}".format(df.shape))
-
-print("\nValidating expression data ...")
-# Extra filter on cell type
-indices = df.index.str.split("_", expand=True).to_frame().reset_index(drop=True)
-mask = (indices.iloc[:, -1] == args.cell_type).to_numpy()
-df = df.loc[mask, :]
-df.index = indices.loc[mask, :].iloc[:, -2]
+print("\tLoaded expression with {:,} cells and shape: {}".format(n_cells, df.shape))
 
 if len(set(df.index)) != df.shape[0]:
     print("\nAggregating expression data ...")
@@ -104,6 +156,7 @@ if len(set(df.index)) != df.shape[0]:
 
 print("\tSaving files")
 df.T.to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
-pd.DataFrame({0: df.index, 1: df.index}).to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.smf"), sep="\t", header=False, index=False)
+pd.DataFrame({0: samples, 1: samples}).to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.smf"), sep="\t", header=False, index=False)
+pd.DataFrame({"ncells": [n_cells]}, index=[args.cell_type]).to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.stats.tsv"), sep="\t", header=True, index=True)
 
 print("Done")

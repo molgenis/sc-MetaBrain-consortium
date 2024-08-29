@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import pandas as pd
-import hashlib
 import os
+import re
 
 # Set logger level.
 if config["settings_extra"]["debug"]:
@@ -64,94 +64,121 @@ if not POOL_DF["Pool"].is_unique:
 logger.info("\tValid.")
 POOLS = POOL_DF["Pool"].tolist()
 
-def get_md5_hash(s):
-    return hashlib.md5(s.encode()).hexdigest()
-
-def save_settings(settings_df):
-    # Check if the current settings are not run before. If not, add them and update
-    # the settings file.
-    settings_fpath = config["outputs"]["output_dir"] + "settings.tsv"
-    if not os.path.exists(settings_fpath):
-        # No settings file exists so any setting is always new.
-        logger.info("\tSaving settings")
-        settings_df.to_csv(settings_fpath,sep="\t",header=True,index=True)
-        return
-
-    # Load the old settings.
-    old_settings_df = pd.read_csv(settings_fpath,sep="\t",header=0,index_col=0)
-    logger.debug("\nPrevious settings:")
-    logger.debug(old_settings_df)
-
-    # Stop if they are identical.
-    if old_settings_df.equals(settings_df):
-        logger.debug("\nPrevious and current settings are identical.")
-        return
-
-    # Merge the old and new settings together, remove duplicates and sort.
-    new_settings_df = pd.concat([settings_df, old_settings_df],axis=0).drop_duplicates().sort_index()
-    logger.debug("\nUpdated settings:")
-    logger.debug(new_settings_df)
-
-    # Stop if this yields the same result as the old settings.
-    if new_settings_df.equals(old_settings_df):
-        logger.debug("\nUpdated and old settings are identical.")
-        return
-
-    # Make sure the hashes are unique, should never happen.
-    if len(set(settings_df.index)) != settings_df.shape[0]:
-        logger.error("Error, duplicate hash values for unique settings.")
-        exit()
-
-    logger.info("\tSaving updated settings")
-    new_settings_df.to_csv(settings_fpath,sep="\t",header=True,index=True)
-
-# Define the input settings and store their hashes.
-logger.info("Loading settings from yaml:")
-SETTINGS = {}
+# Create the settings.
+PB_SETTINGS = []
 for ncount_rna in config["settings"]["ncount_rna"]:
     for nfeature_rna in config["settings"]["nfeature_rna"]:
         for percent_rb in config["settings"]["percent_rb"]:
             for percent_mt in config["settings"]["percent_mt"]:
                 for malat1 in config["settings"]["malat1"]:
-                    for min_cells in config["settings"]["min_cells"]:
-                        settings = {
-                            "nCount_RNA": ncount_rna,
-                            "nFeature_RNA": nfeature_rna,
-                            "percent.rb": percent_rb,
-                            "percent.mt": percent_mt,
-                            "MALAT1": malat1,
-                            "minCells": min_cells
-                        }
-                        md5_hash = get_md5_hash(str(settings))
-                        SETTINGS[md5_hash] = settings
-                        logger.info("\t{}: {}".format(md5_hash, settings))
+                    setting = "{ncount_rna}nCountRNA_{nfeature_rna}nFeatureRNA_{percent_rb}PcntRB_{percent_mt}PcntMT_{malat1}MALAT1".format(ncount_rna=ncount_rna, nfeature_rna=nfeature_rna, percent_rb=percent_rb, percent_mt=percent_mt, malat1=malat1)
+                    logger.info("\tRequesting pseudobulk setting: {}".format(setting))
+                    PB_SETTINGS.append(setting)
 
-settings_df = pd.DataFrame(SETTINGS).T.sort_index()
-logger.debug("\nActive settings:")
-logger.debug(settings_df)
+MERGE_SETTINGS = []
+for min_cells in config["settings"]["min_cells"]:
+    setting = "{min_cells}Cells".format(min_cells=min_cells)
+    logger.info("\tRequesting merge setting: {}".format(setting))
+    MERGE_SETTINGS.append(setting)
 
-# Save the settings to people can look up what hash is what setting.
-save_settings(settings_df=settings_df)
+BRYOIS_FILTER_SETTINGS = []
+for min_obs in config["settings"]["min_obs_bryois"]:
+    for min_cpm in config["settings"]["min_cpm_bryois"]:
+        setting = "{min_obs}Obs{min_cpm}CPM".format(min_obs=min_obs, min_cpm=min_cpm)
+        logger.info("\tRequesting Bryois filter setting: {}".format(setting))
+        BRYOIS_FILTER_SETTINGS.append(setting)
 
-# Define the output hashes.
-HASHES = SETTINGS.keys()
+FUJITA_FILTER_SETTINGS = []
+for min_cpm in config["settings"]["min_cpm_fujita"]:
+    setting = "{min_cpm}CPM".format(min_cpm=min_cpm)
+    logger.info("\tRequesting Fujita filter setting: {}".format(setting))
+    FUJITA_FILTER_SETTINGS.append(setting)
 
 
 wildcard_constraints:
-    hash = "[A-Za-z0-9]+",
+    pb_setting = "[0-9A-Za-z_]+",
+    merge_setting = "[0-9A-Za-z_]+",
+    filter_setting = "[0-9A-Za-z_]+",
     pool = "[\w-]+",
-    cell_type = "[A-Za-z.]+",
-    min_ind_expr = "[0-9]+",
-    min_cpm = "[0-9]+"
+    cell_type = "[A-Za-z.]+"
+
+
+def print_wildcards(wildcards):
+    out = []
+    for key, value in wildcards.items():
+        out.append(key + "=" + value)
+    return ", ".join(out)
+
+
+def get_pseudobulk_setting(wildcards, parameter):
+    logger.debug("rule pseudobulk_pool - get_pseudobulk_setting({})".format(print_wildcards(wildcards)))
+    match = re.match("([0-9]+)nCountRNA_([0-9]+)nFeatureRNA_([0-9]+)PcntRB_([0-9]+)PcntMT_([0-9]+)MALAT1", wildcards.pb_setting)
+    if parameter == "nCount_RNA":
+        return match.group(1)
+    elif parameter == "nFeature_RNA":
+        return match.group(2)
+    elif parameter == "percent.rb":
+        return match.group(3)
+    elif parameter == "percent.mt":
+        return match.group(4)
+    elif parameter == "MALAT1":
+        return match.group(5)
+    else:
+        logger.error("Critical, Unexpected value for parameter in get_pseudobulk_setting: {}\n\nExiting.".format(parameter))
+        exit()
+
+    logger.debug("\treturning ''")
+    return ""
+
+
+def get_merge_setting(wildcards, parameter):
+    logger.debug("rule merge_expr - get_merge_setting({})".format(print_wildcards(wildcards)))
+    match = re.match("([0-9]+)Cells", wildcards.merge_setting)
+    if parameter == "MinCells":
+        return match.group(1)
+    else:
+        logger.error("Critical, Unexpected value for parameter in get_merge_setting: {}\n\nExiting.".format(parameter))
+        exit()
+
+    logger.debug("\treturning ''")
+    return ""
+
+
+def get_filter_setting_bryois(wildcards, parameter):
+    logger.debug("rule normalise_bryois - get_filter_setting_bryois({})".format(print_wildcards(wildcards)))
+    match = re.match("([0-9]+)Obs([0-9]+)CPM", wildcards.filter_setting)
+    if parameter == "MinObs":
+        return match.group(1)
+    elif parameter == "MinCPM":
+        return match.group(2)
+    else:
+        logger.error("Critical, Unexpected value for parameter in get_filter_setting: {}\n\nExiting.".format(parameter))
+        exit()
+
+    logger.debug("\treturning ''")
+    return ""
+
+
+def get_filter_setting_fujita(wildcards, parameter):
+    logger.debug("rule normalise_fujita - get_filter_setting_fujita({})".format(print_wildcards(wildcards)))
+    match = re.match("([0-9]+)CPM", wildcards.filter_setting)
+    if parameter == "MinCPM":
+        return match.group(1)
+    else:
+        logger.error("Critical, Unexpected value for parameter in get_filter_setting: {}\n\nExiting.".format(parameter))
+        exit()
+
+    logger.debug("\treturning ''")
+    return ""
 
 
 rule all:
     input:
-        exp_bryois = expand(config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.{min_ind_expr}Expr{min_cpm}CPM.TMM.tsv.gz", hash=HASHES, cell_type=config["settings"]["cell_type"], min_ind_expr=config["settings"]["min_ind_expr"], min_cpm=config["settings"]["min_cpm"]),
-        exp_fujita = expand(config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.{min_cpm}CPM.log2CPM_QN.tsv.gz", hash=HASHES, cell_type=config["settings"]["cell_type"], min_cpm=config["settings"]["min_cpm"]),
-        smf = expand(config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.smf", hash=HASHES, cell_type=config["settings"]["cell_type"]),
-        stats = expand(config["outputs"]["output_dir"] + "expression/{hash}/pseudobulk.sumstats.tsv.gz", hash=HASHES),
-        qc_metrics = expand(config["outputs"]["output_dir"] + "figures/{hash}/ncount_rna_vs_percent_mt.png", hash=HASHES)
+        exp_bryois = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}.TMM.tsv.gz", pb_setting=PB_SETTINGS, merge_setting=MERGE_SETTINGS, cell_type=config["settings"]["cell_type"], filter_setting=BRYOIS_FILTER_SETTINGS),
+        exp_fujita = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}.log2CPM_QN.tsv.gz", pb_setting=PB_SETTINGS, merge_setting=MERGE_SETTINGS, cell_type=config["settings"]["cell_type"], filter_setting=FUJITA_FILTER_SETTINGS),
+        smf = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.smf", pb_setting=PB_SETTINGS, merge_setting=MERGE_SETTINGS, cell_type=config["settings"]["cell_type"]),
+        qc_metrics = expand(config["outputs"]["output_dir"] + "figures/{pb_setting}/ncount_rna_vs_percent_mt.png", pb_setting=PB_SETTINGS),
+        stats = config["outputs"]["output_dir"] + "expression/pseudobulk.stats.tsv",
 
 
 rule pseudobulk_pool:
@@ -164,12 +191,12 @@ rule pseudobulk_pool:
         rb_genes = config["inputs"]["rb_genes"],
         mt_genes = config["inputs"]["mt_genes"]
     output:
-        metadata = config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.metadata.tsv.gz",
-        qc_metrics = config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.qc_metrics.tsv.gz",
-        full_metadata = config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.full.metadata.tsv.gz",
-        exp = config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.pseudobulk.tsv.gz",
-        stats = config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.pseudobulk.stats.tsv.gz",
-        done = config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.done",
+        metadata = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.metadata.tsv.gz",
+        qc_metrics = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.qc_metrics.tsv.gz",
+        full_metadata = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.full.metadata.tsv.gz",
+        exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.pseudobulk.tsv.gz",
+        stats = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.pseudobulk.stats.tsv.gz",
+        done = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.done",
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["pseudobulk_pool_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["pseudobulk_pool_memory"],
@@ -183,16 +210,15 @@ rule pseudobulk_pool:
         sample_aggregate = config["settings_extra"]["sample_aggregate"],
         ancestry = config["settings"]["ancestry"],
         cell_level = config["settings"]["cell_level"],
-        ncount_rna = lambda wildcards: SETTINGS[wildcards.hash]["nCount_RNA"],
-        nfeature_rna = lambda wildcards: SETTINGS[wildcards.hash]["nFeature_RNA"],
-        percent_rb = lambda wildcards: SETTINGS[wildcards.hash]["percent.rb"],
-        percent_mt = lambda wildcards: SETTINGS[wildcards.hash]["percent.mt"],
-        malat1 = lambda wildcards: SETTINGS[wildcards.hash]["MALAT1"],
+        ncount_rna = lambda wildcards: get_pseudobulk_setting(wildcards, parameter="nCount_RNA"),
+        nfeature_rna = lambda wildcards: get_pseudobulk_setting(wildcards, parameter="nFeature_RNA"),
+        percent_rb = lambda wildcards: get_pseudobulk_setting(wildcards, parameter="percent.rb"),
+        percent_mt = lambda wildcards: get_pseudobulk_setting(wildcards, parameter="percent.mt"),
+        malat1 = lambda wildcards: get_pseudobulk_setting(wildcards, parameter="MALAT1"),
         feature_name = config["settings_extra"]["feature_name"],
         aggregate_fun = config["settings_extra"]["aggregate_fun"],
-        min_cells = lambda wildcards: SETTINGS[wildcards.hash]["minCells"],
-        out = config["outputs"]["output_dir"] + "expression/{hash}/pools/"
-    log: config["outputs"]["output_dir"] + "log/pseudobulk_pool.{hash}.{pool}.log"
+        out = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/"
+    log: config["outputs"]["output_dir"] + "log/pseudobulk_pool.{pb_setting}.{pool}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} python {params.script} \
@@ -214,7 +240,6 @@ rule pseudobulk_pool:
             --percent_mt {params.percent_mt} \
             --malat1 {params.malat1} \
             --feature_name {params.feature_name} \
-            --min_cells {params.min_cells} \
             --aggregate_fun {params.aggregate_fun} \
             --out {params.out} > {log} 2>&1
         singularity exec --bind {params.bind} {params.sif} touch {output.exp}
@@ -226,10 +251,11 @@ rule pseudobulk_pool:
 rule merge_expr:
     input:
         poolsheet = config["inputs"]["poolsheet"],
-        expr = expand(config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.pseudobulk.tsv.gz", pool=POOLS, allow_missing=True)
+        done = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.done", pool=POOLS, allow_missing=True)
     output:
-        exp = config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.tsv.gz",
-        smf = config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.smf",
+        exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.tsv.gz",
+        smf = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.smf",
+        stats = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.stats.tsv",
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_expr_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_expr_memory"],
@@ -239,26 +265,29 @@ rule merge_expr:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/merge_expr.py",
-        indir = config["outputs"]["output_dir"] + "expression/{hash}/pools/",
+        indir = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/",
+        min_cells = lambda wildcards: get_merge_setting(wildcards, parameter="MinCells"),
         aggregate_fun = config["settings_extra"]["aggregate_fun"],
-        out = config["outputs"]["output_dir"] + "expression/{hash}/"
-    log: config["outputs"]["output_dir"] + "log/merge.{hash}.{cell_type}.log"
+        out = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/"
+    log: config["outputs"]["output_dir"] + "log/merge_expr.{pb_setting}.{merge_setting}.{cell_type}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --poolsheet {input.poolsheet} \
             --indir {params.indir} \
             --cell_type {wildcards.cell_type} \
+            --min_cells {params.min_cells} \
             --aggregate_fun {params.aggregate_fun} \
             --out {params.out} > {log} 2>&1
+        singularity exec --bind {params.bind} {params.sif} touch {output.exp} {output.smf} {output.stats}
         """
 
 
 rule normalise_bryois:
     input:
-        exp = config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.tsv.gz",
+        exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.tsv.gz",
     output:
-        exp = config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.{min_ind_expr}Expr{min_cpm}CPM.TMM.tsv.gz",
+        exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}.TMM.tsv.gz",
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["normalise_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["normalise_memory"],
@@ -267,24 +296,26 @@ rule normalise_bryois:
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/normalise_bryois.R"
-    log: config["outputs"]["output_dir"] + "log/normalise_bryois.{hash}.{cell_type}.{min_ind_expr}Expr{min_cpm}CPM.log"
+        script = config["inputs"]["repo_dir"] + "scripts/normalise_bryois.R",
+        min_obs = lambda wildcards: get_filter_setting_bryois(wildcards, parameter="MinObs"),
+        min_cpm = lambda wildcards: get_filter_setting_bryois(wildcards, parameter="MinCPM"),
+    log: config["outputs"]["output_dir"] + "log/normalise_bryois.{pb_setting}.{merge_setting}.{cell_type}.{filter_setting}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} Rscript {params.script} \
             --exp {input.exp} \
-            --min_ind_expr {wildcards.min_ind_expr} \
-            --min_cpm {wildcards.min_cpm} \
+            --min_obs {params.min_obs} \
+            --min_cpm {params.min_cpm} \
             --out {output.exp} > {log} 2>&1
         """
 
 
 rule normalise_fujita:
     input:
-        exp = config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.tsv.gz",
+        exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.tsv.gz",
         # batches = ""
     output:
-        exp = config["outputs"]["output_dir"] + "expression/{hash}/{cell_type}.pseudobulk.{min_cpm}CPM.log2CPM_QN.tsv.gz",
+        exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}.log2CPM_QN.tsv.gz",
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["normalise_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["normalise_memory"],
@@ -293,13 +324,14 @@ rule normalise_fujita:
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/normalise_fujita.R"
-    log: config["outputs"]["output_dir"] + "log/normalise_fujita.{hash}.{cell_type}.{min_cpm}CPM.log"
+        script = config["inputs"]["repo_dir"] + "scripts/normalise_fujita.R",
+        min_cpm = lambda wildcards: get_filter_setting_fujita(wildcards, parameter="MinCPM"),
+    log: config["outputs"]["output_dir"] + "log/normalise_fujita.{pb_setting}.{merge_setting}.{cell_type}.{filter_setting}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} Rscript {params.script} \
             --exp {input.exp} \
-            --min_cpm {wildcards.min_cpm} \
+            --min_cpm {params.min_cpm} \
             --out {output.exp} > {log} 2>&1
         """
 
@@ -307,10 +339,10 @@ rule normalise_fujita:
 rule merge_stats:
     input:
         poolsheet = config["inputs"]["poolsheet"],
-        stats = expand(config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.pseudobulk.stats.tsv.gz", pool=POOLS, allow_missing=True)
+        stats = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.pseudobulk.stats.tsv.gz", pool=POOLS, allow_missing=True)
     output:
-        stats = config["outputs"]["output_dir"] + "expression/{hash}/pseudobulk.stats.tsv.gz",
-        sumstats = config["outputs"]["output_dir"] + "expression/{hash}/pseudobulk.sumstats.tsv.gz"
+        stats = config["outputs"]["output_dir"] + "expression/{pb_setting}/pseudobulk.stats.tsv.gz",
+        sumstats = config["outputs"]["output_dir"] + "expression/{pb_setting}/pseudobulk.sumstats.tsv.gz"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_expr_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_expr_memory"],
@@ -320,25 +352,49 @@ rule merge_stats:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/merge_stats.py",
-        indir = config["outputs"]["output_dir"] + "expression/{hash}/pools/",
-        out = config["outputs"]["output_dir"] + "expression/{hash}/"
-    log: config["outputs"]["output_dir"] + "log/merge.{hash}.log"
+        indir = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/",
+        out = config["outputs"]["output_dir"] + "expression/{pb_setting}/"
+    log: config["outputs"]["output_dir"] + "log/merge_stats.{pb_setting}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --poolsheet {input.poolsheet} \
             --indir {params.indir} \
             --out {params.out} > {log} 2>&1
+         singularity exec --bind {params.bind} {params.sif} touch {output.stats} {output.sumstats}
+        """
+
+
+rule merge_ncells:
+    input:
+        stats = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.stats.tsv", pb_setting=PB_SETTINGS, merge_setting=MERGE_SETTINGS, cell_type=config["settings"]["cell_type"])
+    output:
+        stats = config["outputs"]["output_dir"] + "expression/pseudobulk.stats.tsv",
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_ncells_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_ncells_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["merge_ncells_time"]],
+    threads: config["merge_ncells_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/merge_ncells.py",
+        workdir = config["outputs"]["output_dir"] + "expression/"
+    log: config["outputs"]["output_dir"] + "log/merge_ncells.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --workdir {params.workdir} > {log} 2>&1
         """
 
 
 rule visualise_barcode_qc:
     input:
         poolsheet = config["inputs"]["poolsheet"],
-        qc_metrics = expand(config["outputs"]["output_dir"] + "expression/{hash}/pools/{pool}.full.metadata.tsv.gz", pool=POOLS, allow_missing=True)
+        qc_metrics = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.full.metadata.tsv.gz", pool=POOLS, allow_missing=True)
     output:
-        qc_metrics = config["outputs"]["output_dir"] + "expression/{hash}/qc_metrics.tsv.gz",
-        smf = config["outputs"]["output_dir"] + "figures/{hash}/ncount_rna_vs_percent_mt.png",
+        qc_metrics = config["outputs"]["output_dir"] + "expression/{pb_setting}/qc_metrics.tsv.gz",
+        smf = config["outputs"]["output_dir"] + "figures/{pb_setting}/ncount_rna_vs_percent_mt.png",
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["visualise_barcode_qc_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["visualise_barcode_qc_memory"],
@@ -348,17 +404,17 @@ rule visualise_barcode_qc:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/visualise_barcode_qc.py",
-        indir = config["outputs"]["output_dir"] + "expression/{hash}/pools/",
+        indir = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/",
         cell_level = config["settings"]["cell_level"],
-        ncount_rna = lambda wildcards: SETTINGS[wildcards.hash]["nCount_RNA"],
-        nfeature_rna = lambda wildcards: SETTINGS[wildcards.hash]["nFeature_RNA"],
-        percent_rb = lambda wildcards: SETTINGS[wildcards.hash]["percent.rb"],
-        percent_mt = lambda wildcards: SETTINGS[wildcards.hash]["percent.mt"],
-        malat1 = lambda wildcards: SETTINGS[wildcards.hash]["MALAT1"],
+        ncount_rna = lambda wildcards: get_pseudobulk_setting(wildcards, parameter="nCount_RNA"),
+        nfeature_rna = lambda wildcards: get_pseudobulk_setting(wildcards, parameter="nFeature_RNA"),
+        percent_rb = lambda wildcards: get_pseudobulk_setting(wildcards, parameter="percent.rb"),
+        percent_mt = lambda wildcards: get_pseudobulk_setting(wildcards, parameter="percent.mt"),
+        malat1 = lambda wildcards: get_pseudobulk_setting(wildcards, parameter="MALAT1"),
         palette = "--palette " + config["inputs"]["palette"] if config["inputs"]["palette"] is not None else "",
-        data_out = config["outputs"]["output_dir"] + "expression/{hash}/",
-        plot_out = config["outputs"]["output_dir"] + "figures/{hash}/"
-    log: config["outputs"]["output_dir"] + "log/visualise_barcode_qc.{hash}.log"
+        data_out = config["outputs"]["output_dir"] + "expression/{pb_setting}/",
+        plot_out = config["outputs"]["output_dir"] + "figures/{pb_setting}/"
+    log: config["outputs"]["output_dir"] + "log/visualise_barcode_qc.{pb_setting}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} python {params.script} \

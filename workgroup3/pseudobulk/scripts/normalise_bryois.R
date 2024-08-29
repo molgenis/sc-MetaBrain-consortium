@@ -12,7 +12,7 @@ parser <- ArgumentParser()
 # specify our desired options
 # by default ArgumentParser will add an help option
 parser$add_argument("--exp", required=TRUE, type="character", help="")
-parser$add_argument("--min_ind_expr", required=FALSE, type="numeric", default=10, help="")
+parser$add_argument("--min_obs", required=FALSE, type="numeric", default=10, help="")
 parser$add_argument("--min_cpm", required=FALSE, type="numeric", default=1, help="")
 parser$add_argument("--out", required=TRUE, type="character", help="")
 
@@ -45,9 +45,9 @@ print(paste0("  Removed ", n_genes_before - n_genes_after, " genes due to no var
 
 ##Filter on expressed in 10 individuals
 n_genes_before = dim(expression)[1]
-expression <- expression[which(rowSums(expression > 0) > args$min_ind_expr), ]
+expression <- expression[which(rowSums(expression > 0) > args$min_obs), ]
 n_genes_after = dim(expression)[1]
-print(paste0("  Removed ", n_genes_before - n_genes_after, " genes due to >0 counts in >", args$min_ind_expr, " individuals filter"))
+print(paste0("  Removed ", n_genes_before - n_genes_after, " genes due to >0 counts in >", args$min_obs, " individuals filter"))
 
 ##Filter on CPM
 n_genes_before = dim(expression)[1]
