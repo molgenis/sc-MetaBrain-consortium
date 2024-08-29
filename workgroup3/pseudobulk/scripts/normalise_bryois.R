@@ -34,26 +34,24 @@ shhh(library(edgeR))
 print("Loading expression data")
 expression <- read.table(file = args$exp, row.names = 1, check.names = FALSE)
 print(paste0("  Loaded expression with shape (", nrow(expression), ", ", ncol(expression), ")"))
+n_genes_input = dim(expression)[1]
 
 ##Filter based on gene variance
 print("Filtering genes")
-n_genes_before = dim(expression)[1]
 rowVarInfo <- rowVars(as.matrix(expression))
 expression <- expression[which(rowVarInfo != 0),]
-n_genes_after = dim(expression)[1]
-print(paste0("  Removed ", n_genes_before - n_genes_after, " genes due to no variance"))
+n_var_removed <- dim(expression)[1]
+print(paste0("  Removed ", n_genes_input - n_var_removed, " genes due to no variance"))
 
 ##Filter on expressed in 10 individuals
-n_genes_before = dim(expression)[1]
 expression <- expression[which(rowSums(expression > 0) > args$min_obs), ]
-n_genes_after = dim(expression)[1]
-print(paste0("  Removed ", n_genes_before - n_genes_after, " genes due to >0 counts in >", args$min_obs, " individuals filter"))
+n_obs_removed <- dim(expression)[1]
+print(paste0("  Removed ", n_var_removed - n_obs_removed, " genes due to >0 counts in >", args$min_obs, " individuals filter"))
 
 ##Filter on CPM
-n_genes_before = dim(expression)[1]
 expression <- expression[which(rowMeans(expression * 10^6 / colSums(expression)) > args$min_cpm), ]
-n_genes_after = dim(expression)[1]
-print(paste0("  Removed ", n_genes_before - n_genes_after, " genes due to >", args$min_cpm, " average CPM filter"))
+n_cpm_removed <- dim(expression)[1]
+print(paste0("  Removed ", n_obs_removed - n_cpm_removed, " genes due to >", args$min_cpm, " average CPM filter"))
 
 print("Normalise expression")
 expression <- DGEList(counts = expression) %>% #TMM normalize the data using edgeR
@@ -62,7 +60,11 @@ expression <- DGEList(counts = expression) %>% #TMM normalize the data using edg
     as.data.frame()
 
 print("Writing output")
-write.table(expression, gzfile(args$out), quote = F, sep = "\t", row.names=TRUE, col.names=NA)
+write.table(expression, gzfile(paste0(args$out, "TMM.tsv.gz")), quote = F, sep = "\t", row.names=TRUE, col.names=NA)
 print(paste0("  Written expression with shape (", nrow(expression), ", ", ncol(expression), ")"))
+
+filter.stats <- data.frame(c("Input", "Varfilter", "MinObsFilter", "CPMFilter"), c(n_genes_input, n_var_removed, n_obs_removed, n_cpm_removed))
+colnames(filter.stats) <- c("filter", "ngenes")
+write.table(filter.stats, paste0(args$out, "TMM.stats.tsv"), quote = F, sep = "\t", row.names=TRUE, col.names=NA)
 
 print("Done")

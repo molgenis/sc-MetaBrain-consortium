@@ -84,7 +84,7 @@ for min_cells in config["settings"]["min_cells"]:
 BRYOIS_FILTER_SETTINGS = []
 for min_obs in config["settings"]["min_obs_bryois"]:
     for min_cpm in config["settings"]["min_cpm_bryois"]:
-        setting = "{min_obs}Obs{min_cpm}CPM".format(min_obs=min_obs, min_cpm=min_cpm)
+        setting = "{min_obs}Obs_{min_cpm}CPM".format(min_obs=min_obs, min_cpm=min_cpm)
         logger.info("\tRequesting Bryois filter setting: {}".format(setting))
         BRYOIS_FILTER_SETTINGS.append(setting)
 
@@ -146,7 +146,7 @@ def get_merge_setting(wildcards, parameter):
 
 def get_filter_setting_bryois(wildcards, parameter):
     logger.debug("rule normalise_bryois - get_filter_setting_bryois({})".format(print_wildcards(wildcards)))
-    match = re.match("([0-9]+)Obs([0-9]+)CPM", wildcards.filter_setting)
+    match = re.match("([0-9]+)Obs_([0-9]+)CPM", wildcards.filter_setting)
     if parameter == "MinObs":
         return match.group(1)
     elif parameter == "MinCPM":
@@ -174,11 +174,12 @@ def get_filter_setting_fujita(wildcards, parameter):
 
 rule all:
     input:
+        qc_metrics = expand(config["outputs"]["output_dir"] + "figures/{pb_setting}/ncount_rna_vs_percent_mt.png", pb_setting=PB_SETTINGS),
+        smf = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.smf", pb_setting=PB_SETTINGS, merge_setting=MERGE_SETTINGS, cell_type=config["settings"]["cell_type"]),
         exp_bryois = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}.TMM.tsv.gz", pb_setting=PB_SETTINGS, merge_setting=MERGE_SETTINGS, cell_type=config["settings"]["cell_type"], filter_setting=BRYOIS_FILTER_SETTINGS),
         exp_fujita = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}.log2CPM_QN.tsv.gz", pb_setting=PB_SETTINGS, merge_setting=MERGE_SETTINGS, cell_type=config["settings"]["cell_type"], filter_setting=FUJITA_FILTER_SETTINGS),
-        smf = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.smf", pb_setting=PB_SETTINGS, merge_setting=MERGE_SETTINGS, cell_type=config["settings"]["cell_type"]),
-        qc_metrics = expand(config["outputs"]["output_dir"] + "figures/{pb_setting}/ncount_rna_vs_percent_mt.png", pb_setting=PB_SETTINGS),
-        stats = config["outputs"]["output_dir"] + "expression/pseudobulk.stats.tsv",
+        ncells_stats = config["outputs"]["output_dir"] + "expression/ncells.stats.tsv",
+        ngenes_stats = config["outputs"]["output_dir"] + "expression/ngenes.stats.tsv",
 
 
 rule pseudobulk_pool:
@@ -248,146 +249,6 @@ rule pseudobulk_pool:
         """
 
 
-rule merge_expr:
-    input:
-        poolsheet = config["inputs"]["poolsheet"],
-        done = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.done", pool=POOLS, allow_missing=True)
-    output:
-        exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.tsv.gz",
-        smf = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.smf",
-        stats = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.stats.tsv",
-    resources:
-        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_expr_memory"],
-        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_expr_memory"],
-        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["merge_expr_time"]],
-    threads: config["merge_expr_threads"]
-    params:
-        bind = config["inputs"]["bind_path"],
-        sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/merge_expr.py",
-        indir = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/",
-        min_cells = lambda wildcards: get_merge_setting(wildcards, parameter="MinCells"),
-        aggregate_fun = config["settings_extra"]["aggregate_fun"],
-        out = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/"
-    log: config["outputs"]["output_dir"] + "log/merge_expr.{pb_setting}.{merge_setting}.{cell_type}.log"
-    shell:
-        """
-         singularity exec --bind {params.bind} {params.sif} python {params.script} \
-            --poolsheet {input.poolsheet} \
-            --indir {params.indir} \
-            --cell_type {wildcards.cell_type} \
-            --min_cells {params.min_cells} \
-            --aggregate_fun {params.aggregate_fun} \
-            --out {params.out} > {log} 2>&1
-        singularity exec --bind {params.bind} {params.sif} touch {output.exp} {output.smf} {output.stats}
-        """
-
-
-rule normalise_bryois:
-    input:
-        exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.tsv.gz",
-    output:
-        exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}.TMM.tsv.gz",
-    resources:
-        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["normalise_memory"],
-        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["normalise_memory"],
-        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["normalise_time"]]
-    threads: config["normalise_threads"]
-    params:
-        bind = config["inputs"]["bind_path"],
-        sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/normalise_bryois.R",
-        min_obs = lambda wildcards: get_filter_setting_bryois(wildcards, parameter="MinObs"),
-        min_cpm = lambda wildcards: get_filter_setting_bryois(wildcards, parameter="MinCPM"),
-    log: config["outputs"]["output_dir"] + "log/normalise_bryois.{pb_setting}.{merge_setting}.{cell_type}.{filter_setting}.log"
-    shell:
-        """
-         singularity exec --bind {params.bind} {params.sif} Rscript {params.script} \
-            --exp {input.exp} \
-            --min_obs {params.min_obs} \
-            --min_cpm {params.min_cpm} \
-            --out {output.exp} > {log} 2>&1
-        """
-
-
-rule normalise_fujita:
-    input:
-        exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.tsv.gz",
-        # batches = ""
-    output:
-        exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}.log2CPM_QN.tsv.gz",
-    resources:
-        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["normalise_memory"],
-        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["normalise_memory"],
-        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["normalise_time"]]
-    threads: config["normalise_threads"]
-    params:
-        bind = config["inputs"]["bind_path"],
-        sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/normalise_fujita.R",
-        min_cpm = lambda wildcards: get_filter_setting_fujita(wildcards, parameter="MinCPM"),
-    log: config["outputs"]["output_dir"] + "log/normalise_fujita.{pb_setting}.{merge_setting}.{cell_type}.{filter_setting}.log"
-    shell:
-        """
-         singularity exec --bind {params.bind} {params.sif} Rscript {params.script} \
-            --exp {input.exp} \
-            --min_cpm {params.min_cpm} \
-            --out {output.exp} > {log} 2>&1
-        """
-
-
-rule merge_stats:
-    input:
-        poolsheet = config["inputs"]["poolsheet"],
-        stats = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.pseudobulk.stats.tsv.gz", pool=POOLS, allow_missing=True)
-    output:
-        stats = config["outputs"]["output_dir"] + "expression/{pb_setting}/pseudobulk.stats.tsv.gz",
-        sumstats = config["outputs"]["output_dir"] + "expression/{pb_setting}/pseudobulk.sumstats.tsv.gz"
-    resources:
-        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_expr_memory"],
-        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_expr_memory"],
-        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["merge_expr_time"]],
-    threads: config["merge_expr_threads"]
-    params:
-        bind = config["inputs"]["bind_path"],
-        sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/merge_stats.py",
-        indir = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/",
-        out = config["outputs"]["output_dir"] + "expression/{pb_setting}/"
-    log: config["outputs"]["output_dir"] + "log/merge_stats.{pb_setting}.log"
-    shell:
-        """
-         singularity exec --bind {params.bind} {params.sif} python {params.script} \
-            --poolsheet {input.poolsheet} \
-            --indir {params.indir} \
-            --out {params.out} > {log} 2>&1
-         singularity exec --bind {params.bind} {params.sif} touch {output.stats} {output.sumstats}
-        """
-
-
-rule merge_ncells:
-    input:
-        stats = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.stats.tsv", pb_setting=PB_SETTINGS, merge_setting=MERGE_SETTINGS, cell_type=config["settings"]["cell_type"])
-    output:
-        stats = config["outputs"]["output_dir"] + "expression/pseudobulk.stats.tsv",
-    resources:
-        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_ncells_memory"],
-        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_ncells_memory"],
-        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["merge_ncells_time"]],
-    threads: config["merge_ncells_threads"]
-    params:
-        bind = config["inputs"]["bind_path"],
-        sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/merge_ncells.py",
-        workdir = config["outputs"]["output_dir"] + "expression/"
-    log: config["outputs"]["output_dir"] + "log/merge_ncells.log"
-    shell:
-        """
-         singularity exec --bind {params.bind} {params.sif} python {params.script} \
-            --workdir {params.workdir} > {log} 2>&1
-        """
-
-
 rule visualise_barcode_qc:
     input:
         poolsheet = config["inputs"]["poolsheet"],
@@ -429,5 +290,173 @@ rule visualise_barcode_qc:
             {params.palette} \
             --data_out {params.data_out} \
             --plot_out {params.plot_out} > {log} 2>&1
+        """
+
+
+rule merge_pseudobulk_expr:
+    input:
+        poolsheet = config["inputs"]["poolsheet"],
+        done = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.done", pool=POOLS, allow_missing=True)
+    output:
+        exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.tsv.gz",
+        smf = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.smf",
+        stats = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.stats.tsv",
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_pseudobulk_expr_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_pseudobulk_expr_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["merge_pseudobulk_expr_time"]],
+    threads: config["merge_pseudobulk_expr_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/merge_pseudobulk_expr.py",
+        indir = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/",
+        min_cells = lambda wildcards: get_merge_setting(wildcards, parameter="MinCells"),
+        aggregate_fun = config["settings_extra"]["aggregate_fun"],
+        out = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/"
+    log: config["outputs"]["output_dir"] + "log/merge_pseudobulk_expr.{pb_setting}.{merge_setting}.{cell_type}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --poolsheet {input.poolsheet} \
+            --indir {params.indir} \
+            --cell_type {wildcards.cell_type} \
+            --min_cells {params.min_cells} \
+            --aggregate_fun {params.aggregate_fun} \
+            --out {params.out} > {log} 2>&1
+        singularity exec --bind {params.bind} {params.sif} touch {output.exp} {output.smf} {output.stats}
+        """
+
+
+rule merge_pseudobulk_stats:
+    input:
+        poolsheet = config["inputs"]["poolsheet"],
+        stats = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.pseudobulk.stats.tsv.gz", pool=POOLS, allow_missing=True)
+    output:
+        stats = config["outputs"]["output_dir"] + "expression/{pb_setting}/pseudobulk.stats.tsv.gz",
+        sumstats = config["outputs"]["output_dir"] + "expression/{pb_setting}/pseudobulk.sumstats.tsv.gz"
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_pseudobulk_stats_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_pseudobulk_stats_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["merge_pseudobulk_stats_time"]],
+    threads: config["merge_pseudobulk_stats_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/merge_pseudobulk_stats.py",
+        indir = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/",
+        out = config["outputs"]["output_dir"] + "expression/{pb_setting}/"
+    log: config["outputs"]["output_dir"] + "log/merge_pseudobulk_stats.{pb_setting}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --poolsheet {input.poolsheet} \
+            --indir {params.indir} \
+            --out {params.out} > {log} 2>&1
+         singularity exec --bind {params.bind} {params.sif} touch {output.stats} {output.sumstats}
+        """
+
+
+rule merge_ncells_stats:
+    input:
+        stats = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.stats.tsv", pb_setting=PB_SETTINGS, merge_setting=MERGE_SETTINGS, cell_type=config["settings"]["cell_type"])
+    output:
+        stats = config["outputs"]["output_dir"] + "expression/ncells.stats.tsv",
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_ncells_stats_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_ncells_stats_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["merge_ncells_stats_time"]],
+    threads: config["merge_ncells_stats_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/merge_ncells_stats.py",
+        workdir = config["outputs"]["output_dir"] + "expression/"
+    log: config["outputs"]["output_dir"] + "log/merge_ncells_stats.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --workdir {params.workdir} > {log} 2>&1
+        """
+
+
+rule normalise_bryois:
+    input:
+        exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.tsv.gz",
+    output:
+        exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}.TMM.tsv.gz",
+        stats = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}.TMM.stats.tsv",
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["normalise_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["normalise_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["normalise_time"]]
+    threads: config["normalise_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/normalise_bryois.R",
+        min_obs = lambda wildcards: get_filter_setting_bryois(wildcards, parameter="MinObs"),
+        min_cpm = lambda wildcards: get_filter_setting_bryois(wildcards, parameter="MinCPM"),
+        out = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}."
+    log: config["outputs"]["output_dir"] + "log/normalise_bryois.{pb_setting}.{merge_setting}.{cell_type}.{filter_setting}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} Rscript {params.script} \
+            --exp {input.exp} \
+            --min_obs {params.min_obs} \
+            --min_cpm {params.min_cpm} \
+            --out {params.out} > {log} 2>&1
+        """
+
+
+rule normalise_fujita:
+    input:
+        exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.tsv.gz",
+        # batches = ""
+    output:
+        exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}.log2CPM_QN.tsv.gz",
+        stats = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}.log2CPM_QN.stats.tsv",
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["normalise_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["normalise_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["normalise_time"]]
+    threads: config["normalise_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/normalise_fujita.R",
+        min_cpm = lambda wildcards: get_filter_setting_fujita(wildcards, parameter="MinCPM"),
+        out = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}."
+    log: config["outputs"]["output_dir"] + "log/normalise_fujita.{pb_setting}.{merge_setting}.{cell_type}.{filter_setting}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} Rscript {params.script} \
+            --exp {input.exp} \
+            --min_cpm {params.min_cpm} \
+            --out {params.out} > {log} 2>&1
+        """
+
+
+rule merge_ngenes_stats:
+    input:
+        bryois_stats = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}.TMM.stats.tsv", pb_setting=PB_SETTINGS, merge_setting=MERGE_SETTINGS, cell_type=config["settings"]["cell_type"], filter_setting=BRYOIS_FILTER_SETTINGS),
+        fujita_stats = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}.log2CPM_QN.stats.tsv", pb_setting=PB_SETTINGS, merge_setting=MERGE_SETTINGS, cell_type=config["settings"]["cell_type"], filter_setting=FUJITA_FILTER_SETTINGS)
+    output:
+        stats = config["outputs"]["output_dir"] + "expression/ngenes.stats.tsv",
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_ngenes_stats_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_ngenes_stats_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["merge_ngenes_stats_time"]],
+    threads: config["merge_ngenes_stats_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/merge_ngenes_stats.py",
+        workdir = config["outputs"]["output_dir"] + "expression/"
+    log: config["outputs"]["output_dir"] + "log/merge_ngenes_stats.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --workdir {params.workdir} > {log} 2>&1
         """
 

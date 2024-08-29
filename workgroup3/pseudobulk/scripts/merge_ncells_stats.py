@@ -28,7 +28,9 @@ print("\nLoading ncells stats ...")
 data = {}
 for i, fpath in enumerate(glob.glob(os.path.join(args.workdir, "*/*/*.pseudobulk.stats.tsv"))):
     fparts = fpath.split(os.sep)
-    cell_type = fparts[-1].replace(".pseudobulk.stats.tsv", "")
+
+    match = re.match("([A-Za-z]+).pseudobulk.stats.tsv", os.path.basename(fpath))
+    cell_type = match.group(1)
 
     settings = {"Cell type": cell_type}
     for fpart in fparts[-3:-1]:
@@ -49,6 +51,6 @@ stats.sort_values(by=["Cell type", "ncells"], ascending=[True, False], inplace=T
 print(stats)
 
 print("\nSaving files")
-stats.to_csv(os.path.join(args.workdir, "pseudobulk.stats.tsv"), sep="\t", header=True, index=True)
+stats.to_csv(os.path.join(args.workdir, "ncells.stats.tsv"), sep="\t", header=True, index=True)
 
 print("Done")
