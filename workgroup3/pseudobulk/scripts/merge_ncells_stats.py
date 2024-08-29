@@ -20,7 +20,7 @@ print("")
 
 def get_key_value(setting):
     value = re.match("([0-9]+)", setting).group(1)
-    key = setting.replace(value, "")
+    key = setting.lstrip(value)
     return key, value
 
 
