@@ -1,0 +1,45 @@
+##############################################################################################################
+##### The following arguments need to be changed by the user to indicating file locations on your system #####
+##############################################################################################################
+inputs:
+  bind_path: ### directories that the singularity should have access to (comma seperated).
+  singularity_image: ### path to the singularity image containing the software.
+  repo_dir: ### path to the base directory where the scripts are stored (i.e. parent of `scripts`).
+  datasheet_path: ### tab separated file that has a header. Each line has a dataset name and the input directories
+
+  # Optional
+  variants_path: ### file with variants to filter on
+
+outputs:
+  output_dir: ### the output directory.
+
+settings:
+  filter_samples: True
+
+cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
+
+##############################################################################################################
+##### The following arguments are common parameters that may need to be changed depending on the dataset #####
+##############################################################################################################
+
+export_vcf_samples_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+export_vcf_samples_threads: 1 ### Number of threads to use
+export_vcf_samples_time: 0 ### The time setting to use
+
+filter_vcf_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
+filter_vcf_threads: 1 ### Number of threads to use
+filter_vcf_time: 0 ### The time setting to use
+
+combine_vcf_memory: 8 ### Amount of gigs that will be used for memory and disk space per thread
+combine_vcf_threads: 4 ### Number of threads to use
+combine_vcf_time: 0 ### The time setting to use
+
+combine_files_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+combine_files_threads: 1 ### Number of threads to use
+combine_files_time: 0 ### The time setting to use
+
+############################################################################################################################################
+##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####
+############################################################################################################################################
+settings_extra:
+  debug: False ### set logger to level DEBUG printing additional information.

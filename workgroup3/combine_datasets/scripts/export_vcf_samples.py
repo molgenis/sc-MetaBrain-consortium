@@ -43,7 +43,7 @@ def load_vcf_samples(inpath):
     f.close()
     return set([col for col in header if col not in ["#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT"]])
 
-print("Loading WG1 metadata samples:")
+print("Loading WG1 metadata samples ...")
 wg1_metadata_samples = set()
 for wg1_metadata in args.wg1_metadata:
     samples = load_wg1_samples(inpath=wg1_metadata)
@@ -51,7 +51,7 @@ for wg1_metadata in args.wg1_metadata:
     wg1_metadata_samples.update(samples)
 print("WG1 metadata has {:,} samples".format(len(wg1_metadata_samples)))
 
-print("Loading VCF samples:")
+print("Loading VCF samples ...")
 vcf_samples = set()
 for vcf in args.vcf:
     samples = load_vcf_samples(inpath=vcf)
@@ -59,6 +59,7 @@ for vcf in args.vcf:
     vcf_samples.update(samples)
 print("VCF file has {:,} samples".format(len(vcf_samples)))
 
+print("Overlapping samples ...")
 overlap = wg1_metadata_samples.intersection(vcf_samples)
 print("Overlap is {:,} samples".format(len(overlap)))
 if len(overlap) == 0:
@@ -67,7 +68,10 @@ if len(overlap) == 0:
 overlap = list(overlap)
 overlap.sort()
 
+print("Saving samples ...")
 with gzip.open(args.outfile, "wt") as f:
     for sample in overlap:
         f.write(sample + "\n")
 f.close()
+
+print("Done")
