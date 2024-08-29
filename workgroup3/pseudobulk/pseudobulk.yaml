@@ -37,7 +37,7 @@ settings:
   min_ind_expr: [ 10 ] ### applies only to Bryois normalisation
   min_cpm: [ 1 ]
 
-cluster_time: {0: "00:59:00", 1: "23:59:00", 2: "6-23:59:00"}
+cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
 
 ##############################################################################################################
 ##### The following arguments are common parameters that may need to be changed depending on the dataset #####
