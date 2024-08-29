@@ -175,7 +175,7 @@ def get_filter_setting_fujita(wildcards, parameter):
 rule all:
     input:
         qc_metrics = expand(config["outputs"]["output_dir"] + "figures/{pb_setting}/ncount_rna_vs_percent_mt.png", pb_setting=PB_SETTINGS),
-        smf = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.smf", pb_setting=PB_SETTINGS, merge_setting=MERGE_SETTINGS, cell_type=config["settings"]["cell_type"]),
+        gte = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.gte.txt", pb_setting=PB_SETTINGS, merge_setting=MERGE_SETTINGS, cell_type=config["settings"]["cell_type"]),
         exp_bryois = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}.TMM.tsv.gz", pb_setting=PB_SETTINGS, merge_setting=MERGE_SETTINGS, cell_type=config["settings"]["cell_type"], filter_setting=BRYOIS_FILTER_SETTINGS),
         exp_fujita = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{filter_setting}.log2CPM_QN.tsv.gz", pb_setting=PB_SETTINGS, merge_setting=MERGE_SETTINGS, cell_type=config["settings"]["cell_type"], filter_setting=FUJITA_FILTER_SETTINGS),
         ncells_stats = config["outputs"]["output_dir"] + "expression/ncells.stats.tsv",
@@ -255,7 +255,7 @@ rule visualise_barcode_qc:
         qc_metrics = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.full.metadata.tsv.gz", pool=POOLS, allow_missing=True)
     output:
         qc_metrics = config["outputs"]["output_dir"] + "expression/{pb_setting}/qc_metrics.tsv.gz",
-        smf = config["outputs"]["output_dir"] + "figures/{pb_setting}/ncount_rna_vs_percent_mt.png",
+        image = config["outputs"]["output_dir"] + "figures/{pb_setting}/ncount_rna_vs_percent_mt.png",
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["visualise_barcode_qc_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["visualise_barcode_qc_memory"],
@@ -299,7 +299,9 @@ rule merge_pseudobulk_expr:
         done = expand(config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.done", pool=POOLS, allow_missing=True)
     output:
         exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.tsv.gz",
-        smf = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.smf",
+        gte = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.gte.txt",
+        # gte_dataset = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{dataset}.gte.txt",
+        # gte_nodataset = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.NoDataset.gte.txt",
         stats = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.stats.tsv",
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_pseudobulk_expr_memory"],
@@ -324,7 +326,7 @@ rule merge_pseudobulk_expr:
             --min_cells {params.min_cells} \
             --aggregate_fun {params.aggregate_fun} \
             --out {params.out} > {log} 2>&1
-        singularity exec --bind {params.bind} {params.sif} touch {output.exp} {output.smf} {output.stats}
+        singularity exec --bind {params.bind} {params.sif} touch {output.exp} {output.gte} {output.stats}
         """
 
 
@@ -381,6 +383,7 @@ rule merge_ncells_stats:
 
 
 rule normalise_bryois:
+    priority: 50
     input:
         exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.tsv.gz",
     output:
@@ -410,6 +413,7 @@ rule normalise_bryois:
 
 
 rule normalise_fujita:
+    priority: 50
     input:
         exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.tsv.gz",
         # batches = ""

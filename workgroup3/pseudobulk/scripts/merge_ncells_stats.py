@@ -26,6 +26,7 @@ def get_key_value(setting):
 
 print("\nLoading ncells stats ...")
 data = {}
+order = ["Cell type"]
 for i, fpath in enumerate(glob.glob(os.path.join(args.workdir, "*/*/*.pseudobulk.stats.tsv"))):
     fparts = fpath.split(os.sep)
 
@@ -37,13 +38,26 @@ for i, fpath in enumerate(glob.glob(os.path.join(args.workdir, "*/*/*.pseudobulk
         for setting in fpart.split("_"):
             key, value = get_key_value(setting)
             settings[key] = value
+            if key not in order:
+                order.append(key)
 
     stats = pd.read_csv(fpath, sep="\t", header=0, index_col=0)
-    settings["ncells"] = stats.loc[cell_type, "ncells"]
+    if "Dataset" in stats.columns:
+        settings["ncells"] = stats.loc[cell_type, "ncells"]
+        if "ncells" not in order:
+            order.append("ncells")
+    else:
+        for dataset in stats.columns:
+            settings[dataset] = stats.loc[cell_type, dataset]
+            if dataset not in order:
+                order.append(dataset)
+        settings["ncells"] = stats.loc[cell_type, :].sum()
+        if "ncells" not in order:
+            order.append("ncells")
     data[i] = settings
 if len(data) == 0:
     exit()
-stats = pd.DataFrame(data).T
+stats = pd.DataFrame(data).T.loc[:, order]
 print("\tLoaded cell stats with shape: {}".format(stats.shape))
 
 print("\nLoaded stats:")

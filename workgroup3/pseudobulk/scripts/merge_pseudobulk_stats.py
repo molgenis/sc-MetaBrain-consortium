@@ -20,11 +20,12 @@ print("")
 
 print("\nLoading poolsheet ...")
 poolsheet = pd.read_csv(args.poolsheet, sep="\t")
+has_dataset = "Dataset" in poolsheet.columns
 
 print("\nLoading cell stats ...")
 data = []
-for pool in poolsheet["Pool"]:
-    fpath = os.path.join(args.indir, pool + ".pseudobulk.stats.tsv.gz")
+for _, row in poolsheet.iterrows():
+    fpath = os.path.join(args.indir, row["Pool"] + ".pseudobulk.stats.tsv.gz")
     if not os.path.exists(fpath):
         print("\tWarning, {} does not exist".format(fpath))
         continue
@@ -36,7 +37,9 @@ for pool in poolsheet["Pool"]:
         print("\tFailed to load {}: no data".format(os.path.basename(fpath)))
         continue
 
-    stats.insert(0, "pool", str(pool))
+    stats.insert(0, "pool", str(row["Pool"]))
+    if has_dataset:
+        stats.insert(0, "dataset", str(row["Dataset"]))
     data.append(stats)
 if len(data) == 0:
     exit()
@@ -47,13 +50,20 @@ print("\nBarcode selection stats output:")
 print(stats)
 
 print("\nBarcode selection summary stats:")
-sumstats = stats.loc[:, [col for col in stats.columns if col not in ["pool", "sample", "ncells_pool", "ncells_sample"]]].groupby("cell type").sum()
-sumstats.sort_values(by="ncells", ascending=False, inplace=True)
+groupby = ["cell type"]
+sortby = ["ncells"]
+sortorder = [False]
+if has_dataset:
+    groupby += ["dataset"]
+    sortby += ["dataset"]
+    sortorder += [False, True]
+sumstats = stats.loc[:, [col for col in stats.columns if col not in ["pool", "sample", "ncells_pool", "ncells_sample"]]].groupby(groupby).sum()
+sumstats.sort_values(by=sortby, ascending=sortorder, inplace=True)
 sumstats = sumstats.T
 sumstats["Total"] = sumstats.sum(axis=1)
 print(sumstats)
 
-print("\tSaving files")
+print("\nSaving files")
 stats.to_csv(os.path.join(args.out, "pseudobulk.stats.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
 sumstats.to_csv(os.path.join(args.out, "pseudobulk.sumstats.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
 

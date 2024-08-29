@@ -78,15 +78,17 @@ def load_file_full(inpath, header, index_col, sep="\t", low_memory=True,
 
 print("\nLoading poolsheet ...")
 poolsheet = load_file(args.poolsheet)
+has_dataset = "Dataset" in poolsheet.columns
 
 print("\nLoading expression data ...")
-data = []
-samples = []
-n_cells = 0
-for pool in poolsheet["Pool"]:
+gte_data = []
+ncells_data = {}
+ncells_total = 0
+expr_data = []
+for _, row in poolsheet.iterrows():
     # Define input filepaths and check if they exist.
-    expr_fpath = os.path.join(args.indir, pool + ".pseudobulk.tsv.gz")
-    stats_fpath = os.path.join(args.indir, pool + ".pseudobulk.stats.tsv.gz")
+    expr_fpath = os.path.join(args.indir, row["Pool"] + ".pseudobulk.tsv.gz")
+    stats_fpath = os.path.join(args.indir, row["Pool"] + ".pseudobulk.stats.tsv.gz")
     all_exist = True
     for fpath in [expr_fpath, stats_fpath]:
         if not os.path.exists(fpath):
@@ -105,7 +107,6 @@ for pool in poolsheet["Pool"]:
     mask = expr_df.index.str.endswith("_" + args.cell_type)
     expr_df = expr_df.loc[mask, :]
     expr_df.index = expr_df.index.str.removesuffix("_" + args.cell_type)
-    # print(expr_df)
 
     stats_df = load_file_full(stats_fpath, header=0, index_col=None)
     mask = stats_df["cell type"] == args.cell_type
@@ -115,7 +116,6 @@ for pool in poolsheet["Pool"]:
         print("\tError, expression indices are not unique.")
         exit()
     stats_df = stats_df.loc[expr_df.index, :]
-    # print(stats_df)
 
     # Remove samples with too few cells.
     mask = stats_df["ncells"] >= args.min_cells
@@ -126,22 +126,35 @@ for pool in poolsheet["Pool"]:
         continue
     expr_df = expr_df.loc[mask, :]
     stats_df = stats_df.loc[mask, :]
-    # print(expr_df)
-    # print(stats_df)
 
     # Post-process.
-    samples.extend(expr_df.index.values)
-    expr_df.index = str(pool) + "_" + expr_df.index
-    data.append(expr_df)
-    n_cells += stats_df["ncells"].sum()
-    # print(samples)
-    # print(expr_df)
+    if has_dataset:
+        updated_indices = []
+        for sample in expr_df.index:
+            updated_sample = str(row["Dataset"]) + "_" + sample
+            updated_indices.append(updated_sample)
+            gte_data.append([sample, updated_sample, row["Dataset"]])
+        expr_df.index = updated_indices
+        del updated_indices
 
-if len(data) == 0:
+        if not row["Dataset"] in ncells_data:
+            ncells_data[row["Dataset"]] = 0
+        ncells_data[row["Dataset"]] += stats_df["ncells"].sum()
+    else:
+        for sample in expr_df.index:
+            gte_data.append([sample, sample, "Dataset"])
+
+        if not "Dataset" in ncells_data:
+            ncells_data["Dataset"] = 0
+        ncells_data["Dataset"] += stats_df["ncells"].sum()
+    ncells_total += stats_df["ncells"].sum()
+    expr_data.append(expr_df)
+
+if len(expr_data) == 0:
     print("\tError, no data.")
     exit()
-df = pd.concat(data, axis=0).astype(float)
-print("\tLoaded expression with {:,} cells and shape: {}".format(n_cells, df.shape))
+df = pd.concat(expr_data, axis=0).astype(float)
+print("\tLoaded expression with {:,} cells and shape: {}".format(ncells_total, df.shape))
 
 if len(set(df.index)) != df.shape[0]:
     print("\nAggregating expression data ...")
@@ -154,9 +167,21 @@ if len(set(df.index)) != df.shape[0]:
         exit()
     print("\tAggregated expression to shape: {}".format(df.shape))
 
-print("\tSaving files")
-df.T.to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
-pd.DataFrame({0: samples, 1: samples}).to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.smf"), sep="\t", header=False, index=False)
-pd.DataFrame({"ncells": [n_cells]}, index=[args.cell_type]).to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.stats.tsv"), sep="\t", header=True, index=True)
+print("\nPostprocessing data")
+df = df.T
+gte = pd.DataFrame(gte_data).drop_duplicates()
+stats = pd.DataFrame(ncells_data, index=[args.cell_type])
+
+print("\nSaving files")
+df.to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
+gte.to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.gte.txt"), sep="\t", header=False, index=False)
+stats.to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.stats.tsv"), sep="\t", header=True, index=True)
+
+if has_dataset:
+    for dataset in gte.iloc[:, 2].unique():
+        gte.loc[gte.iloc[:, 2] == dataset, :].to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.gte." + dataset + ".txt"), sep="\t", header=False, index=False)
+
+    gte.iloc[:, 2] = "Dataset"
+    gte.to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.gte.NoDataset.txt"), sep="\t", header=False, index=False)
 
 print("Done")

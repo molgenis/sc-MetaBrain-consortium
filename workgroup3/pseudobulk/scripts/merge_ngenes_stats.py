@@ -26,8 +26,8 @@ def get_key_value(setting):
 
 print("\nLoading ngenes stats ...")
 data = {}
+order = ["Cell type", "method"]
 for i, fpath in enumerate(glob.glob(os.path.join(args.workdir, "*/*/*.pseudobulk.*.*.stats.tsv"))):
-    print(fpath)
     fparts = fpath.split(os.sep)
 
     match = re.match("([A-Za-z]+).pseudobulk.([0-9A-Za-z_]+).([0-9A-Za-z_]+).stats.tsv", os.path.basename(fpath))
@@ -48,26 +48,37 @@ for i, fpath in enumerate(glob.glob(os.path.join(args.workdir, "*/*/*.pseudobulk
         for setting in fpart.split("_"):
             key, value = get_key_value(setting)
             settings[key] = value
+            if key not in order:
+                order.append(key)
 
     stats = pd.read_csv(fpath, sep="\t", header=0, index_col=None)
     for index, row in stats.iterrows():
         if index == stats.index[0]:
-            settings[row["filter"]] = row["ngenes"]
+            key = row["filter"]
+            settings[key] = row["ngenes"]
+            if key not in order:
+                order.append(key)
         else:
-            settings[str(index) + "_" + row["filter"]] = row["ngenes"]
+            key = str(index) + "_" + row["filter"]
+            settings[key] = row["ngenes"]
+            if key not in order:
+                order.append(key)
 
         if index == stats.index[-1]:
             settings["ngenes"] = row["ngenes"]
+            if "ngenes" not in order:
+                order.append("ngenes")
     data[i] = settings
 if len(data) == 0:
     exit()
-stats = pd.DataFrame(data).T
+order.remove("ngenes")
+order.append("ngenes")
+stats = pd.DataFrame(data).T.loc[:, order]
 print("\tLoaded cell stats with shape: {}".format(stats.shape))
 
 print("\nLoaded stats:")
-order = [column for column in stats.columns if column != "ngenes"] + ["ngenes"]
-stats = stats.loc[:, order]
 stats.sort_values(by=["Cell type", "method", "ngenes"], ascending=[True, True, False], inplace=True)
+print(stats)
 
 print("\nSaving files")
 stats.to_csv(os.path.join(args.workdir, "ngenes.stats.tsv"), sep="\t", header=True, index=True)
