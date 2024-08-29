@@ -26,11 +26,14 @@ settings:
   cell_type: ["EX"]
 
   # pseudobulk pool: filter barcodes
-  ncount_rna: [ 500 ]
-  nfeature_rna: [ 0 ]
-  percent_rb: [ 0 ]
-  percent_mt: [ 5 ]
-  malat1: [ 0 ]
+  ncount_rna: [ 500 ] # min value
+  nfeature_rna: [ 0 ] # min value
+  complexity: [ 100 ] # max value
+  percent_rb: [ 100 ] # max value
+  percent_mt: [ 5 ] # max value
+  malat1: [ 0 ] # min value
+  cap_barcodes: [ Null ] # max value
+  cellranger_barcodes: [ False ]
 
   # Merge
   min_cells: [ 5 ]

@@ -19,7 +19,14 @@ for arg in vars(args):
 print("")
 
 def get_key_value(setting):
-    value = re.match("([0-9]+)", setting).group(1)
+    if setting.startswith("None"):
+        value = "None"
+    elif setting.startswith("True"):
+        value = "True"
+    elif setting.startswith("False"):
+        value = "False"
+    else:
+        value = re.match("([0-9]+)", setting).group(1)
     key = setting.lstrip(value)
     return key, value
 

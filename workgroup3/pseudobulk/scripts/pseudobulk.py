@@ -26,9 +26,12 @@ parser.add_argument("--ancestry", required=False, type=str, default="EUR", help=
 parser.add_argument("--cell_level", required=False, type=str, default="L1", help="")
 parser.add_argument("--ncount_rna", required=False, type=int, default=500, help="")
 parser.add_argument("--nfeature_rna", required=False, type=int, default=0, help="")
-parser.add_argument("--percent_rb", required=False, type=int, default=0, help="")
+parser.add_argument("--complexity", required=False, type=int, default=100, help="")
+parser.add_argument("--percent_rb", required=False, type=int, default=100, help="")
 parser.add_argument("--percent_mt", required=False, type=int, default=5, help="")
 parser.add_argument("--malat1", required=False, type=int, default=0, help="")
+parser.add_argument("--cap_barcodes", required=False, type=int, default=None, help="")
+parser.add_argument("--cr_barcodes", action="store_true", default=False, help="")
 parser.add_argument("--feature_name", required=False, type=str, default="HGNC", choices=["HGNC", "ENSG", "HGNC_ENSG"], help="")
 parser.add_argument("--aggregate_fun", required=False, type=str, default="sum", choices=["sum", "mean"], help="")
 parser.add_argument("--out", required=True, type=str, help="")
@@ -92,6 +95,13 @@ def load_metadata(barcodes_fpath):
 
     print("  Loading cell annotations")
     cell_annot = load_file(args.cell_annotation, must_contain=args.pool)
+    cr_barcodes = None
+    if "CellBender" in cell_annot:
+        cr_barcodes = [barcode.split("_")[0] + "-1" for barcode in cell_annot.loc[cell_annot["CellBender"] == "False", "Barcode"].values]
+    elif "CellRanger" in cell_annot:
+        cr_barcodes = [barcode.split("_")[0] + "-1" for barcode in cell_annot.loc[cell_annot["CellRanger"] == "True", "Barcode"].values]
+    else:
+        print("  Warning, could not add CellRanger column.")
 
     print("  Loading droplet type annotations")
     droplet_annot = load_file(args.droplet_type_annotation, must_contain=args.pool)
@@ -129,7 +139,7 @@ def load_metadata(barcodes_fpath):
         exit()
 
     print("\tLoaded metadata with shape: {}".format(metadata.shape))
-    return metadata
+    return metadata, cr_barcodes
 
 def load_counts(counts_fpath):
     count_data = scanpy.read_10x_h5(counts_fpath)
@@ -196,7 +206,7 @@ def get_malat1_feature():
     features = get_features(m=np.array([["ENSG00000251562", "MALAT1"]]), indices={"HGNC": 1, "ENSG": 0})
     return features[0]
 
-def calc_barcode_qc(counts, barcodes, features):
+def calc_barcode_qc(counts, barcodes, features, cr_barcodes):
     print("  Adding UMI and feature counts")
     info = pd.DataFrame(np.hstack((np.sum(counts, axis=1), np.sum(counts != 0, axis=1))), 
                         columns=["nCount_RNA", "nFeature_RNA"], index=barcodes)
@@ -204,7 +214,7 @@ def calc_barcode_qc(counts, barcodes, features):
     print("  Adding complexity")
     info["complexity"] = np.nan
     mask = info["nCount_RNA"] > 0
-    info.loc[mask, "complexity"] = info.loc[mask, "nFeature_RNA"] / info.loc[mask, "nCount_RNA"]
+    info.loc[mask, "complexity"] = (info.loc[mask, "nFeature_RNA"] / info.loc[mask, "nCount_RNA"]) * 100
     del mask
 
     print("  Adding ribosomal %")
@@ -234,9 +244,21 @@ def calc_barcode_qc(counts, barcodes, features):
     info["MALAT1"] = counts[:, malat1_mask].toarray()
     del malat1_feature, malat1_mask
 
+    print("  Adding nCount_RNA index")
+    info["nCount_RNAIndex"] = info[["nCount_RNA"]].rank(method="first", ascending=False)
+
+    print("  Adding CellRanger flag")
+    if cr_barcodes is None:
+        info["CellRanger"] = True
+    else:
+        info["CellRanger"] = False
+        info.loc[info.index.isin(cr_barcodes), "CellRanger"] = True
+
     return info
 
 def apply_barcode_qc(barcode_qc):
+    print(barcode_qc)
+
     n_barcodes = barcode_qc.shape[0]
     print("  Input: {:,} barcodes".format(n_barcodes))
 
@@ -245,6 +267,9 @@ def apply_barcode_qc(barcode_qc):
 
     nfeature_rna_mask = barcode_qc["nFeature_RNA"] >= args.nfeature_rna
     print("\tnFeature_RNA >= {} yields {:,} [{:.2f}%] barcodes".format(args.nfeature_rna, np.sum(nfeature_rna_mask), (100 / n_barcodes) * np.sum(nfeature_rna_mask)))
+
+    complexity_mask = barcode_qc["complexity"] <= args.complexity
+    print("\tcomplexity <= {} yields {:,} [{:.2f}%] barcodes".format(args.complexity, np.sum(complexity_mask), (100 / n_barcodes) * np.sum(complexity_mask)))
 
     percent_rb_mask = barcode_qc["percent.rb"] <= args.percent_rb
     print("\tpercent_rb <= {} yields {:,} [{:.2f}%] barcodes".format(args.percent_rb, np.sum(percent_rb_mask), (100 / n_barcodes) * np.sum(percent_rb_mask)))
@@ -255,7 +280,19 @@ def apply_barcode_qc(barcode_qc):
     malat1_mask = barcode_qc["MALAT1"] >= args.malat1
     print("\tMALAT1 >= {} yields {:,} [{:.2f}%] barcodes".format(args.malat1, np.sum(malat1_mask), (100 / n_barcodes) * np.sum(malat1_mask)))
 
-    mask = ncount_rna_mask & nfeature_rna_mask & percent_rb_mask & percent_mt_mask & malat1_mask
+    cap_barcodes = np.inf
+    if args.cap_barcodes is not None:
+        cap_barcodes = args.cap_barcodes
+    cap_barcodes_mask = barcode_qc["nCount_RNAIndex"] <= cap_barcodes
+    print("\tmax cells <= {} yields {:,} [{:.2f}%] barcodes".format(cap_barcodes, np.sum(cap_barcodes_mask), (100 / n_barcodes) * np.sum(cap_barcodes_mask)))
+
+    cr_barcodes_mask = pd.Series(True, index=barcode_qc.index, name="index")
+    if args.cr_barcodes:
+        cr_barcodes_mask = barcode_qc["CellRanger"]
+    print("\tCellRanger barcodes yields {:,} [{:.2f}%] barcodes".format(np.sum(cr_barcodes_mask), (100 / n_barcodes) * np.sum(cr_barcodes_mask)))
+
+    mask = ncount_rna_mask & nfeature_rna_mask & complexity_mask & percent_rb_mask & percent_mt_mask & malat1_mask & cap_barcodes_mask & cr_barcodes_mask
+
     print("  Pass-QC: {:,} [{:.2f}%] barcodes".format(np.sum(mask), (100 / n_barcodes) * np.sum(mask)))
 
     barcode_qc["tag"] = "Outlier"
@@ -359,7 +396,7 @@ print("  Counts fpath: " + counts_fpath)
 print("  Barcodes fpath: " + barcodes_fpath)
 
 print("\nCreating metadata ...")
-metadata = load_metadata(barcodes_fpath=barcodes_fpath)
+metadata, cr_barcodes = load_metadata(barcodes_fpath=barcodes_fpath)
 
 print("\tSaving file")
 metadata.to_csv(os.path.join(args.out, str(args.pool) + ".metadata.tsv.gz"), sep="\t", header=True, index=False, compression="gzip")
@@ -368,13 +405,16 @@ print("\nLoading counts matrix ...")
 counts, barcodes, features = load_counts(counts_fpath=counts_fpath)
 
 print("\nCalculating barcode QC stats ...")
-barcode_qc = calc_barcode_qc(counts=counts, barcodes=barcodes, features=features)
+barcode_qc = calc_barcode_qc(counts=counts, barcodes=barcodes, features=features, cr_barcodes=cr_barcodes)
 
 print("\tSaving file")
 barcode_qc.to_csv(os.path.join(args.out, str(args.pool) + ".qc_metrics.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
 
 print("\nApplying barcode QC ...")
 barcode_qc = apply_barcode_qc(barcode_qc=barcode_qc)
+if barcode_qc.shape[0] == 0:
+    print("Error, 0 barcodes passed QC.")
+    exit()
 
 print("\nMerging metadata and barcode QC ...")
 # Add the Barcode_Pool column.
