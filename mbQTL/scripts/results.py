@@ -40,7 +40,7 @@ for i, fpath in enumerate(glob.glob(args.data)):
     n_nom = 0
     n_datasets = 0
     dataset_labels = {}
-    dataset_n_nom = {}
+    dataset_stats = {}
     n_perm = 0
     n_qval = 0
     indices = {}
@@ -49,14 +49,16 @@ for i, fpath in enumerate(glob.glob(args.data)):
             values = line.rstrip("\n").split("\t")
             if j == 0:
                 for index, colname in enumerate(values):
-                    match = re.match("([A-Za-z]+)\(([A-Za-z;_]+)\)", colname)
+                    match = re.match("([A-Za-z]+)\(([^()]+)\)", colname)
                     if match:
                         colname = match.group(1)
 
                         if colname == "DatasetZScores":
                             for ds_index, dataset in enumerate(match.group(2).split(";")):
                                 dataset_labels[ds_index] = dataset
-                                dataset_n_nom[ds_index] = 0
+                                dataset_stats[ds_index] = {}
+                                dataset_stats[ds_index]["N-effects"] = 0
+                                dataset_stats[ds_index][args.nom_pvalue_column] = 0
                                 n_datasets += 1
 
                     indices[colname] = index
@@ -80,8 +82,9 @@ for i, fpath in enumerate(glob.glob(args.data)):
                     if zscore == "-":
                         continue
                     pvalue = stats.norm.cdf(-abs(float(zscore))) * 2
+                    dataset_stats[ds_index]["N-effects"] += 1
                     if pvalue < args.minimimal_reporting_p:
-                        dataset_n_nom[ds_index] += 1
+                        dataset_stats[ds_index][args.nom_pvalue_column] += 1
             n += 1
     f.close()
 
@@ -94,10 +97,18 @@ for i, fpath in enumerate(glob.glob(args.data)):
     }
     if n_datasets > 1:
         for ds_index in range(n_datasets):
-            dataset_nom_pvalue_column = dataset_labels[ds_index] + "P"
-            row[dataset_nom_pvalue_column] = dataset_n_nom[ds_index]
+            # Extract and print the stats per dataset.
+            dataset_label = dataset_labels[ds_index]
+            dataset_n = dataset_stats[ds_index]["N-effects"]
+            dataset_n_na = n - dataset_n
+            dataset_n_nom = dataset_stats[ds_index][args.nom_pvalue_column]
+            print("\tDataset: {}\tN-effects: {:,} \tN-missing: {:,}\tN-nom signif. {:,} [{:.2f}%] (<{})".format(dataset_label, dataset_n, dataset_n_na, dataset_n_nom, (100 / dataset_n) * dataset_n_nom, args.minimimal_reporting_p))
+
+            # Add number of nominal significant effects to the summary stats.
+            dataset_nom_pvalue_column = dataset_label + "P"
             if dataset_nom_pvalue_column not in dataset_nom_pvalue_columns:
                 dataset_nom_pvalue_columns.append(dataset_nom_pvalue_column)
+            row[dataset_nom_pvalue_column] = dataset_n_nom
     data[i] = row
 
 print("\nResults:")
