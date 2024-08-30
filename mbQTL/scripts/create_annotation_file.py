@@ -17,6 +17,8 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
+os.makedirs(os.path.dirname(args.out_dir), exist_ok=True)
+
 
 def gzopen(file, mode="r"):
     if file.endswith(".gz"):

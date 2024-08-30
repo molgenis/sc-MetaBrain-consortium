@@ -1,6 +1,13 @@
 #!/usr/bin/env python
+# Author: M. Vochteloo
 
 import argparse
+import pandas as pd
+import numpy as np
+from scipy import linalg
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import os
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--data", required=True, type=str, help="")
@@ -9,7 +16,8 @@ parser.add_argument("--gte", required=False, type=str, default=None, help="")
 parser.add_argument("--center", action="store_true", default=False, help="")
 parser.add_argument("--scale", action="store_true", default=False, help="")
 parser.add_argument("--plot_n", required=False, type=int, default=3, help="")
-parser.add_argument("--out", required=True, type=str, help="")
+parser.add_argument("--data_out", required=True, type=str, help="")
+parser.add_argument("--plot_out", required=False, type=str, default=None, help="")
 args = parser.parse_args()
 
 print("Options in effect:")
@@ -17,11 +25,11 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
-import pandas as pd
-import numpy as np
-from scipy import linalg
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
+if args.plot_out is None:
+    args.plot_out = args.data_out
+
+os.makedirs(os.path.dirname(args.data_out), exist_ok=True)
+os.makedirs(os.path.dirname(args.plot_out), exist_ok=True)
 
 COLORMAP = ["#000000", "#E69F00",  "#56B4E9",  "#CC79A7",
             "#F0E442",  "#0072B2",  "#D55E00",  "#009E73",
@@ -108,7 +116,7 @@ def plot_scree(data, x, y1, y2, lines=None, xlabel='', ylabel1='', ylabel2='', t
                        weight='bold')
 
     fig.tight_layout()
-    plt.savefig(args.out + filename + '.png', bbox_inches="tight")
+    plt.savefig(args.plot_out + filename + '.png', bbox_inches="tight")
 
 
 def plot_embedding(data, z=None, annot=None, title='', filename='PCA', label_n_points=5):
@@ -182,7 +190,7 @@ def plot_embedding(data, z=None, annot=None, title='', filename='PCA', label_n_p
                  color="#000000",
                  weight='bold')
     fig.tight_layout()
-    plt.savefig(args.out + filename + '.png', bbox_inches="tight")
+    plt.savefig(args.plot_out + filename + '.png', bbox_inches="tight")
 
 print("Loading data...")
 df = pd.read_csv(args.data, sep="\t", header=0, index_col=0)
@@ -242,9 +250,9 @@ expl_var_df = pd.Series((pca["sdev"] ** 2) / np.sum(pca["sdev"] ** 2), index=pca
 # print(expl_var_df)
 
 print("Saving results...")
-projection_df.to_csv(args.out + "Pcs.txt.gz", sep="\t", header=True, index=True, compression="gzip")
-rotation_df.to_csv(args.out + "Pcs_rot.txt.gz", sep="\t", header=True, index=True, compression="gzip")
-expl_var_df.to_csv(args.out + "Pcs_var.txt.gz", sep="\t", header=True, index=True, compression="gzip")
+projection_df.to_csv(args.data_out + "Pcs.txt.gz", sep="\t", header=True, index=True, compression="gzip")
+rotation_df.to_csv(args.data_out + "Pcs_rot.txt.gz", sep="\t", header=True, index=True, compression="gzip")
+expl_var_df.to_csv(args.data_out + "Pcs_var.txt.gz", sep="\t", header=True, index=True, compression="gzip")
 
 print("Plotting embedding...")
 scree_df = expl_var_df.to_frame().rename(columns={"Explained Variance": "var"}).reset_index(drop=True).reset_index()

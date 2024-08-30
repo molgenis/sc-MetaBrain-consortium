@@ -4,6 +4,7 @@
 import argparse
 import gzip
 import glob
+import os
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--input_dir", required=True, type=str, help="")
@@ -14,6 +15,8 @@ print("Options in effect:")
 for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
+
+os.makedirs(os.path.dirname(args.out), exist_ok=True)
 
 
 def gzopen(file, mode="r"):

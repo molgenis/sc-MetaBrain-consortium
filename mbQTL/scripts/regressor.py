@@ -1,6 +1,11 @@
 #!/usr/bin/env python
+# Author: M. Vochteloo
 
 import argparse
+from statsmodels.regression.linear_model import OLS
+import numpy as np
+import gzip
+import os
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--data", required=True, type=str, help="")
@@ -18,9 +23,7 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
-from statsmodels.regression.linear_model import OLS
-import numpy as np
-import gzip
+os.makedirs(os.path.dirname(args.out), exist_ok=True)
 
 sep = "\t"
 

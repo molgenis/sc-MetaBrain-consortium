@@ -81,7 +81,10 @@ dir.create(dirname(opt$plot_out), recursive = TRUE, showWarnings = FALSE)
 setwd(dirname(opt$plot_out))
 
 print("Creating figures")
+png(paste0(opt$plot_out, "_overview.png"))
 plot1 <- plot(qobj)
+dev.off()
+
 plot2 <- hist(qobj)
 ggsave(plot2, filename = paste0(opt$plot_out, "_hist.png"), width = 29.7, height = 21 ,units = c("cm"))
 

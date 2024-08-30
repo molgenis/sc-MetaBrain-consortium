@@ -1,6 +1,9 @@
 #!/usr/bin/env python
+# Author: M. Vochteloo
 
 import argparse
+import pandas as pd
+import os
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--data", nargs="+", required=True, type=str, help="")
@@ -13,7 +16,7 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
-import pandas as pd
+os.makedirs(os.path.dirname(args.out), exist_ok=True)
 
 print("Loading data...")
 covs_list = []

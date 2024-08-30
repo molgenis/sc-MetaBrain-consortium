@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 # Author: M. Vochteloo
+
 import argparse
+import gzip
+import os
+
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--vcf", required=True, type=str, help="")
@@ -14,7 +18,7 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
-import gzip
+os.makedirs(os.path.dirname(args.outfile), exist_ok=True)
 
 def gzopen(file, mode="r"):
     if file.endswith(".gz"):

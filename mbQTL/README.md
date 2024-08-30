@@ -43,15 +43,16 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
 
 **Pipeline specific settings**:
  * `plot_pca`: whether or not to PCA visualise the expression matrix. Default `False`.
- * `include_modes`: which modes to run (options: `all`, `default`, `cov`, `covXPcs`, `XPcs`). For more info, see modes.
- * `force_mega`: force the covariate correction and / or eQTL mapping to be done over all samples at once (options: `all`, `cov`, `qtl`, `none`). Default: `none`.
- * `n_pcs`: how many PCs should be removed from the expression matrix (e.g. `[0, 5, 10]`). If `cov` is also used these PCs are added to those covariates.
+ * `include_modes`: which modes to run (options: `all`, `default`, `cov`, `covXPcs`, `XPcs`). For more info, see modes. Default `null`.
+ * `force_mega`: force the covariate correction and / or eQTL mapping to be done over all samples at once (options: `all`, `cov`, `qtl`, `none`). Default: `null`.
+ * `n_pcs`: how many PCs should be removed from the expression matrix (e.g. `[0, 5, 10]`). If `cov` is also used these PCs are added to those covariates. Default `null`.
  * `filter_vcf`: whether or not the input VCF should be filtered on variants / samples of interest before running QTL analysis. This adds some pre-processing time but can add substantial speed improvements in the QTL analysis. Only available if `snplimit` or `snpgenelimit` is used. Note that it also filters on the samples in the `gte` file. Default `False`.
- * `n_genes`: how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk. Default `200`.
- * `use_snpannotation`: whether or not the `snpannotation` option should be used. Default `False`. Automatically set to `False` if `snplimit` or `snpgenelimit` is used since it is faster without `snpannotation` then.
+ * `n_genes`: how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk. Default `100`.
+ * `use_snpannotation`: whether or not the `snpannotation` option should be used. Automatically set to `False` if `snplimit` or `snpgenelimit` is used since it is faster without `snpannotation` then. Default `False`.
  * `alpha`: QTL significance threshold. Default `0.05`.
  * `feature_name`: the info column that in your gtf that describes the names of the genes in your expression matrix. Default `gene_name`.
- * `autosomes_only`: whether or not to only include autosomal chromosomes. Default 'True'.
+ * `autosomes_only`: whether or not to only include autosomal chromosomes. Default `True`.
+ * `java_memory_buffer`: memory buffer in Gb to request in addition to what is set for `-Xmx` and `-Xms` to prevent out of memory isues in Java. Default `1`.
  * `force`: prevent snakemake from updating input settings that are unlogical. Use with caution. Default `False`.
  * `debug`: set logger to level DEBUG printing additional information. Default `False`.
 
@@ -141,6 +142,15 @@ echo "Check status of command with:" ps -p $! -u
 The log output will be written to files in `log/` with `log/nohup_*` being the general pipeline log output.
 The `slurm_log/` contains log output of SLURM executing your rule as a jobfile (e.g. runtime, memory usage etc.).
 
+#### Report:
+This script creates a HTML report of the figures.
+```console
+snakemake \
+  --snakefile Snakefile \
+  --configfile mbQTL.yaml \
+  --report mbQTL.html
+```
+
 #### Unlock:
 This script unlocks the working directory if for some reason the manager process got killed.
 ```console
@@ -163,9 +173,10 @@ You can choose to run different combinations of modes at the same time but using
 
 ## Important
 
-Note that expression PCs calculation is per dataset over the samples that overlap between the expression identifiers in `gte` and the columns in `exp`.
-
-Also note that snakemake checks if the output files exist but not with what settings they were generated. If you wish to rerun the pipeline with different settings while keeping the old files I recommend renaming the `output` subfolder (e.g. `default` to `defaultSettingA`). This way snakemake will rerun mbQTL with the updated settings. Generally speaking it is only necessary to rename the `output` subfolder as the other files are generated in subfolders based on the settings used. Exceptions are: the `create_annotation` folder if update settings in `create_annotation_settings`, and the `genotype` folder if you update `snplimit` / `snpgenelimit`.  
+Please keep in mind that:
+ * Expression PCs calculation is per dataset over the samples that overlap between the expression identifiers in `gte` and the columns in `exp`. 
+ * Expression PCs are calculated without first removing covariates in `cov`.
+ * snakemake checks if the output files exist but not with what settings they were generated. If you wish to rerun the pipeline with different settings while keeping the old files I recommend renaming the `output` subfolder (e.g. `default` to `defaultSettingA`). This way snakemake will rerun mbQTL with the updated settings. Generally speaking it is only necessary to rename the `output` subfolder as the other files are generated in subfolders based on the settings used. Exceptions are: the `create_annotation` folder if update settings in `create_annotation_settings`, and the `genotype` folder if you update `snplimit` / `snpgenelimit`.  
 
 ## Output
 
@@ -174,7 +185,7 @@ Each eQTL run is outputted in a seperate folder: e.g. no covariate or PCs (`defa
  * a `-TopEffectsWithqval.txt` file with 2 columns added:
    * `PvalueNominalThreshold`: nominal p-value thresholds based on the permutation beta distribution (`BetaDistAlpha` and `BetaDistBeta`).
    * `qval`: based on the nominal p-values (`MetaP`) if no permutation are run (`perm: 0`) or the permutation p-values (`BetaAdjustedMetaP`) if permutations are run (`perm: >0`).
- * a `-results.txt` file with the number of effects with nominal p-value (`MetaP`), permuted p-value (`BetaAdjustedMetaP`) and qvalue (`qval`) below significance threshold (`<0.05`) per QTL run (e.g. 0Pcs removed, 5Pcs removed, etc.).
+ * a `-results.txt` file with the number of effects with nominal p-value (`MetaP`), permuted p-value (`BetaAdjustedMetaP`) and qvalue (`qval`) below significance threshold (`<0.05`) per QTL run (e.g. 0Pcs removed, 5Pcs removed, etc.). If a meta-analysis was performed the per dataset number of nominal significant effects (based on `DatasetZScores`) are also outputted.
 
 ## Author  
 

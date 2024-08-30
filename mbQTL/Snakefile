@@ -947,8 +947,8 @@ rule pca:
         pca = config["outputs"]["output_dir"] + "pca/{dataset}/{infile}.Pcs.txt.gz",
         rot = config["outputs"]["output_dir"] + "pca/{dataset}/{infile}.Pcs_rot.txt.gz",
         var = config["outputs"]["output_dir"] + "pca/{dataset}/{infile}.Pcs_var.txt.gz",
-        pca_plot = config["outputs"]["output_dir"] + "pca/{dataset}/{infile}.Pcs.png",
-        scree_plot = config["outputs"]["output_dir"] + "pca/{dataset}/{infile}.Scree.png",
+        pca_plot = report(config["outputs"]["output_dir"] + "figures/{dataset}/{infile}.Pcs.png", category="PCA", subcategory="{dataset} - {infile}", caption=config["inputs"]["repo_dir"] + "report_captions/pca_scatter.rst"),
+        scree_plot = report(config["outputs"]["output_dir"] + "figures/{dataset}/{infile}.Scree.png", category="PCA", subcategory="{dataset} - {infile}", caption=config["inputs"]["repo_dir"] + "report_captions/pca_scree.rst"),
         done = config["outputs"]["output_dir"] + "pca/{dataset}/{infile}.done",
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["pca_memory"],
@@ -959,7 +959,8 @@ rule pca:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/pca.py",
-        out = config["outputs"]["output_dir"] + "pca/{dataset}/{infile}."
+        data_out = config["outputs"]["output_dir"] + "pca/{dataset}/{infile}.",
+        plot_out = config["outputs"]["output_dir"] + "figures/{dataset}/{infile}."
     log: config["outputs"]["output_dir"] + "log/pca.{dataset}.{infile}.log"
     shell:
         """
@@ -969,7 +970,8 @@ rule pca:
             --transpose \
             --center \
             --scale \
-            --out {params.out} > {log} 2>&1
+            --data_out {params.data_out} \
+            --plot_out {params.plot_out} > {log} 2>&1
         singularity exec --bind {params.bind} {params.sif} touch {output.done}
         """
 
@@ -1125,6 +1127,7 @@ checkpoint create_batches:
         """
 
 
+# TODO: bug in mbQTL: nrdatasets is 1 but still gives warning 'Warning: min number of datasets 2 smaller than actual number of datasets 1'
 rule run_qtl:
     input:
         annotation = get_annotation,
@@ -1247,8 +1250,8 @@ rule qvalues:
         finished = get_top_hits_finished
     output:
         top_hits = config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffectsWithqval.txt",
-        fig1 = config["outputs"]["output_dir"] + "figures/{cov}/" + config["outputs"]["output_prefix"] + "_overview.pdf",
-        fig2 = config["outputs"]["output_dir"] + "figures/{cov}/" + config["outputs"]["output_prefix"] + "_hist.png"
+        fig1 = report(config["outputs"]["output_dir"] + "figures/{cov}/" + config["outputs"]["output_prefix"] + "_hist.png", category="qvalue", subcategory="{cov}", caption=config["inputs"]["repo_dir"] + "report_captions/qvalue_hist.rst"),
+        fig2 = report(config["outputs"]["output_dir"] + "figures/{cov}/" + config["outputs"]["output_prefix"] + "_overview.png", category="qvalue", subcategory="{cov}", caption=config["inputs"]["repo_dir"] + "report_captions/qvalue_overview.rst")
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["qvalues_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["qvalues_memory"],
@@ -1266,7 +1269,6 @@ rule qvalues:
         alpha = config["general_settings"]["alpha"],
         data_out = config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffects",
         plot_out = config["outputs"]["output_dir"] + "figures/{cov}/" + config["outputs"]["output_prefix"],
-        tmp = config["outputs"]["output_dir"] + "figures/{cov}/Rplots.pdf",
         suffix = "Withqval"
     log: config["outputs"]["output_dir"] + "log/qvalues.{cov}.log"
     shell:
@@ -1282,7 +1284,6 @@ rule qvalues:
             --data_out {params.data_out} \
             --plot_out {params.plot_out} \
             --suffix {params.suffix} > {log} 2>&1
-        singularity exec --bind {params.bind} {params.sif} mv {params.tmp} {output.fig1}
         """
 
 
@@ -1316,4 +1317,3 @@ rule results:
             --minimimal_reporting_p {params.minimimal_reporting_p} \
             --out {output.out} > {log} 2>&1
         """
-

@@ -1,6 +1,14 @@
 #!/usr/bin/env python
 # Author: M. Vochteloo
+
 import argparse
+import numpy as np
+import pandas as pd
+from scipy import stats
+import gzip
+import glob
+import os
+import re
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--data", required=True, type=str, help="")
@@ -16,13 +24,7 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
-import numpy as np
-import pandas as pd
-from scipy import stats
-import gzip
-import glob
-import os
-import re
+os.makedirs(os.path.dirname(args.out), exist_ok=True)
 
 def gzopen(file, mode="r"):
     if file.endswith(".gz"):
