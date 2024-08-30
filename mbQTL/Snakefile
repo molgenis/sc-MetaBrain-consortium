@@ -249,8 +249,9 @@ def get_input(wildcards):
         logger.debug("\trequesting output of rule 'pca' on the input 'exp': " + input_fpath)
         input.append(config["outputs"]["output_dir"] + input_fpath)
 
-        if "cov" in config["general_settings"]["force_mega"]:
-            input_fpaths = expand(config["outputs"]["output_dir"] + "pca/all/{exp_basename}.{cov}.CovariatesRemovedOLS.done", exp_basename=exp_basename, cov=covariates)
+        corr_covariates = [cov for cov in covariates if cov not in ["default", "0Pcs"]]
+        if "cov" in config["general_settings"]["force_mega"] and len(corr_covariates) > 0:
+            input_fpaths = expand(config["outputs"]["output_dir"] + "pca/all/{exp_basename}.{cov}.CovariatesRemovedOLS.done", exp_basename=exp_basename, cov=corr_covariates)
             logger.debug("\trequesting output of rule 'pca' on the output of rule 'regressor': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
             input.extend(input_fpaths)
         else:

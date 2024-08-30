@@ -98,13 +98,14 @@ for i, fpath in enumerate(glob.glob(args.data)):
         args.qvalue_column: n_qval
     }
     if n_datasets > 1:
+        print("\tCovariate: {}".format(cov))
         for ds_index in range(n_datasets):
             # Extract and print the stats per dataset.
             dataset_label = dataset_labels[ds_index]
             dataset_n = dataset_stats[ds_index]["N-effects"]
             dataset_n_na = n - dataset_n
             dataset_n_nom = dataset_stats[ds_index][args.nom_pvalue_column]
-            print("\tDataset: {}\tN-effects: {:,} \tN-missing: {:,}\tN-nom signif. {:,} [{:.2f}%] (<{})".format(dataset_label, dataset_n, dataset_n_na, dataset_n_nom, (100 / dataset_n) * dataset_n_nom, args.minimimal_reporting_p))
+            print("\t  Dataset: {}\tN-effects: {:,} \tN-missing: {:,}\tN-nom signif. {:,} [{:.2f}%] (<{})".format(dataset_label, dataset_n, dataset_n_na, dataset_n_nom, (100 / dataset_n) * dataset_n_nom, args.minimimal_reporting_p))
 
             # Add number of nominal significant effects to the summary stats.
             dataset_nom_pvalue_column = dataset_label + "P"

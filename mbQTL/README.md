@@ -176,7 +176,7 @@ You can choose to run different combinations of modes at the same time but using
 Please keep in mind that:
  * Expression PCs calculation is per dataset over the samples that overlap between the expression identifiers in `gte` and the columns in `exp`. 
  * Expression PCs are calculated without first removing covariates in `cov`.
- * snakemake checks if the output files exist but not with what settings they were generated. If you wish to rerun the pipeline with different settings while keeping the old files I recommend renaming the `output` subfolder (e.g. `default` to `defaultSettingA`). This way snakemake will rerun mbQTL with the updated settings. Generally speaking it is only necessary to rename the `output` subfolder as the other files are generated in subfolders based on the settings used. Exceptions are: the `create_annotation` folder if update settings in `create_annotation_settings`, and the `genotype` folder if you update `snplimit` / `snpgenelimit`.  
+ * snakemake checks if the output files exist but not with what settings they were generated. If you wish to rerun the pipeline with different settings while keeping the old files I recommend renaming the `cov` subfolder (e.g. `default` to `defaultSettingA`). This way snakemake will rerun mbQTL with the updated settings. Generally speaking it is only necessary to rename the `cov` subfolder as the other files are generated in subfolders based on the settings used. Exceptions are: the `create_annotation` folder if update settings in `create_annotation_settings`, and the `genotype` folder if you update `snplimit` / `snpgenelimit`.  
 
 ## Output
 
