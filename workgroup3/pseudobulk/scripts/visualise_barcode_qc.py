@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # Author: M. Vochteloo
 
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -283,7 +286,10 @@ def plot(df, x="x", y="y", panels="z", type="scatter", mask=None, palette=None, 
                     fontsize=12,
                     fontweight='bold')
 
-                pearson_coef, _ = stats.pearsonr(data[y], data[x])
+                pearson_coef = np.nan
+                if data[x].std() > 0 and data[y].std() > 0:
+                    pearson_coef, _ = stats.pearsonr(data[y], data[x])
+
                 ax.annotate(
                     'total r = {:.2f}'.format(pearson_coef),
                     xy=(0.5, 0.65),
@@ -319,7 +325,7 @@ def plot(df, x="x", y="y", panels="z", type="scatter", mask=None, palette=None, 
 
     plt.tight_layout()
     fpath = os.path.join(args.plot_out, "{}.png".format(filename))
-    print("Saving {}".format(fpath))
+    print("Saving {}".format(os.path.basename(fpath)))
     fig.savefig(fpath)
     plt.close()
 
@@ -364,7 +370,7 @@ for variable in barcode_qcm["variable"].unique():
         palette=palette,
         add_mad=False,
         xlabel=variable,
-        ylabel="counts",
+        ylabel="% of cells",
         title=variable,
         filename="barcode_qc_{}_stats".format(variable)
     )
@@ -383,7 +389,7 @@ for cell_type in barcode_qcm[args.cell_level].unique():
         palette=palette,
         add_mad=False,
         xlabel=cell_type,
-        ylabel="counts",
+        ylabel="% of cells",
         title=cell_type,
         filename="barcode_qc_{}_stats".format(cell_type)
     )
