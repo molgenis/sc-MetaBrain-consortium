@@ -16,15 +16,9 @@ import os
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--poolsheet", required=True, type=str, help="")
 parser.add_argument("--indir", required=True, type=str, help="")
+parser.add_argument("--barcode_qc_columns", required=True, type=str, nargs="*", help="")
 parser.add_argument("--cell_level", required=False, type=str, default="L1", help="")
-parser.add_argument("--ncount_rna", required=False, type=int, default=500, help="")
-parser.add_argument("--nfeature_rna", required=False, type=int, default=0, help="")
-parser.add_argument("--complexity", required=False, type=int, default=100, help="")
-parser.add_argument("--percent_rb", required=False, type=int, default=100, help="")
-parser.add_argument("--percent_mt", required=False, type=int, default=5, help="")
-parser.add_argument("--malat1", required=False, type=int, default=0, help="")
-parser.add_argument("--cap_barcodes", required=False, type=int, default=None, help="")
-parser.add_argument("--cr_barcodes", action="store_true", default=False, help="")
+parser.add_argument("--tag", required=False, type=str, default=None, help="")
 parser.add_argument("--palette", type=str, required=False, help="")
 parser.add_argument("--data_out", required=True, type=str, help="")
 parser.add_argument("--plot_out", required=True, type=str, help="")
@@ -43,6 +37,43 @@ if args.palette is not None:
     with open(args.palette) as f:
         palette = json.load(f)
     f.close()
+
+
+def load_barcode_qc():
+    data = []
+    coi = args.barcode_qc_columns + [args.cell_level, args.tag]
+    for pool in poolsheet["Pool"]:
+        fpath = os.path.join(args.indir, pool + ".full.metadata.tsv.gz")
+        if not os.path.exists(fpath):
+            print("\tWarning, {} does not exist".format(fpath))
+            continue
+
+        try:
+            df = pd.read_csv(fpath, sep="\t")
+            print("\tLoaded {} with shape: {}".format(os.path.basename(fpath), df.shape))
+        except pd.errors.EmptyDataError:
+            print("\tFailed to load {}: no data".format(os.path.basename(fpath)))
+            continue
+
+        if len(set(coi).intersection(set(df.columns))) != len(coi):
+            print("Error, not all expected columns are present.")
+            exit()
+
+        pool_coi = coi.copy()
+        if "Dataset" in df.columns:
+            pool_coi.append("Dataset")
+
+        barcode_qc = df.loc[:, pool_coi].copy()
+        barcode_qc.insert(0, "pool", str(pool))
+        barcode_qc[args.cell_level] = barcode_qc[args.cell_level].fillna("NA")
+        data.append(barcode_qc)
+        del df
+
+    if len(data) == 0:
+        exit()
+    barcode_qc = pd.concat(data, axis=0)
+    print("\tLoaded barcode QC metrics with shape: {}".format(barcode_qc.shape))
+    return barcode_qc
 
 def calculate_mad_thresholds(data, constant=1.4826, threshold=1.):
     median = np.median(data)
@@ -141,30 +172,49 @@ def plot(df, x="x", y="y", panels="z", type="scatter", mask=None, palette=None, 
             data.loc[(data[x + "include"]) & (data[y + "include"]), "hue"] = True
 
             sns.despine(fig=fig, ax=ax)
-            if type == "scatter":
-                sns.scatterplot(x=x,
-                                y=y,
-                                hue="hue",
-                                data=data,
-                                palette={False: "#000000", True: color},
-                                alpha=0.1,
-                                linewidth=0,
-                                legend=False,
-                                ax=ax)
-            elif type == "hist":
-                g = sns.histplot(x=x,
-                                 data=data,
-                                 hue="hue",
-                                 palette={False: "#000000", True: color},
-                                 legend=False,
-                                 ax=ax)
-            else:
-                print("Unexpected plot type ''".format(type))
-                exit()
 
-            if add_mad:
-                add_mad_lines(ax=ax, values=data[x], horizontal=False)
-                add_mad_lines(ax=ax, values=data[y], horizontal=True)
+            if (~data[x].isna() & ~data[y].isna()).sum() > 0:
+                if type == "scatter":
+                    sns.scatterplot(x=x,
+                                    y=y,
+                                    hue="hue",
+                                    data=data,
+                                    palette={False: "#000000", True: color},
+                                    alpha=0.1,
+                                    linewidth=0,
+                                    legend=False,
+                                    ax=ax)
+                elif type == "hist":
+                    # g = sns.histplot(x=x,
+                    #                  data=data,
+                    #                  hue="hue",
+                    #                  palette={False: "#000000", True: color},
+                    #                  stat="percent",
+                    #                  multiple="stack",
+                    #                  hue_order=[False, True],
+                    #                  legend=False,
+                    #                  ax=ax)
+                    # g = sns.histplot(x=x,
+                    #                  data=data.loc[~data["hue"], :],
+                    #                  color="#000000",
+                    #                  stat="percent",
+                    #                  alpha=0.2,
+                    #                  legend=False,
+                    #                  ax=ax)
+                    g = sns.histplot(x=x,
+                                     data=data.loc[data["hue"], :],
+                                     color=color,
+                                     stat="percent",
+                                     alpha=1,
+                                     legend=False,
+                                     ax=ax)
+                else:
+                    print("Unexpected plot type ''".format(type))
+                    exit()
+
+                if add_mad:
+                    add_mad_lines(ax=ax, values=data[x], horizontal=False)
+                    add_mad_lines(ax=ax, values=data[y], horizontal=True)
 
             if xinclude is not None:
                 for threshold in xinclude:
@@ -202,14 +252,29 @@ def plot(df, x="x", y="y", panels="z", type="scatter", mask=None, palette=None, 
                 color="#000000",
                 fontsize=12,
                 fontweight='bold')
-            ax.annotate(
-                'average x = {:.2f}'.format(data[x].mean()),
-                xy=(0.5, 0.75),
-                xycoords=ax.transAxes,
-                color="#000000",
-                fontsize=12,
-                fontweight='bold')
+            if type == "hist":
+                ax.annotate(
+                    'average x = {:.2f}'.format(data.loc[data["hue"], x].mean()),
+                    xy=(0.5, 0.75),
+                    xycoords=ax.transAxes,
+                    color=color,
+                    fontsize=12,
+                    fontweight='bold')
+                ax.annotate(
+                    'average x = {:.2f}'.format(data.loc[~data["hue"], x].mean()),
+                    xy=(0.5, 0.70),
+                    xycoords=ax.transAxes,
+                    color="#000000",
+                    fontsize=12,
+                    fontweight='bold')
             if type == "scatter":
+                ax.annotate(
+                    'average x = {:.2f}'.format(data[x].mean()),
+                    xy=(0.5, 0.75),
+                    xycoords=ax.transAxes,
+                    color="#000000",
+                    fontsize=12,
+                    fontweight='bold')
                 ax.annotate(
                     'average y = {:.2f}'.format(data[y].mean()),
                     xy=(0.5, 0.70),
@@ -254,7 +319,7 @@ def plot(df, x="x", y="y", panels="z", type="scatter", mask=None, palette=None, 
 
     plt.tight_layout()
     fpath = os.path.join(args.plot_out, "{}.png".format(filename))
-    print("Saving {}".format(os.path.basename(fpath)))
+    print("Saving {}".format(fpath))
     fig.savefig(fpath)
     plt.close()
 
@@ -264,51 +329,63 @@ print("\nLoading poolsheet ...")
 poolsheet = pd.read_csv(args.poolsheet, sep="\t")
 
 print("\nLoading cell stats ...")
-data = []
-coi = [args.cell_level, "nCount_RNA", "nFeature_RNA", "complexity", "rb", "percent.rb", "mt", "percent.mt", "MALAT1"]
-for pool in poolsheet["Pool"]:
-    fpath = os.path.join(args.indir, pool + ".full.metadata.tsv.gz")
-    if not os.path.exists(fpath):
-        print("\tWarning, {} does not exist".format(fpath))
-        continue
-
-    try:
-        df = pd.read_csv(fpath, sep="\t")
-        print("\tLoaded {} with shape: {}".format(os.path.basename(fpath), df.shape))
-    except pd.errors.EmptyDataError:
-        print("\tFailed to load {}: no data".format(os.path.basename(fpath)))
-        continue
-
-    if len(set(coi).intersection(set(df.columns))) != len(coi):
-        print("Error, not all expected columns are present.")
-        exit()
-
-    barcode_qc = df.loc[:, coi].copy()
-    barcode_qc.insert(0, "pool", str(pool))
-    data.append(barcode_qc)
-    del df
-
-if len(data) == 0:
-    exit()
-barcode_qc = pd.concat(data, axis=0)
-print("\tLoaded barcode QC metrics with shape: {}".format(barcode_qc.shape))
+barcode_qc = load_barcode_qc()
 
 print("\nBarcode QC stats:")
 print(barcode_qc)
 
-print("\tSaving file")
+print("\nSaving file")
 barcode_qc.to_csv(os.path.join(args.data_out, "qc_metrics.tsv.gz"), sep="\t", header=True, index=False, compression="gzip")
 
 print("\nVisualising barcode QC ...")
+barcode_qc["mask"] = barcode_qc[args.tag] == "NotOutlier"
 plot(
-    df=barcode_qc[["nCount_RNA", "percent.mt", args.cell_level]].dropna().copy(),
+    df=barcode_qc,
     x="nCount_RNA",
     y="percent.mt",
+    mask="mask",
     panels=args.cell_level,
     palette=palette,
-    xinclude=(args.ncount_rna, None),
-    yinclude=(None, args.percent_mt),
-    filename="ncount_rna_vs_percent_mt"
+    filename="ncount_rna_vs_percent_mt_all_barcodes"
 )
+
+id_vars = ["pool", args.cell_level, args.tag, "mask"]
+if "Dataset" in barcode_qc:
+    id_vars.append("Dataset")
+barcode_qcm = barcode_qc.melt(id_vars=id_vars, value_vars=args.barcode_qc_columns)
+
+for variable in barcode_qcm["variable"].unique():
+    plot(
+        df=barcode_qcm.loc[barcode_qcm["variable"] == variable, :].copy(),
+        x="value",
+        panels=args.cell_level,
+        mask="mask",
+        type="hist",
+        palette=palette,
+        add_mad=False,
+        xlabel=variable,
+        ylabel="counts",
+        title=variable,
+        filename="barcode_qc_{}_stats".format(variable)
+    )
+
+for cell_type in barcode_qcm[args.cell_level].unique():
+    if cell_type in palette:
+        for variable in barcode_qcm["variable"].unique():
+            palette[variable] = palette[cell_type]
+
+    plot(
+        df=barcode_qcm.loc[barcode_qcm[args.cell_level] == cell_type, :].copy(),
+        x="value",
+        panels="variable",
+        mask="mask",
+        type="hist",
+        palette=palette,
+        add_mad=False,
+        xlabel=cell_type,
+        ylabel="counts",
+        title=cell_type,
+        filename="barcode_qc_{}_stats".format(cell_type)
+    )
 
 print("Done")

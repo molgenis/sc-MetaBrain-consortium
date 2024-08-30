@@ -19,39 +19,37 @@ for arg in vars(args):
 print("")
 
 def get_key_value(setting):
-    if setting.startswith("None"):
+    if setting[0].isdigit():
+        value = re.match("([0-9]+)", setting).group(1)
+    elif setting.startswith("None"):
         value = "None"
     elif setting.startswith("True"):
         value = "True"
     elif setting.startswith("False"):
         value = "False"
+    elif setting.startswith("Bryois"):
+        value = "Bryois"
+    elif setting.startswith("Fujita"):
+        value = "Fujita"
     else:
-        value = re.match("([0-9]+)", setting).group(1)
+        print("Error in get_key_value for setting: {}".format(setting))
+        exit()
     key = setting.lstrip(value)
     return key, value
 
 
 print("\nLoading ngenes stats ...")
 data = {}
-order = ["Cell type", "method"]
-for i, fpath in enumerate(glob.glob(os.path.join(args.workdir, "*/*/*.pseudobulk.*.*.stats.tsv"))):
+order = ["Cell type"]
+for i, fpath in enumerate(glob.glob(os.path.join(args.workdir, "*/*/*/*.pseudobulk.*.stats.tsv"))):
     fparts = fpath.split(os.sep)
 
-    match = re.match("([A-Za-z]+).pseudobulk.([0-9A-Za-z_]+).([0-9A-Za-z_]+).stats.tsv", os.path.basename(fpath))
+    match = re.match("([A-Za-z]+).pseudobulk.([0-9A-Za-z_]+).stats.tsv", os.path.basename(fpath))
     cell_type = match.group(1)
-    filter_fpart = match.group(2)
-    norm = match.group(3)
+    norm = match.group(2)
 
-    if norm == "TMM":
-        method = "Bryois"
-    elif norm == "log2CPM_QN":
-        method = "Fujita"
-    else:
-        print("Error, unexpected norm value '{]'".format(norm))
-        exit()
-
-    settings = {"Cell type": cell_type, "method": method}
-    for fpart in fparts[-3:-1] + [filter_fpart]:
+    settings = {"Cell type": cell_type}
+    for fpart in fparts[-4:-1]:
         for setting in fpart.split("_"):
             key, value = get_key_value(setting)
             settings[key] = value
@@ -84,7 +82,7 @@ stats = pd.DataFrame(data).T.loc[:, order]
 print("\tLoaded cell stats with shape: {}".format(stats.shape))
 
 print("\nLoaded stats:")
-stats.sort_values(by=["Cell type", "method", "ngenes"], ascending=[True, True, False], inplace=True)
+stats.sort_values(by=["Cell type", "Norm", "ngenes"], ascending=[True, True, False], inplace=True)
 print(stats)
 
 print("\nSaving files")

@@ -8,6 +8,7 @@ import os
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--poolsheet", required=True, type=str, help="")
 parser.add_argument("--indir", required=True, type=str, help="")
+parser.add_argument("--split_per_dataset", action="store_true", default=False, help="")
 parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
 
@@ -20,7 +21,7 @@ print("")
 
 print("\nLoading poolsheet ...")
 poolsheet = pd.read_csv(args.poolsheet, sep="\t")
-has_dataset = "Dataset" in poolsheet.columns
+has_dataset = "Dataset" in poolsheet.columns and args.split_per_dataset
 
 print("\nLoading cell stats ...")
 data = []

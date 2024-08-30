@@ -19,14 +19,21 @@ for arg in vars(args):
 print("")
 
 def get_key_value(setting):
-    if setting.startswith("None"):
+    if setting[0].isdigit():
+        value = re.match("([0-9]+)", setting).group(1)
+    elif setting.startswith("None"):
         value = "None"
     elif setting.startswith("True"):
         value = "True"
     elif setting.startswith("False"):
         value = "False"
+    elif setting.startswith("Bryois"):
+        value = "Bryois"
+    elif setting.startswith("Fujita"):
+        value = "Fujita"
     else:
-        value = re.match("([0-9]+)", setting).group(1)
+        print("Error in get_key_value for setting: {}".format(setting))
+        exit()
     key = setting.lstrip(value)
     return key, value
 
@@ -50,7 +57,7 @@ for i, fpath in enumerate(glob.glob(os.path.join(args.workdir, "*/*/*.pseudobulk
 
     stats = pd.read_csv(fpath, sep="\t", header=0, index_col=0)
     if "Dataset" in stats.columns:
-        settings["ncells"] = stats.loc[cell_type, "ncells"]
+        settings["ncells"] = stats.loc[cell_type, "Dataset"]
         if "ncells" not in order:
             order.append("ncells")
     else:

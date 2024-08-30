@@ -12,6 +12,7 @@ parser.add_argument("--indir", required=True, type=str, help="")
 parser.add_argument("--cell_type", required=True, type=str, help="")
 parser.add_argument("--min_cells", required=False, type=int, default=0, help="")
 parser.add_argument("--aggregate_fun", required=False, type=str, default="sum", choices=["sum", "mean"], help="")
+parser.add_argument("--split_per_dataset", action="store_true", default=False, help="")
 parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
 
@@ -78,7 +79,7 @@ def load_file_full(inpath, header, index_col, sep="\t", low_memory=True,
 
 print("\nLoading poolsheet ...")
 poolsheet = load_file(args.poolsheet)
-has_dataset = "Dataset" in poolsheet.columns
+has_dataset = "Dataset" in poolsheet.columns and args.split_per_dataset
 
 print("\nLoading expression data ...")
 gte_data = []

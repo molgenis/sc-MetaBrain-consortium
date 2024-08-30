@@ -37,13 +37,17 @@ conda activate wg1_snakemake
  * `ancestry`:
  * `cell_level`:
  * `cell_type`:
+ * `split_per_dataset`:
  * `ncount_rna`:
  * `nfeature_rna`:
+ * `complexity`:
  * `percent_rb`:
  * `percent_mt`:
  * `malat1`:
+ * `cap_barcodes`:
+ * `cellranger_barcodes`:
  * `min_cells`:
- * `min_obs`:
+ * `min_obs_bryois`:
  * `min_cpm_bryois`:
  * `min_cpm_fujita`:
  * `feature_name`:

@@ -24,6 +24,7 @@ settings:
   ancestry: "EUR"
   cell_level: "L1"
   cell_type: ["EX"]
+  split_per_dataset: False
 
   # pseudobulk pool: filter barcodes
   ncount_rna: [ 500 ] # min value

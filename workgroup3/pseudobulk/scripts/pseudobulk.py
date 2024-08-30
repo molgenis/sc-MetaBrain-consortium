@@ -130,7 +130,7 @@ def load_metadata(barcodes_fpath):
     # Adding extra columns.
     metadata["Assignment_Run_Lane"] = metadata["Assignment"].astype(str) + ";;" + metadata["sequencing_run"].astype(str) + "_" + metadata["sequencing_lane"].astype(str)
 
-    # Rorder back into original order.
+    # Reorder back into original order.
     metadata = metadata.sort_values(by="index", ascending=True).drop(["index"], axis=1)
 
     # Check if all barcodes are unique.
