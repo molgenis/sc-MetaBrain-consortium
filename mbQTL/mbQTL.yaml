@@ -85,6 +85,10 @@ filter_vcf_memory: 4 ### Amount of gigs that will be used for memory and disk sp
 filter_vcf_threads: 1 ### Number of threads to use
 filter_vcf_time: 0 ### The time setting to use
 
+gte_to_dataset_cov_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+gte_to_dataset_cov_threads: 1 ### Number of threads to use
+gte_to_dataset_cov_time: 0 ### The time setting to use
+
 filter_matrix_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 filter_matrix_threads: 1 ### Number of threads to use
 filter_matrix_time: 0 ### The time setting to use
@@ -117,9 +121,9 @@ merge_memory: 4 ### Amount of gigs that will be used for memory and disk space p
 merge_threads: 1 ### Number of threads to use
 merge_time: 0 ### The time setting to use
 
-qvalues_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
-qvalues_threads: 1 ### Number of threads to use
-qvalues_time: 0 ### The time setting to use
+mul_test_correction_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+mul_test_correction_threads: 1 ### Number of threads to use
+mul_test_correction_time: 0 ### The time setting to use
 
 results_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 results_threads: 1 ### Number of threads to use

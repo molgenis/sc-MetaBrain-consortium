@@ -155,13 +155,10 @@ if len(set(cov_rownames)) != len(cov_rownames):
     print("Error, covariate indices should have unique values")
     exit()
 
-# print(pd.DataFrame(cov_m, index=cov_rownames, columns=cov_colnames).T)
-
 data_colnames, _, _, _ = load_file(args.data, header_only=True)
 if len(set(data_colnames)) != len(data_colnames):
     print("Error, data columns should have unique values")
     exit()
-
 
 # Check if the samples overlap. If not, try transposing the covariates file. By default
 # we expect the samples to be on the rows for the covariates and on the columns for the data.
@@ -191,10 +188,18 @@ for cov_index, cov_colname in enumerate(cov_colnames):
         cov_num_colnames.append(cov_colname)
     except ValueError:
         if args.ignore_categorical:
-            print("{} removed".format(cov_colname))
+            print("\t{} removed since ignore_categorical is True".format(cov_colname))
             continue
 
-        print("\tCovariate {} is not numeric, one-hot encoding ignoring most frequent value.".format(cov_colname))
+        n_unique = len(np.unique(cov_m[:, cov_index]))
+        if n_unique == 1:
+            print("\t{} removed due to no variance".format(cov_colname))
+            continue
+        if n_unique == cov_m.shape[0]:
+            print("\t{} removed due to all unique values".format(cov_colname))
+            continue
+
+        print("\tCovariate {} is not numeric, one-hot encoding {:,} values ignoring most frequent value.".format(cov_colname, n_unique))
 
         # Count the unique categorical values.
         cat_cov_counts = list(zip(*np.unique(cov_m[:, cov_index], return_counts=True)))
@@ -218,8 +223,6 @@ cov_colmask = np.std(cov_m, axis=0) != 0
 cov_m = cov_m[:, cov_colmask]
 cov_colnames = [colname for (colname, keep) in zip(cov_colnames, cov_colmask) if keep]
 print("Remaining covariates:\n{}\n".format(";".join(cov_colnames)))
-
-# print(pd.DataFrame(cov_m, index=cov_rownames, columns=cov_colnames).T)
 
 # Updating colorder to match data file. Better to sort this file so we
 # do not need to sort the data file which is likely much bigger.

@@ -11,7 +11,7 @@ The snakemake implements the following additions to the standard mbQTL software:
  * calculate and visualise expression PCs (possibly per dataset in parallel)
  * correct expression input for covariates and / or N expression PCs (possibly per dataset in parallel)
  * QTL analysis in arbitrary number of batches on the HPC in parallel (including merging of output files)
- * perform multiple testing correction over top effects using [qvalue](https://github.com/StoreyLab/qvalue) including visualisations
+ * perform multiple testing correction over top effects (Bonferroni, Benjamini-Hochberg, [qvalue](https://github.com/StoreyLab/qvalue))
  * summarise number of eQTLs detected (possibly per N expression PCs removed)
 
 Furthermore, quality of life settings and setting warnings are added to make the use of mbQTL even easier.
@@ -39,7 +39,7 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * `mbqtl_jar`: mbQTL jar [download](https://jenkins.harmjanwestra.nl/job/systemsgenetics_hjw/lastBuild/nl.systemsgenetics$MbQTL/).
  * `output_dir`: the output directory.
  * `output_prefix`: the output filename prefix.
- * `cov`: covariate file. Tab-separated file containing the covariate values of each feature per sample. The first column contains the covariates. The rest of the columns are the sample names. Non-numerical covariates are automatically one-hot encoded where the most abundant category is excluded. Expression PCs can be automatically added as covariates by using `n_pcs`.
+ * `cov`: covariate file. Tab-separated file containing the covariate values of each feature per sample. The first column contains the covariates. The rest of the columns are the sample names. Non-numerical covariates are automatically one-hot encoded where the most abundant category is excluded. If a `gte` file is given the dataset column will be used os covariate. Expression PCs can be automatically added as covariates by using `n_pcs`.
 
 **Pipeline specific settings**:
  * `plot_pca`: whether or not to PCA visualise the expression matrix. Default `False`.
@@ -185,7 +185,12 @@ Each eQTL run is outputted in a seperate folder: e.g. no covariate or PCs (`defa
  * a `-TopEffectsWithqval.txt` file with 2 columns added:
    * `PvalueNominalThreshold`: nominal p-value thresholds based on the permutation beta distribution (`BetaDistAlpha` and `BetaDistBeta`).
    * `qval`: based on the nominal p-values (`MetaP`) if no permutation are run (`perm: 0`) or the permutation p-values (`BetaAdjustedMetaP`) if permutations are run (`perm: >0`).
- * a `-results.txt` file with the number of effects with nominal p-value (`MetaP`), permuted p-value (`BetaAdjustedMetaP`) and qvalue (`qval`) below significance threshold (`<0.05`) per QTL run (e.g. 0Pcs removed, 5Pcs removed, etc.). If a meta-analysis was performed the per dataset number of nominal significant effects (based on `DatasetZScores`) are also outputted.
+ * a `-results.txt` file the number of effects, tests, and nominal p-values below the significance threshold (`<0.05`) per QTL run (e.g. 0Pcs removed, 5Pcs removed, etc.). If a meta-analysis was performed the per dataset, the number of nominal significant effects (based on `DatasetZScores`) are also counted. In addition, the number of significant effects based on the different multiple testing correction approaches are also counted:
+   * Beta adjusted p-values: `BetaAdjustedMetaP`
+   * Bonferroni p-values: `bonf_pvalue`
+   * Two step FDR (BH-FDR over bonferroni p-values): `two_step_fdr`
+   * Benjamini-Hochberg FDR: `bh_fdr`
+   * [qvalue](https://github.com/StoreyLab/qvalue): `qval`
 
 ## Author  
 

@@ -110,6 +110,11 @@ else:
     if "qtl" in config["general_settings"]["force_mega"] and config["qtl_settings"]["nrdatasets"] > 1:
         logger.warning("Warning, setting nrdatasets to 1 since force_mega for QTL mapping is True.")
         config["qtl_settings"]["nrdatasets"] = 1
+    if config["inputs"]["cov"] == config["inputs"]["gte"] and config["inputs"]["gte"].endswith(".smf"):
+        logger.warning("Warning, setting cov to 'null' since the input gte endswith '.smf' and therefore does not "
+                       "contain dataset information to include as covariates.")
+        config["inputs"]["cov"] = ""
+
 
 # Check setting combinations that are not allowed.
 if config["qtl_settings"]["nrdatasets"] > 1 and config["inputs"]["gte"].endswith(".smf"):
@@ -138,6 +143,9 @@ else:
                    "will be performed per dataset. If there is only one dataset, all analyses will "
                    "be performed over all samples at once. Use force_mega: cov to force the "
                    "program to perform PCA correction over all samples.")
+if config["inputs"]["cov"] == config["inputs"]["gte"]:
+    logger.warning("Warning, your input cov is equal to your input gte. A covariate will be "
+                   "added based on the dataset column of your gte file.")
 if config["inputs"]["snpgenelimit"] != "" and config["run_qtl_time"] != 0:
     logger.warning("Warning, you are only testing a select number of effects but the runtime for each "
                    "job is max {}. If you tink this is too long you should decrease "
@@ -285,7 +293,7 @@ def get_input(wildcards):
                     input.extend(input_fpaths)
 
     # Output of mbQTL.
-    input_fpaths = expand(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithqval.txt", cov=covariates, output_prefix=config["outputs"]["output_prefix"])
+    input_fpaths = expand(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithMultTest.txt", cov=covariates, output_prefix=config["outputs"]["output_prefix"])
     logger.debug("\trequesting output of rule 'run_qtl': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
     input.extend(input_fpaths)
 
@@ -411,8 +419,30 @@ def get_regressor_exp(wildcards):
     logger.debug("\treturning output of rule 'filter_exp' for a specific dataset: " + fpath)
     return config["outputs"]["output_dir"] + fpath
 
-
 def get_cov(wildcards):
+    """
+    :rule: merge_covs, regressor
+    :param wildcards:
+    :return: either a dataset covariate file based on the gte input or the cov input file.
+    """
+    logger.debug("rule merge_covs, regressor - get_cov({})".format(print_wildcards(wildcards)))
+    if config["inputs"]["cov"] == "":
+        logger.error("Critical, unexpected empty value for input 'cov' in get_cov.\n\nExiting.".format(wildcards.cov))
+        exit()
+    elif (config["inputs"]["cov"] == config["inputs"]["gte"] and not config["inputs"]["gte"].endswith(".smf")):
+        fpath = config["outputs"]["output_dir"] + "cov/dataset.txt.gz"
+        logger.debug("\treturning output of rule 'gte_to_dataset_cov': " + fpath)
+        return fpath
+    else:
+        fpath = config["inputs"]["cov"]
+        logger.debug("\treturning input 'cov': " + fpath)
+        return fpath
+
+    logger.debug("\treturning []")
+    return []
+
+
+def get_regressor_cov(wildcards):
     """
     :rule: regressor
     :param wildcards:
@@ -420,14 +450,15 @@ def get_cov(wildcards):
     cov contains only covariates and no PCs (i.e. cov or cov0Pcs) the input covariate file is returned. If cov contains only
     Pcs and no covariates the output of pca is returned. If cov contains both covariates and PCs the output of merge_covs is returned.
     """
-    logger.debug("rule regressor - get_cov({})".format(print_wildcards(wildcards)))
+    logger.debug("rule regressor - get_regressor_cov({})".format(print_wildcards(wildcards)))
     if wildcards.cov == "default" or wildcards.cov == "0Pcs":
-        logger.error("Critical, unexpected covariate '{}' wildcard in get_cov.\n\nExiting.".format(wildcards.cov))
+        logger.error("Critical, unexpected covariate '{}' wildcard in get_regressor_cov.\n\nExiting.".format(wildcards.cov))
         exit()
     elif wildcards.cov == "cov" or wildcards.cov == "cov0Pcs":
         # Only cov, no PCs.
-        fpath = config["inputs"]["cov"]
-        logger.debug("\treturning input 'cov': " + fpath)
+        logger.debug("\tcalling 'get_cov' function")
+        fpath = get_cov(wildcards)
+        logger.debug("\treturning: " + fpath)
         return fpath
     elif not wildcards.cov.startswith("cov") and wildcards.cov.endswith("Pcs"):
         # No Cov, only PCs.
@@ -697,7 +728,7 @@ def get_batches(wildcards):
 
 def get_top_hits(wildcards):
     """
-    :rule: qvalues
+    :rule: multiple_test_correction
     :param wildcards:
     :return: If the program is executed with a single batch we can return the output of rule run_qtl directly,
     otherwise we first need to combine all top effects by requesting the output of rule merge.
@@ -715,7 +746,7 @@ def get_top_hits(wildcards):
 
 def get_top_hits_finished(wildcards):
     """
-    :rule: qvalues
+    :rule: multiple_test_correction
     :param wildcards:
     :return: If the program is executed with a single batch we need to check if the finished file exits, else
     there is no need sing the 'merge' rule checks this.
@@ -913,6 +944,30 @@ rule filter_vcf:
         """
 
 
+rule gte_to_dataset_cov:
+    input:
+        gte = get_gte
+    output:
+        cov = config["outputs"]["output_dir"] + "cov/dataset.txt.gz"
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["gte_to_dataset_cov_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["gte_to_dataset_cov_memory"],
+        time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["gte_to_dataset_cov_time"]]
+    threads: config["gte_to_dataset_cov_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/gte_to_dataset_cov.py",
+        out = config["outputs"]["output_dir"] + "cov/"
+    log: config["outputs"]["output_dir"] + "log/gte_to_dataset_cov.log"
+    shell:
+        """
+        singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --gte {input.gte} \
+            --out {params.out} > {log} 2>&1
+        """
+
+
 rule filter_exp:
     input:
         data = config["inputs"]["exp"],
@@ -1003,7 +1058,7 @@ rule filter_pcs:
 
 rule merge_covs:
     input:
-        cov = config["inputs"]["cov"],
+        cov = get_cov,
         pca = config["outputs"]["output_dir"] + "pca/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".{n_pcs}Pcs.txt.gz"
     output:
         cov = config["outputs"]["output_dir"] + "cov/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".cov{n_pcs}Pcs.txt.gz"
@@ -1030,7 +1085,7 @@ rule merge_covs:
 rule regressor:
     input:
         data = get_regressor_exp,
-        cov = get_cov
+        cov = get_regressor_cov
     output:
         data = config["outputs"]["output_dir"] + "regressor/{dataset}/" + get_basename(config["inputs"]["exp"]) + ".{cov}.CovariatesRemovedOLS.txt.gz"
     resources:
@@ -1245,42 +1300,48 @@ rule merge:
         """
 
 
-rule qvalues:
+rule multiple_test_correction:
     input:
         top_hits = get_top_hits,
         finished = get_top_hits_finished
     output:
-        top_hits = config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffectsWithqval.txt",
+        top_hits = config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffectsWithMultTest.txt",
         fig1 = report(config["outputs"]["output_dir"] + "figures/{cov}/" + config["outputs"]["output_prefix"] + "_hist.png", category="qvalue", subcategory="{cov}", caption=config["inputs"]["repo_dir"] + "report_captions/qvalue_hist.rst"),
         fig2 = report(config["outputs"]["output_dir"] + "figures/{cov}/" + config["outputs"]["output_prefix"] + "_overview.png", category="qvalue", subcategory="{cov}", caption=config["inputs"]["repo_dir"] + "report_captions/qvalue_overview.rst")
     resources:
-        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["qvalues_memory"],
-        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["qvalues_memory"],
-        time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["qvalues_time"]]
-    threads: config["qvalues_threads"]
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["multiple_test_correction_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["multiple_test_correction_memory"],
+        time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["multiple_test_correction_time"]]
+    threads: config["multiple_test_correction_threads"]
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/multiple_testing_correction.R",
-        beta_dist_a = "BetaDistAlpha",
-        beta_dist_b = "BetaDistBeta",
-        nom_threshold = "PvalueNominalThreshold",
-        pvalue = "BetaAdjustedMetaP" if config["qtl_settings"]["perm"] > 0 else "MetaP",
-        qvalue = "qval",
+        nom_pvalue = "MetaP",
+        n_tests = "NrTestedSNPs",
+        perm_settings = "--beta_adj_pvalue BetaAdjustedMetaP --beta_dist_a BetaDistAlpha --beta_dist_b BetaDistBeta" if config["qtl_settings"]["perm"] > 0 else "",
+        bonf_pvalue_col= "BonfAdjustedMetaP",
+        bonf_bh_fdr_col = "BonfBHAdjustedMetaP",
+        bh_fdr_col = "bh_fdr",
+        qvalue_col = "qval",
+        nom_thresh_col = "PvalueNominalThreshold",
         alpha = config["general_settings"]["alpha"],
         data_out = config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffects",
         plot_out = config["outputs"]["output_dir"] + "figures/{cov}/" + config["outputs"]["output_prefix"],
-        suffix = "Withqval"
-    log: config["outputs"]["output_dir"] + "log/qvalues.{cov}.log"
+        suffix = "WithMultTest"
+    log: config["outputs"]["output_dir"] + "log/multiple_test_correction.{cov}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} Rscript {params.script} \
             --input {input.top_hits} \
-            --beta_dist_a {params.beta_dist_a} \
-            --beta_dist_b {params.beta_dist_b} \
-            --nom_threshold {params.nom_threshold} \
-            --pvalue {params.pvalue} \
-            --qvalue {params.qvalue} \
+            --nom_pvalue {params.nom_pvalue} \
+            --n_tests {params.n_tests} \
+            {params.perm_settings} \
+            --bonf_pvalue_col {params.bonf_pvalue_col} \
+            --bonf_bh_fdr_col {params.bonf_bh_fdr_col} \
+            --bh_fdr_col {params.bh_fdr_col} \
+            --qvalue_col {params.qvalue_col} \
+            --nom_thresh_col {params.nom_thresh_col} \
             --alpha {params.alpha} \
             --data_out {params.data_out} \
             --plot_out {params.plot_out} \
@@ -1290,7 +1351,7 @@ rule qvalues:
 
 rule results:
     input:
-        data = expand(config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffectsWithqval.txt", cov=covariates)
+        data = expand(config["outputs"]["output_dir"] + "output/{cov}/" + config["outputs"]["output_prefix"] + "-TopEffectsWithMultTest.txt", cov=covariates)
     output:
         out = config["outputs"]["output_dir"] + "output/" + config["outputs"]["output_prefix"] + "-results.txt"
     resources:
@@ -1302,19 +1363,27 @@ rule results:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/results.py",
-        data = config["outputs"]["output_dir"] + "output/*/" + config["outputs"]["output_prefix"] + "-TopEffectsWithqval.txt",
-        nom_pvalue_column = "MetaP",
-        perm_pvalue_column = "BetaAdjustedMetaP",
-        qvalue_column = "qval",
-        minimimal_reporting_p = config["general_settings"]["alpha"]
+        indir = config["outputs"]["output_dir"] + "output/",
+        n_tests_col = "NrTestedSNPs",
+        nom_pvalue_col = "MetaP",
+        beta_adj_pvalue_col = "BetaAdjustedMetaP",
+        bonf_pvalue_col= "BonfAdjustedMetaP",
+        bonf_bh_fdr_col = "BonfBHAdjustedMetaP",
+        bh_fdr_col = "bh_fdr",
+        qvalue_col = "qval",
+        alpha = config["general_settings"]["alpha"]
     log: config["outputs"]["output_dir"] + "log/results.log"
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} python {params.script} \
-            --data '{params.data}' \
-            --nom_pvalue_column {params.nom_pvalue_column} \
-            --perm_pvalue_column {params.perm_pvalue_column} \
-            --qvalue_column {params.qvalue_column} \
-            --minimimal_reporting_p {params.minimimal_reporting_p} \
+            --indir {params.indir} \
+            --n_tests_col {params.n_tests_col} \
+            --nom_pvalue_col {params.nom_pvalue_col} \
+            --beta_adj_pvalue_col {params.beta_adj_pvalue_col} \
+            --bonf_pvalue_col {params.bonf_pvalue_col} \
+            --bonf_bh_fdr_col {params.bonf_bh_fdr_col} \
+            --bh_fdr_col {params.bh_fdr_col} \
+            --qvalue_col {params.qvalue_col} \
+            --alpha {params.alpha} \
             --out {output.out} > {log} 2>&1
         """
