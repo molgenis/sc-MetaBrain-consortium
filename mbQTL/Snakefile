@@ -89,32 +89,32 @@ if not config["outputs"]["output_dir"].endswith("/"):
     config["outputs"]["output_dir"] += "/"
 
 # Check setting combinations that do not make sense and update accordingly.
+logger.warning("Updating settings:")
 if config["settings_extra"]["force"]:
-    logger.warning("Warning, unlogical input arguments will not be automatically updated. Use with caution!")
+    logger.warning("\tWarning, unlogical input arguments will not be automatically updated. Use with caution!")
 else:
     if (config["inputs"]["snpgenelimit"] != "" or config["inputs"]["snplimit"] != "") and config["general_settings"]["use_snpannotation"]:
-        logger.warning("Warning, setting use_snpannotation to False since snpgenelimit / snplimit is used.")
+        logger.warning("\tWarning, setting use_snpannotation to False since snpgenelimit / snplimit is used.")
         config["general_settings"]["use_snpannotation"] = False
     if config["inputs"]["snpgenelimit"] == "" and config["inputs"]["snplimit"] == "" and config["general_settings"]["filter_vcf"]:
-        logger.warning("Warning, setting filter_vcf to False since snpgenelimit / snplimit is not used.")
+        logger.warning("\tWarning, setting filter_vcf to False since snpgenelimit / snplimit is not used.")
         config["general_settings"]["filter_vcf"] = False
     if config["inputs"]["snpgenelimit"] != "" and not config["qtl_settings"]["outputall"]:
-        logger.warning("Warning, setting outputall to True since snpgenelimit is used.")
+        logger.warning("\tWarning, setting outputall to True since snpgenelimit is used.")
         config["qtl_settings"]["outputall"] = True
     if config["inputs"]["snpgenelimit"] != "" and not config["qtl_settings"]["perm"] == 0:
-        logger.warning("Warning, setting perm to 0 since snpgenelimit is used.")
+        logger.warning("\tWarning, setting perm to 0 since snpgenelimit is used.")
         config["qtl_settings"]["perm"] = 0
     if config["inputs"]["gte"].endswith(".smf") and config["qtl_settings"]["nrdatasets"] > 1:
-        logger.warning("Warning, setting nrdatasets to 1 since the input gte is a single dataset ('.smf').")
+        logger.warning("\tWarning, setting nrdatasets to 1 since the input gte is a single dataset ('.smf').")
         config["qtl_settings"]["nrdatasets"] = 1
     if "qtl" in config["general_settings"]["force_mega"] and config["qtl_settings"]["nrdatasets"] > 1:
-        logger.warning("Warning, setting nrdatasets to 1 since force_mega for QTL mapping is True.")
+        logger.warning("\tWarning, setting nrdatasets to 1 since force_mega for QTL mapping is True.")
         config["qtl_settings"]["nrdatasets"] = 1
     if config["inputs"]["cov"] == config["inputs"]["gte"] and config["inputs"]["gte"].endswith(".smf"):
-        logger.warning("Warning, setting cov to 'null' since the input gte endswith '.smf' and therefore does not "
+        logger.warning("\tWarning, setting cov to 'null' since the input gte endswith '.smf' and therefore does not "
                        "contain dataset information to include as covariates.")
         config["inputs"]["cov"] = ""
-
 
 # Check setting combinations that are not allowed.
 if config["qtl_settings"]["nrdatasets"] > 1 and config["inputs"]["gte"].endswith(".smf"):
@@ -129,35 +129,38 @@ if config["qtl_settings"]["replacemissinggenotypes"] and config["qtl_settings"][
     exit()
 
 # Some friendly reminders.
+logger.warning("\nUsage warnings:")
 if config["qtl_settings"]["nrdatasets"] > 1:
-    logger.error("Error, setting the minimum number of datasets required in "
+    logger.warning("\tWarning, setting the minimum number of datasets required in "
                   "meta-analysis (nrdatasets) > 1 will result in no results "
                   "if your input GTE only contains one dataset.")
 if config["inputs"]["gte"].endswith(".smf"):
-    logger.warning("Warning, your input gte ends with '.smf'. If there is any datasets info in "
+    logger.warning("\tWarning, your input gte ends with '.smf'. If there is any datasets info in "
                    "the third column it will be ignored and all analyses will be performed over "
                    "all samples at once. This is equivalent to setting force_mega: all.")
 else:
-    logger.warning("Warning, your input gte ends with '.txt'. The info in the third column will "
+    logger.warning("\tWarning, your input gte ends with '.txt'. The info in the third column will "
                    "be used as dataset. The principal component calculations and corrections "
                    "will be performed per dataset. If there is only one dataset, all analyses will "
                    "be performed over all samples at once. Use force_mega: cov to force the "
                    "program to perform PCA correction over all samples.")
 if config["inputs"]["cov"] == config["inputs"]["gte"]:
-    logger.warning("Warning, your input cov is equal to your input gte. A covariate will be "
+    logger.warning("\tWarning, your input cov is equal to your input gte. A covariate will be "
                    "added based on the dataset column of your gte file.")
 if config["inputs"]["snpgenelimit"] != "" and config["run_qtl_time"] != 0:
-    logger.warning("Warning, you are only testing a select number of effects but the runtime for each "
+    logger.warning("\tWarning, you are only testing a select number of effects but the runtime for each "
                    "job is max {}. If you tink this is too long you should decrease "
                    "run_qtl_time to e.g. 0.".format(config["cluster_time"][config["run_qtl_time"]]))
 if config["inputs"]["snpgenelimit"] == "" and config["general_settings"]["n_genes"] is None and config["run_qtl_time"] == 0:
-    logger.warning("Warning, you are running all tests in one job file but the runtime for this "
+    logger.warning("\tWarning, you are running all tests in one job file but the runtime for this "
                    "job is max {}. If you tink this is too short you should increase "
                    "run_qtl_time to 1 or higher.".format(config["cluster_time"][config["run_qtl_time"]]))
 if config["inputs"]["snpgenelimit"] == "" and config["general_settings"]["n_genes"] is not None and config["run_qtl_time"] != 0:
-    logger.warning("Warning, you are running tests in multiple job files but the runtime for each "
+    logger.warning("\tWarning, you are running tests in multiple job files but the runtime for each "
                    "job is max {}. If you tink this is too long you should decrease "
                    "run_qtl_time to e.g. 0.".format(config["cluster_time"][config["run_qtl_time"]]))
+
+logger.info("\nEvaluating input:")
 
 # Automatically determine the mode of the input.
 if config["inputs"]["cov"] == "" and not config["general_settings"]["n_pcs"]:
@@ -171,7 +174,7 @@ elif config["inputs"]["cov"] != "" and config["general_settings"]["n_pcs"]:
 else:
     logger.error("Critical, could not determine input mode.\n\nExiting")
     exit()
-logger.info("Your input is in mode: {}.".format(input_mode))
+logger.info("\tYour input is in mode: {}.".format(input_mode))
 
 # Define the tests that the user wants to run.
 modes = ["all", "default", "cov", "covXPcs", "XPcs"]
@@ -192,7 +195,7 @@ if "all" in config["general_settings"]["include_modes"]:
     selected_modes = set(modes)
 else:
     selected_modes = set(config["general_settings"]["include_modes"])
-logger.info("You selected input to execute the following modes: {}.".format(", ".join(selected_modes)))
+logger.info("\tYou selected input to execute the following modes: {}.".format(", ".join(selected_modes)))
 
 # Combine the output modes (henceforth named covariates).
 covariates = []
@@ -224,7 +227,7 @@ if "covXPcs" in selected_modes:
                 continue
             covariates.append("cov" + str(n_pcs) + "Pcs")
 if len(covariates) > 0:
-    logger.info("Generating output for the following modes: {}.".format(", ".join(covariates)))
+    logger.info("\tGenerating output for the following modes: {}.\n".format(", ".join(covariates)))
 
 
 wildcard_constraints:
