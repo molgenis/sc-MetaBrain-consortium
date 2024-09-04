@@ -186,9 +186,9 @@ Each eQTL run is outputted in a seperate folder: e.g. no covariate or PCs (`defa
  * a `-TopEffectsWithqval.txt` file with a couple of columns added:
    * `BonfAdjustedMetaP`: nominal p-value (`MetaP`) multiplied by the number of tests performed for that gene (`NrTestedSNPs`).
    * `BonfBHAdjustedMetaP`: boneferroni corrected p-value (`BonfAdjustedMetaP`) converted to Benjamini-Hochberg FDR values.
-   * `bh_fdr`: Benjamini-Hochberg FDR values (using `BetaAdjustedMetaP` if `perm: >0` else `MetaP`).
    * `PvalueNominalThreshold`: nominal p-value thresholds based on the permutation beta distribution (`BetaDistAlpha` and `BetaDistBeta`, only if `perm: >0`).
-   * `qval`: [qvalue](https://github.com/StoreyLab/qvalue) [qvalue](https://github.com/StoreyLab/qvalue) qvalues calculated over the p-values (using `BetaAdjustedMetaP` if `perm: >0` else `MetaP`).
+   * `bh_fdr`: Benjamini-Hochberg FDR values calculated over the p-values (using `BetaAdjustedMetaP` if `perm: >0` else `MetaP`).
+   * `qval`: [qvalue](https://github.com/StoreyLab/qvalue) q-values calculated over the p-values (using `BetaAdjustedMetaP` if `perm: >0` else `MetaP`).
  * a `-results.txt` file with the number of effects, tests, and significance values (e.g. `MetaP   BetaAdjustedMetaP`, `BonfAdjustedMetaP`, `BonfBHAdjustedMetaP`, `bh_fdr`, and `qval`) below the significance threshold (`<0.05`) per QTL run (e.g. 0Pcs removed, 5Pcs removed, etc.). If a meta-analysis was performed the per dataset, the number of nominal significant effects (based on `DatasetZScores`) are also counted.
 
 ## Author  
