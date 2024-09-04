@@ -15,7 +15,8 @@ parser.add_argument("--transpose", action="store_true", default=False, help="")
 parser.add_argument("--gte", required=False, type=str, default=None, help="")
 parser.add_argument("--center", action="store_true", default=False, help="")
 parser.add_argument("--scale", action="store_true", default=False, help="")
-parser.add_argument("--plot_n", required=False, type=int, default=3, help="")
+parser.add_argument("--eval_n_pcs", required=False, type=int, default=3, help="")
+parser.add_argument("--zscore", required=False, type=int, default=None, help="")
 parser.add_argument("--data_out", required=True, type=str, help="")
 parser.add_argument("--plot_out", required=False, type=str, default=None, help="")
 args = parser.parse_args()
@@ -119,11 +120,11 @@ def plot_scree(data, x, y1, y2, lines=None, xlabel='', ylabel1='', ylabel2='', t
     plt.savefig(args.plot_out + filename + '.png', bbox_inches="tight")
 
 
-def plot_embedding(data, z=None, annot=None, title='', filename='PCA', label_n_points=5):
+def plot_embedding(data, z=None, label_mask=None, annot=None, title='', filename='PCA'):
     if annot is None:
         annot = {}
 
-    columns = [column for column in data.columns if column != z]
+    columns = [column for column in data.columns if column not in [z, label_mask]]
     ncolumns = len(columns)
 
     c = None
@@ -169,21 +170,20 @@ def plot_embedding(data, z=None, annot=None, title='', filename='PCA', label_n_p
                 ax.axvline(0, ls='--', color="#000000", alpha=0.5, zorder=-1, linewidth=2)
                 ax.axhline(0, ls='--', color="#000000", alpha=0.5, zorder=-1, linewidth=2)
 
-                data["OrigenDistance"] = data[column1].abs() + data[column2].abs()
-                data.sort_values(by="OrigenDistance", ascending=False, inplace=True)
-                for index, point in data.head(label_n_points).iterrows():
-                    color = "#b22222"
-                    if cmap is not None and cmap[point[z]] == "#D55E00":
-                        color = "#00000"
+                if label_mask is not None:
+                    for index, point in data.loc[data[label_mask], :].iterrows():
+                        color = "#b22222"
+                        if cmap is not None and cmap[point[z]] == "#D55E00":
+                            color = "#00000"
 
-                    ax.annotate(
-                        str(index),
-                        xy=(point[column2], point[column1]),
-                        color=color,
-                        fontsize=8,
-                        ha='center',
-                        va='bottom',
-                        fontweight='bold')
+                        ax.annotate(
+                            str(index),
+                            xy=(point[column2], point[column1]),
+                            color=color,
+                            fontsize=8,
+                            ha='center',
+                            va='bottom',
+                            fontweight='bold')
 
     fig.suptitle(title,
                  fontsize=16,
@@ -206,7 +206,7 @@ m = df.to_numpy()
 del df
 
 if args.transpose:
-    print("Transposing data...")
+    print("\nTransposing data...")
     m = np.transpose(m)
     tmp_samples = samples
     samples = features
@@ -215,7 +215,7 @@ if args.transpose:
 
 gte_df = None
 if args.gte is not None:
-    print("Filtering data...")
+    print("\nFiltering data...")
     gte_df = pd.read_csv(args.gte, sep="\t", header=None, index_col=None)
     keep = set(gte_df.iloc[:, 1].values)
     print("  Loaded {:,} samples".format(len(keep)))
@@ -233,12 +233,13 @@ if args.gte is not None:
         print("Error, GTE file does not match indices nor colnames.")
         exit()
 
-print("Removing zero variance columns...")
+print("\nRemoving zero variance columns...")
 features_mask = np.std(m, axis=0) != 0
 m = m[:, features_mask]
 features = features[features_mask]
+print("  Kept {:,} / {:,} features".format(np.sum(features_mask), np.size(features_mask)))
 
-print("Calculating Principal Components...")
+print("\nCalculating Principal Components...")
 pca = prcomp(x=m, center=args.center, scale=args.scale)
 pca_indices = ["PC{}_exp".format(i) for i in range(1, len(samples) + 1)]
 projection_df = pd.DataFrame(pca["x"], index=samples, columns=pca_indices).astype(float).T
@@ -249,12 +250,35 @@ expl_var_df = pd.Series((pca["sdev"] ** 2) / np.sum(pca["sdev"] ** 2), index=pca
 # print(rotation_df)
 # print(expl_var_df)
 
-print("Saving results...")
+print("\nIdentifying outlier samples (abs z-score >= {})...".format(args.zscore))
+proj_eval_df = projection_df.iloc[:args.eval_n_pcs, :].T
+proj_eval_df = (proj_eval_df - proj_eval_df.mean(axis=0)) / proj_eval_df.std(axis=0)
+proj_eval_df["include"] = True
+proj_eval_df.loc[proj_eval_df.abs().max(axis=1) >= args.zscore, "include"] = False
+for i in range(args.eval_n_pcs):
+    index = proj_eval_df.columns[i]
+    n_outliers = (proj_eval_df.iloc[:, i].abs() >= args.zscore).sum()
+    print("\t{}: {:,} outlier samples".format(index, n_outliers))
+print("\ttotal: {:,} outlier samples".format(proj_eval_df.shape[0] - proj_eval_df["include"].sum()))
+
+include_samples = proj_eval_df.index[proj_eval_df["include"]]
+exclude_samples = proj_eval_df.index[~proj_eval_df["include"]]
+if gte_df is None:
+    include_df = pd.DataFrame({0: include_samples})
+    exclude_df = pd.DataFrame({0: exclude_samples})
+else:
+    include_df = gte_df.loc[gte_df.iloc[:, 1].isin(include_samples), :]
+    exclude_df = gte_df.loc[gte_df.iloc[:, 1].isin(exclude_samples), :]
+del proj_eval_df, include_samples
+
+print("\nSaving results...")
 projection_df.to_csv(args.data_out + "Pcs.txt.gz", sep="\t", header=True, index=True, compression="gzip")
 rotation_df.to_csv(args.data_out + "Pcs_rot.txt.gz", sep="\t", header=True, index=True, compression="gzip")
 expl_var_df.to_csv(args.data_out + "Pcs_var.txt.gz", sep="\t", header=True, index=True, compression="gzip")
+include_df.to_csv(args.data_out + "samples_include.txt", sep="\t", header=False, index=False)
+exclude_df.to_csv(args.data_out + "samples_exclude.txt", sep="\t", header=False, index=False)
 
-print("Plotting embedding...")
+print("\nPlotting embedding...")
 scree_df = expl_var_df.to_frame().rename(columns={"Explained Variance": "var"}).reset_index(drop=True).reset_index()
 scree_df["var"] = scree_df["var"] * 100
 scree_df["cumsum"] = scree_df["var"].cumsum()
@@ -277,7 +301,9 @@ annot = {}
 for label in projection_df.index:
     annot[label] = "{}\n{:.2f}%".format(label, expl_var[label] * 100)
 
-projection_df = projection_df.iloc[:args.plot_n, :].T
+projection_df = projection_df.iloc[:args.eval_n_pcs, :].T
+projection_df["outlier"] = False
+projection_df.loc[exclude_samples, "outlier"] = True
 z = None
 if gte_df is not None:
     projection_df = projection_df.merge(gte_df[[1, 2]].rename(columns={1: "sample", 2: "dataset"}), left_index=True, right_on="sample", how="left").set_index("sample")
@@ -286,6 +312,7 @@ if gte_df is not None:
 plot_embedding(
     data=projection_df,
     z=z,
+    label_mask="outlier",
     annot=annot,
     title='PCA - {}{}Counts'.format('Centered ' if args.scale else '', 'Scaled ' if args.scale else ''),
     filename="Pcs"

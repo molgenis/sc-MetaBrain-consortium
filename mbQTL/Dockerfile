@@ -150,6 +150,8 @@ RUN apt-get install -y --no-install-recommends cmake \
 
 # remotes_2.4.2.1
 RUN R --slave -e 'install.packages("remotes")' \
+    # getopt_1.20.4
+    && R --slave -e 'remotes::install_version("optparse", version = "1.7.3", upgrade=FALSE)' \
     # glue_1.7.0 cli_3.6.3 vctrs_0.6.5 rlang_1.1.4 pkgconfig_2.0.3 lifecycle_1.0.4
     # R6_2.5.1 prettyunits_1.2.0 hms_1.1.3 crayon_1.5.3 cpp11_0.4.7 withr_3.0.1
     # utf8_1.2.4 pillar_1.9.0 magrittr_2.0.3 fansi_1.0.6 bit_4.0.5 progress_1.2.3
@@ -194,10 +196,10 @@ RUN apt-get install -y --no-install-recommends openjdk-17-jdk
 ##################################
 
 RUN cd /opt \
-    && wget 'https://jenkins.harmjanwestra.nl/job/systemsgenetics_hjw/33/nl.systemsgenetics$MbQTL/artifact/nl.systemsgenetics/MbQTL/1.5.0-SNAPSHOT/MbQTL-1.5.0-SNAPSHOT-jar-with-dependencies.jar' \
-    && mkdir MbQTL-1.5.0-SNAPSHOT \
-    && mv MbQTL-1.5.0-SNAPSHOT-jar-with-dependencies.jar MbQTL-1.5.0-SNAPSHOT/MbQTL.jar \
-    && chmod 777 MbQTL-1.5.0-SNAPSHOT/MbQTL.jar
+    && wget 'https://jenkins.harmjanwestra.nl/view/all/job/systemsgenetics_hjw/lastBuild/nl.systemsgenetics$MbQTL/artifact/nl.systemsgenetics/MbQTL/1.5.0-SNAPSHOT/MbQTL-1.5.0-SNAPSHOT-jar-with-dependencies.jar' \
+    && mkdir tools \
+    && mv MbQTL-1.5.0-SNAPSHOT-jar-with-dependencies.jar tools/MbQTL.jar \
+    && chmod 777 tools/MbQTL.jar
 
 ####################################
 ################ CLEAN #############

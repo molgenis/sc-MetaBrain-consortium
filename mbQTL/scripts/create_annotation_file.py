@@ -9,7 +9,7 @@ parser = argparse.ArgumentParser(description="")
 parser.add_argument("--in_gtf", required=True, type=str, help="")
 parser.add_argument("--feature_name", required=False, type=str, default="gene_name", help="")
 parser.add_argument("--autosomes_only", action="store_true", default=False, help="")
-parser.add_argument("--out_dir", required=True, type=str, help="")
+parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
 
 print("Options in effect:")
@@ -17,7 +17,7 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
-os.makedirs(os.path.dirname(args.out_dir), exist_ok=True)
+os.makedirs(os.path.dirname(args.out), exist_ok=True)
 
 
 def gzopen(file, mode="r"):
@@ -29,7 +29,7 @@ def gzopen(file, mode="r"):
 
 print("Parsing annotation file...")
 
-tmp_fpath = os.path.join(args.out_dir, "refdata-gex-GeneAnnotation.WithDuplicates.txt.gz")
+tmp_fpath = args.out + ".WithDuplicates.txt.gz"
 fhtmp = gzopen(tmp_fpath, mode="w")
 fhtmp.write("\t".join(["Platform", "ArrayAddress", "Symbol", "Chr", "ChrStart", "ChrEnd", "Probe", "Strand"]) + "\n")
 
@@ -65,7 +65,7 @@ fhtmp.close()
 
 print("  Saved {:,} features with {:,} duplicates".format(len(features), len(duplicated)))
 
-fhout = gzopen(os.path.join(args.out_dir, "refdata-gex-GeneAnnotation.txt.gz"), mode="w")
+fhout = gzopen(args.out + ".txt.gz", mode="w")
 n_removed = 0
 with gzopen(tmp_fpath, mode="r") as f:
     for line in f:

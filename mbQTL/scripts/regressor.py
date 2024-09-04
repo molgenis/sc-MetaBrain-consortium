@@ -15,7 +15,7 @@ parser.add_argument("--index_col", required=False, default=0, help="")
 parser.add_argument("--no_index_name", dest="has_index_name", action="store_false", default=True, help="")
 parser.add_argument("--allow_na", action="store_true", default=False, help="")
 parser.add_argument("--ignore_categorical", action="store_true", default=False, help="")
-parser.add_argument("--out", required=True, type=str, help="")
+parser.add_argument("--outfile", required=True, type=str, help="")
 args = parser.parse_args()
 
 print("Options in effect:")
@@ -23,13 +23,11 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
-os.makedirs(os.path.dirname(args.out), exist_ok=True)
-
-sep = "\t"
-
 if args.header is not None and args.header != 0:
     print("Error, header should be None or 0. Other values might show unintended behaviour.")
     exit()
+
+os.makedirs(os.path.dirname(args.outfile), exist_ok=True)
 
 
 def gzopen(file, mode="r"):
@@ -51,7 +49,7 @@ def load_file(inpath, header_only=False):
     data = []
     n_values = None
     for i, line in enumerate(fhin):
-        values = line.rstrip("\n").split(sep)
+        values = line.rstrip("\n").split("\t")
         if n_values is None:
             n_values = len(values)
         if len(values) != n_values:
@@ -117,7 +115,7 @@ def regress_data(inpath, outpath, covariates, sample_mask):
         if i % 1000 == 0:
             print("  Processed {:,} rows".format(i), end='\r')
 
-        values = line.rstrip("\n").split(sep)
+        values = line.rstrip("\n").split("\t")
         if n_values is None:
             n_values = len(values)
         if len(values) != n_values:
@@ -134,11 +132,11 @@ def regress_data(inpath, outpath, covariates, sample_mask):
             del values[args.index_col]
 
         if i == args.header:
-            fhout.write(sep.join(["-"] + np.array(values, dtype=object)[sample_mask].tolist()) + "\n")
+            fhout.write("\t".join(["-"] + np.array(values, dtype=object)[sample_mask].tolist()) + "\n")
             continue
 
         adj_values = calc_residuals(y=np.array(values, dtype=np.float64)[sample_mask], X=covariates)
-        fhout.write(sep.join([index] + adj_values) + "\n")
+        fhout.write("\t".join([index] + adj_values) + "\n")
 
     fhin.close()
     fhout.close()
@@ -249,11 +247,7 @@ if cov_rownames != data_colnames:
 cov_m = np.hstack([np.ones((cov_m.shape[0], 1)), cov_m])
 cov_colnames = ["intercept"] + cov_colnames
 
-# Define the output file.
-out_fpath = args.out + ".CovariatesRemovedOLS.txt" + (".gz" if args.data.endswith(".gz") else "")
-
 print("Calculating OLS residuals...")
-regress_data(inpath=args.data, outpath=out_fpath, covariates=cov_m, sample_mask=data_sample_mask)
+regress_data(inpath=args.data, outpath=args.outfile, covariates=cov_m, sample_mask=data_sample_mask)
 
-print("Saved: {}".format(out_fpath))
 print("Done")

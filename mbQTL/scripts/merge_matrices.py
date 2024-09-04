@@ -8,7 +8,7 @@ import os
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--data", nargs="+", required=True, type=str, help="")
 parser.add_argument("--axis", required=False, type=int, default=0, help="")
-parser.add_argument("--out", required=True, type=str, help="")
+parser.add_argument("--outfile", required=True, type=str, help="")
 args = parser.parse_args()
 
 print("Options in effect:")
@@ -16,7 +16,7 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
-os.makedirs(os.path.dirname(args.out), exist_ok=True)
+os.makedirs(os.path.dirname(args.outfile), exist_ok=True)
 
 print("Loading data...")
 covs_list = []
@@ -29,6 +29,6 @@ else:
     df = pd.concat(covs_list, axis=args.axis).dropna(axis=1, how="any")
 
 print("Saving results...")
-df.to_csv(args.out + ".txt.gz", sep="\t", header=True, index=True, compression="gzip")
+df.to_csv(args.outfile, sep="\t", header=True, index=True, compression="gzip")
 
 print("Done")

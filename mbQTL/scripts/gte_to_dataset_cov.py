@@ -7,7 +7,7 @@ import gzip
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--gte", required=True, type=str, help="")
-parser.add_argument("--out", required=True, type=str, help="")
+parser.add_argument("--outfile", required=True, type=str, help="")
 args = parser.parse_args()
 
 print("Options in effect:")
@@ -15,7 +15,7 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
-os.makedirs(os.path.dirname(args.out), exist_ok=True)
+os.makedirs(os.path.dirname(args.outfile), exist_ok=True)
 
 def gzopen(file, mode="r"):
     if file.endswith(".gz"):
@@ -34,7 +34,7 @@ fhin.close()
 
 
 print("\nSaving dataset as covariates...")
-fhout = gzopen(os.path.join(args.out + "dataset.txt.gz"), mode='w')
+fhout = gzopen(args.outfile, mode='w')
 for line in lines:
     fhout.write("\t".join(line) + "\n")
 fhout.close()

@@ -20,7 +20,7 @@ parser.add_argument("--bonf_bh_fdr_col", required=False, type=str, default="bonf
 parser.add_argument("--bh_fdr_col", required=False, type=str, default="bh_fdr", help="")
 parser.add_argument("--qvalue_col", required=False, type=str, default="qvalue_col", help="")
 parser.add_argument("--alpha", required=False, type=float, default=0.05, help="")
-parser.add_argument("--out", required=True, type=str, help="The output file where results will be saved.")
+parser.add_argument("--outfile", required=True, type=str, help="The output file where results will be saved.")
 args = parser.parse_args()
 
 print("Options in effect:")
@@ -28,7 +28,7 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
-os.makedirs(os.path.dirname(args.out), exist_ok=True)
+os.makedirs(os.path.dirname(args.outfile), exist_ok=True)
 
 def gzopen(file, mode="r"):
     if file.endswith(".gz"):
@@ -116,7 +116,7 @@ for i, fpath in enumerate(glob.glob(os.path.join(args.indir, "*/*-TopEffectsWith
             dataset_n = dataset_stats[ds_index]["NrTestedGenes"]
             dataset_n_na = row["NrTestedGenes"] - dataset_n
             dataset_n_nom = dataset_stats[ds_index][args.nom_pvalue_col]
-            print("\t  Dataset: {}\tNrTestedGenes: {:,} \tN-missing: {:,}\tN-nom signif. {:,} [{:.2f}%] (<{})".format(dataset_label, dataset_n, dataset_n_na, dataset_n_nom, (100 / dataset_n) * dataset_n_nom, args.minimimal_reporting_p))
+            print("\t  Dataset: {}\tNrTestedGenes: {:,} \tN-missing: {:,}\tN-nom signif. {:,} [{:.2f}%] (<{})".format(dataset_label, dataset_n, dataset_n_na, dataset_n_nom, (100 / dataset_n) * dataset_n_nom, args.alpha))
 
             # Add number of nominal significant effects to the summary stats.
             dataset_nom_pvalue_col = dataset_label + "P"
@@ -136,6 +136,6 @@ df = pd.DataFrame(data).T.loc[:, order].sort_values(by=[args.nom_pvalue_col, "Nr
 print(df)
 
 print("\nWriting output ...")
-df.to_csv(args.out, sep="\t", header=True, index=False)
+df.to_csv(args.outfile, sep="\t", header=True, index=False)
 
 print("\nEND")

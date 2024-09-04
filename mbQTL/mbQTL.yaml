@@ -3,9 +3,8 @@
 ##############################################################################################################
 inputs:
   bind_path: ### directories that the singularity should have access to (comma seperated).
-  singularity_image: ### path to the singularity image containing the software.
+  singularity_image: ### path to the singularity image containing the required software.
   repo_dir: ### path to the base directory where the scripts are stored (i.e. parent of `scripts`).
-  mbqtl_jar: ### mbQTL jar
 
   annotation: ### `genes.gtf` of your alignment reference. If the file does not end with `.gtf` it assumes it is a mbQTL annotation file.
   vcf: ### bgzipped genotype VCF file.
@@ -121,9 +120,9 @@ merge_memory: 4 ### Amount of gigs that will be used for memory and disk space p
 merge_threads: 1 ### Number of threads to use
 merge_time: 0 ### The time setting to use
 
-mul_test_correction_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
-mul_test_correction_threads: 1 ### Number of threads to use
-mul_test_correction_time: 0 ### The time setting to use
+multiple_test_correction_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+multiple_test_correction_threads: 1 ### Number of threads to use
+multiple_test_correction_time: 0 ### The time setting to use
 
 results_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 results_threads: 1 ### Number of threads to use
@@ -135,6 +134,10 @@ results_time: 0 ### The time setting to use
 create_annotation_settings:
   feature_name: "gene_name" ### the info column that in your gtf that describes the names of the genes in your expression matrix. Default `gene_name`.
   autosomes_only: True ### whether or not to only include autosomal chromosomes. Default 'True'.
+
+pca_settings:
+  eval_n_pcs: 3 ### how many PCs to evaluate for outlier detection; same number of Pcs is plotted
+  sample_outlier_zscore: 3 ### max absolute zscore calculated over `eval_n_pcs` number of PCs, higher than this number is defined as outlier
 
 settings_extra:
   java_memory_buffer: 1 ### increase job memory to this amount when running java applications to ensure '-Xmx' and '-Xms' do not overflow the max memory.

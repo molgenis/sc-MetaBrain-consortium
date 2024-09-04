@@ -18,14 +18,14 @@ Furthermore, quality of life settings and setting warnings are added to make the
 
 ## Installing
 
-In order to run the pipeline you require snakemake. The pipeline was developed using snakemake version `5.26.1=0` as part of the [sc-eQTLgen WG1](https://github.com/sc-eQTLgen-consortium/WG1-pipeline-QC/tree/scMetaBrain) conda environment ([snakemake.yaml](https://github.com/sc-eQTLgen-consortium/WG1-pipeline-QC/blob/master/Demultiplexing/snakemake.yaml)). In order to install this you require [miniconda3](https://repo.anaconda.com/miniconda/) and subsequently run:
+In order to run the pipeline you require snakemake. The pipeline was developed using snakemake version `5.26.1=0` in a conda [environment](snakemake.yaml)). In order to install this you require [miniconda3](https://repo.anaconda.com/miniconda/) and subsequently run:
 ```console
-conda env create -f snakemake.yaml -n wg1_snakemake
+conda env create -f snakemake.yaml -n mbqtl
 ``` 
 Then, to activate the environment, run:
 
 ```console
-conda activate wg1_snakemake
+conda activate mbqtl
 ``` 
 
 ## Arguments
@@ -34,9 +34,8 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
 
 **Pipeline specific inputs**:
  * `bind_path`: directories that the singularity should have access to (comma seperated).
- * `singularity_image`: path to the singularity image containing the software. Can be created from this [Dockerfile](Dockerfile).
+ * `singularity_image`: path to the singularity image containing the required software. Can be created from this [Dockerfile](Dockerfile).
  * `repo_dir`: path to the base directory where the scripts are stored (i.e. parent of `scripts`).
- * `mbqtl_jar`: mbQTL jar [download](https://jenkins.harmjanwestra.nl/job/systemsgenetics_hjw/lastBuild/nl.systemsgenetics$MbQTL/).
  * `output_dir`: the output directory.
  * `output_prefix`: the output filename prefix.
  * `cov`: covariate file. Tab-separated file containing the covariate values of each feature per sample. The first column contains the covariates. The rest of the columns are the sample names. Non-numerical covariates are automatically one-hot encoded where the most abundant category is excluded. If a `gte` file is given the dataset column will be used os covariate. Expression PCs can be automatically added as covariates by using `n_pcs`.
@@ -52,6 +51,8 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * `alpha`: QTL significance threshold. Default `0.05`.
  * `feature_name`: the info column that in your gtf that describes the names of the genes in your expression matrix. Default `gene_name`.
  * `autosomes_only`: whether or not to only include autosomal chromosomes. Default `True`.
+ * `eval_n_pcs`: how many PCs to evaluate for outlier detection; same number of Pcs is plotted. Default `3`. 
+ * `sample_outlier_zscore`: max absolute zscore calculated over `eval_n_pcs` number of PCs, higher than this number is defined as outlier. Note that outlier samples are not automatically excluded from the analysis. Default `3`.
  * `java_memory_buffer`: memory buffer in Gb to request in addition to what is set for `-Xmx` and `-Xms` to prevent out of memory isues in Java. Default `1`.
  * `force`: prevent snakemake from updating input settings that are unlogical. Use with caution. Default `False`.
  * `debug`: set logger to level DEBUG printing additional information. Default `False`.
@@ -176,7 +177,7 @@ You can choose to run different combinations of modes at the same time but using
 Please keep in mind that:
  * Expression PCs calculation is per dataset over the samples that overlap between the expression identifiers in `gte` and the columns in `exp`. 
  * Expression PCs are calculated without first removing covariates in `cov`.
- * snakemake checks if the output files exist but not with what settings they were generated. If you wish to rerun the pipeline with different settings while keeping the old files I recommend renaming the `cov` subfolder (e.g. `default` to `defaultSettingA`). This way snakemake will rerun mbQTL with the updated settings. Generally speaking it is only necessary to rename the `cov` subfolder as the other files are generated in subfolders based on the settings used. Exceptions are: the `create_annotation` folder if update settings in `create_annotation_settings`, and the `genotype` folder if you update `snplimit` / `snpgenelimit`.  
+ * Snakemake checks if the output files exist but not with what settings they were generated. Therefore, if you wish to rerun the eQTL mapping with different settings while keeping the old files it is recommended to change the complete `output_dir` rather than just changing the`output_prefix` since wrongly pre-processed input files might be used otherwise.
 
 ## Output
 

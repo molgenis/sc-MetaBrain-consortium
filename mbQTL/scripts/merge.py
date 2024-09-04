@@ -8,7 +8,7 @@ import os
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--input_dir", required=True, type=str, help="")
-parser.add_argument("--out", required=True, type=str, help="")
+parser.add_argument("--outfile", required=True, type=str, help="")
 args = parser.parse_args()
 
 print("Options in effect:")
@@ -16,7 +16,7 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
-os.makedirs(os.path.dirname(args.out), exist_ok=True)
+os.makedirs(os.path.dirname(args.outfile), exist_ok=True)
 
 
 def gzopen(file, mode="r"):
@@ -74,7 +74,7 @@ if len(files) > 0:
         gene_pval.sort(key=lambda p: p[1])
 
         # Save the output.
-        fho = gzopen(args.out + ".txt", 'w')
+        fho = gzopen(args.outfile, 'w')
         fho.write(header + "\n")
         for (gene, _) in gene_pval:
             fho.write(gene_line[gene] + "\n")
