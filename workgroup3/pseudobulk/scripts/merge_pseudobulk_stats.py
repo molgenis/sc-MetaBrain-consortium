@@ -8,7 +8,6 @@ import os
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--poolsheet", required=True, type=str, help="")
 parser.add_argument("--indir", required=True, type=str, help="")
-parser.add_argument("--split_per_dataset", action="store_true", default=False, help="")
 parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
 
@@ -21,7 +20,7 @@ print("")
 
 print("\nLoading poolsheet ...")
 poolsheet = pd.read_csv(args.poolsheet, sep="\t")
-has_dataset = "Dataset" in poolsheet.columns and args.split_per_dataset
+has_dataset = "Dataset" in poolsheet.columns
 
 print("\nLoading cell stats ...")
 data = []
@@ -33,14 +32,18 @@ for _, row in poolsheet.iterrows():
 
     try:
         stats = pd.read_csv(fpath, sep="\t")
-        print("\tLoaded {} with shape: {}".format(os.path.basename(fpath), stats.shape))
+        print("\tLoaded dataframe {} with shape: {}".format(os.path.basename(fpath), stats.shape))
     except pd.errors.EmptyDataError:
         print("\tFailed to load {}: no data".format(os.path.basename(fpath)))
         continue
 
-    stats.insert(0, "pool", str(row["Pool"]))
+    dataset = "Dataset"
     if has_dataset:
-        stats.insert(0, "dataset", str(row["Dataset"]))
+        dataset = str(row["Dataset"])
+
+    stats.insert(0, "pool", str(row["Pool"]))
+    stats.insert(0, "dataset", dataset)
+
     data.append(stats)
 if len(data) == 0:
     exit()
@@ -51,15 +54,8 @@ print("\nBarcode selection stats output:")
 print(stats)
 
 print("\nBarcode selection summary stats:")
-groupby = ["cell type"]
-sortby = ["ncells"]
-sortorder = [False]
-if has_dataset:
-    groupby += ["dataset"]
-    sortby += ["dataset"]
-    sortorder += [False, True]
-sumstats = stats.loc[:, [col for col in stats.columns if col not in ["pool", "sample", "ncells_pool", "ncells_sample"]]].groupby(groupby).sum()
-sumstats.sort_values(by=sortby, ascending=sortorder, inplace=True)
+sumstats = stats.loc[:, [col for col in stats.columns if col not in ["pool", "sample", "ncells_pool", "ncells_sample"]]].groupby(["dataset", "cell type"]).sum()
+sumstats.sort_values(by=["dataset", "ncells"], ascending=[True, False], inplace=True)
 sumstats = sumstats.T
 sumstats["Total"] = sumstats.sum(axis=1)
 print(sumstats)

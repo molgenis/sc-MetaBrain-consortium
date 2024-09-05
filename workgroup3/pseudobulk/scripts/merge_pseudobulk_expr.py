@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Author: M. Vochteloo
 
+import numpy as np
 import pandas as pd
 import argparse
 import gzip
@@ -33,12 +34,8 @@ def gzopen(file, mode="r"):
 def load_file(fpath, sep="\t", header=0, index_col=None, must_contain=None):
     data = []
     columns = None
-    index = 0
     with gzopen(fpath, mode="r") as fh:
         for index, line in enumerate(fh):
-            if index == 0 or (index + 1) % 1e5 == 0:
-                print("\tParsed {:,} lines".format(index + 1), end='\r')
-
             if index != header and must_contain is not None and must_contain not in line:
                 continue
 
@@ -47,7 +44,6 @@ def load_file(fpath, sep="\t", header=0, index_col=None, must_contain=None):
                 columns = values
                 continue
             data.append(values)
-    print("\tParsed {:,} lines".format(index + 1), end='\n')
 
     if len(data) == 0:
         print("\tFailed to load {}: no data".format(os.path.basename(fpath)))
@@ -62,8 +58,6 @@ def load_file(fpath, sep="\t", header=0, index_col=None, must_contain=None):
         column = df.columns[index_col]
         df.index = df[column]
         df.drop(column, axis=1, inplace=True)
-
-    print("\tLoaded {} with shape: {}".format(os.path.basename(fpath), df.shape))
     return df
 
 
@@ -71,22 +65,21 @@ def load_file_full(inpath, header, index_col, sep="\t", low_memory=True,
               nrows=None, skiprows=None):
     df = pd.read_csv(inpath, sep=sep, header=header, index_col=index_col,
                      low_memory=low_memory, nrows=nrows, skiprows=skiprows)
-    print("\tLoaded dataframe: {} "
-          "with shape: {}".format(os.path.basename(inpath),
-                                  df.shape))
     return df
 
 
 print("\nLoading poolsheet ...")
 poolsheet = load_file(args.poolsheet)
-has_dataset = "Dataset" in poolsheet.columns and args.split_per_dataset
+has_dataset = "Dataset" in poolsheet.columns
 
 print("\nLoading expression data ...")
-gte_data = []
-ncells_data = {}
-ncells_total = 0
 expr_data = []
+stats_data = []
+pool_index = 0
+n_pools = poolsheet.shape[0]
 for _, row in poolsheet.iterrows():
+    print("\tParsed {:,} / {:,} pools".format(pool_index, n_pools), end='\r')
+
     # Define input filepaths and check if they exist.
     expr_fpath = os.path.join(args.indir, row["Pool"] + ".pseudobulk.tsv.gz")
     stats_fpath = os.path.join(args.indir, row["Pool"] + ".pseudobulk.stats.tsv.gz")
@@ -99,15 +92,16 @@ for _, row in poolsheet.iterrows():
         continue
 
     # Load data and pre-process data.
-    expr_df = load_file(expr_fpath, index_col=0, must_contain=args.cell_type)
+    ct_suffix = "_" + args.cell_type
+    expr_df = load_file(expr_fpath, index_col=0, must_contain=ct_suffix)
     if expr_df is None:
         continue
     if len(set(expr_df.index)) != expr_df.shape[0]:
-        print("\tError, expression indices are not unique.")
+        print("\tError, sample indices are not unique.")
         exit()
-    mask = expr_df.index.str.endswith("_" + args.cell_type)
+    mask = expr_df.index.str.endswith(ct_suffix)
     expr_df = expr_df.loc[mask, :]
-    expr_df.index = expr_df.index.str.removesuffix("_" + args.cell_type)
+    expr_df.index = expr_df.index.str.removesuffix(ct_suffix)
 
     stats_df = load_file_full(stats_fpath, header=0, index_col=None)
     mask = stats_df["cell type"] == args.cell_type
@@ -116,73 +110,94 @@ for _, row in poolsheet.iterrows():
     if len(set(stats_df.index)) != stats_df.shape[0]:
         print("\tError, expression indices are not unique.")
         exit()
+    stats_df.drop(["sample", "cell type"], axis=1, inplace=True)
     stats_df = stats_df.loc[expr_df.index, :]
-
-    # Remove samples with too few cells.
-    mask = stats_df["ncells"] >= args.min_cells
-    if mask.sum() != stats_df.shape[0]:
-        for sample, ncells in zip(expr_df.index[~mask], stats_df["ncells"][~mask]):
-            print("\tExcluding sample '{}' with {:,} cells".format(sample, ncells))
-    if mask.sum() == 0:
-        continue
-    expr_df = expr_df.loc[mask, :]
-    stats_df = stats_df.loc[mask, :]
+    if not expr_df.index.equals(stats_df.index):
+        print("\tError, indices are not identical.")
+        exit()
 
     # Post-process.
+    dataset = "Dataset"
     if has_dataset:
-        updated_indices = []
-        for sample in expr_df.index:
-            updated_sample = str(row["Dataset"]) + "_" + sample
-            updated_indices.append(updated_sample)
-            gte_data.append([sample, updated_sample, row["Dataset"]])
-        expr_df.index = updated_indices
-        del updated_indices
+        dataset = row["Dataset"]
+    multiindex_df = pd.DataFrame({"Dataset": dataset, "Pool": row["Pool"], "Sample": expr_df.index})
+    expr_df.index = pd.MultiIndex.from_frame(multiindex_df)
+    stats_df.index = pd.MultiIndex.from_frame(multiindex_df)
 
-        if not row["Dataset"] in ncells_data:
-            ncells_data[row["Dataset"]] = 0
-        ncells_data[row["Dataset"]] += stats_df["ncells"].sum()
-    else:
-        for sample in expr_df.index:
-            gte_data.append([sample, sample, "Dataset"])
-
-        if not "Dataset" in ncells_data:
-            ncells_data["Dataset"] = 0
-        ncells_data["Dataset"] += stats_df["ncells"].sum()
-    ncells_total += stats_df["ncells"].sum()
+    # Save
     expr_data.append(expr_df)
+    stats_data.append(stats_df)
+    pool_index += 1
+
+print("\tParsed {:,} / {:,} genes".format(pool_index, n_pools))
 
 if len(expr_data) == 0:
     print("\tError, no data.")
     exit()
-df = pd.concat(expr_data, axis=0).astype(float)
-print("\tLoaded expression with {:,} cells and shape: {}".format(ncells_total, df.shape))
+expr_df = pd.concat(expr_data, axis=0).astype(float)
+stats_df = pd.concat(stats_data, axis=0).astype(float)
+print("\tLoaded expression with {:,} cells and shape: {}".format(stats_df["ncells"].sum(), expr_df.shape))
+if not expr_df.index.equals(stats_df.index):
+    print("\tError, indices are not identical.")
+    exit()
 
-if len(set(df.index)) != df.shape[0]:
-    print("\nAggregating expression data ...")
-    if args.aggregate_fun == "sum":
-        df = df.groupby(df.index).sum()
-    elif args.aggregate_fun == "mean":
-        df = df.groupby(df.index).mean()
-    else:
-        print("Error, unexpected aggregate_fun type {}".format(args.aggregate_fun))
-        exit()
-    print("\tAggregated expression to shape: {}".format(df.shape))
+print("\nAggregate on sample level ...")
+expr_df = expr_df.groupby(level=["Dataset", "Sample"]).sum()
+stats_df = stats_df.groupby(level=["Dataset", "Sample"]).sum()
 
-print("\nPostprocessing data")
-df = df.T
-gte = pd.DataFrame(gte_data).drop_duplicates()
-stats = pd.DataFrame(ncells_data, index=[args.cell_type])
+print("\nExcluding samples ...")
+dataset_pre_filter_n = dict(zip(*np.unique(stats_df.index.get_level_values("Dataset"), return_counts=True)))
+
+# Filter on minimum number of cells
+pre_filter_n = stats_df.shape[0]
+stats_df = stats_df.loc[stats_df["ncells"] > args.min_cells, :]
+print("\tRemoved {:,} samples with <{} cells".format(pre_filter_n - stats_df.shape[0], args.min_cells))
+
+# Resolve duplicate samples between datasets; pick the one with the most cells.
+pre_filter_n = stats_df.shape[0]
+keep_samples = stats_df.groupby("Sample")["ncells"].idxmax()
+expr_df = expr_df.loc[keep_samples, :]
+stats_df = stats_df.loc[keep_samples, :]
+print("\tRemoved {:,} duplicated samples\n".format(pre_filter_n - stats_df.shape[0]))
+
+dataset_post_filter_n = dict(zip(*np.unique(stats_df.index.get_level_values("Dataset"), return_counts=True)))
+for dataset, pre_filter_n in dataset_pre_filter_n.items():
+    post_filter_n = dataset_post_filter_n[dataset]
+    print("\tRemoved {:,} / {:,} samples from {}".format(pre_filter_n - post_filter_n, pre_filter_n, dataset))
+
+# Make sure the indices still match and that the samples are now distinct.
+if not expr_df.index.equals(stats_df.index):
+    print("\tError, indices are not identical.")
+    exit()
+samples = expr_df.index.get_level_values("Sample")
+if len(samples) != len(samples.unique()):
+    print("\tError, sample indices are not unique.")
+    exit()
+
+print("\nExpression file:")
+expr_df = expr_df.droplevel(["Dataset"]).T
+expr_df.columns.name = None
+print(expr_df)
+
+print("\nSummary stats file:")
+stats_df = stats_df.reset_index()
+stats_df.insert(3, "Cell type", args.cell_type)
+print(stats_df)
+
+print("\nGTE file:")
+gte_df = stats_df[["Sample", "Sample", "Dataset"]].copy()
+print(gte_df)
 
 print("\nSaving files")
-df.to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
-gte.to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.gte.txt"), sep="\t", header=False, index=False)
-stats.to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.stats.tsv"), sep="\t", header=True, index=True)
+expr_df.to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
+stats_df.to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.stats.tsv"), sep="\t", header=True, index=True)
+gte_df.to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.gte.txt"), sep="\t", header=False, index=False)
 
 if has_dataset:
-    for dataset in gte.iloc[:, 2].unique():
-        gte.loc[gte.iloc[:, 2] == dataset, :].to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.gte." + dataset + ".txt"), sep="\t", header=False, index=False)
+    for dataset in gte_df.iloc[:, 2].unique():
+        gte_df.loc[gte_df.iloc[:, 2] == dataset, :].to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.gte." + dataset + ".txt"), sep="\t", header=False, index=False)
 
-    gte.iloc[:, 2] = "Dataset"
-    gte.to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.gte.NoDataset.txt"), sep="\t", header=False, index=False)
+    gte_df.iloc[:, 2] = "Dataset"
+    gte_df.to_csv(os.path.join(args.out, args.cell_type + ".pseudobulk.gte.NoDataset.txt"), sep="\t", header=False, index=False)
 
 print("Done")

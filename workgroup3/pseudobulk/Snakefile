@@ -322,7 +322,7 @@ rule merge_pseudobulk_expr:
         exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.tsv.gz",
         gte = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.gte.txt",
         # gte_dataset = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.{dataset}.gte.txt",
-        # gte_nodataset = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.NoDataset.gte.txt",
+        gte_nodataset = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.NoDataset.gte.txt",
         stats = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/{cell_type}.pseudobulk.stats.tsv",
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_pseudobulk_expr_memory"],
@@ -349,7 +349,7 @@ rule merge_pseudobulk_expr:
             --aggregate_fun {params.aggregate_fun} \
             {params.split_per_dataset} \
             --out {params.out} > {log} 2>&1
-        singularity exec --bind {params.bind} {params.sif} touch {output.exp} {output.gte} {output.stats}
+        singularity exec --bind {params.bind} {params.sif} touch {output.exp} {output.gte} {output.gte_nodataset} {output.stats}
         """
 
 
@@ -370,7 +370,6 @@ rule merge_pseudobulk_stats:
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/merge_pseudobulk_stats.py",
         indir = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/",
-        split_per_dataset = "--split_per_dataset" if config["settings"]["split_per_dataset"] else "",
         out = config["outputs"]["output_dir"] + "expression/{pb_setting}/"
     log: config["outputs"]["output_dir"] + "log/merge_pseudobulk_stats.{pb_setting}.log"
     shell:
@@ -378,7 +377,6 @@ rule merge_pseudobulk_stats:
          singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --poolsheet {input.poolsheet} \
             --indir {params.indir} \
-            {params.split_per_dataset} \
             --out {params.out} > {log} 2>&1
          singularity exec --bind {params.bind} {params.sif} touch {output.stats} {output.sumstats}
         """

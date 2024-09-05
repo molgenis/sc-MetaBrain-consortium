@@ -83,7 +83,7 @@ def load_file(fpath, sep="\t", header=0, index_col=None, must_contain=None):
         df.index = df[column]
         df.drop(column, axis=1, inplace=True)
 
-    print("\tLoaded {} with shape: {}".format(os.path.basename(fpath), df.shape))
+    print("\tLoaded dataframe {} with shape: {}".format(os.path.basename(fpath), df.shape))
     return df
 
 def load_metadata(barcodes_fpath):

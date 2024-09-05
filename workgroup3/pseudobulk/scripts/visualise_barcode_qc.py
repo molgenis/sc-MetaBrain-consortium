@@ -53,7 +53,7 @@ def load_barcode_qc():
 
         try:
             df = pd.read_csv(fpath, sep="\t")
-            print("\tLoaded {} with shape: {}".format(os.path.basename(fpath), df.shape))
+            print("\tLoaded dataframe {} with shape: {}".format(os.path.basename(fpath), df.shape))
         except pd.errors.EmptyDataError:
             print("\tFailed to load {}: no data".format(os.path.basename(fpath)))
             continue
@@ -105,9 +105,10 @@ def add_mad_lines(ax, values, horizontal=False, alpha=0.3):
         if lower_threshold > outer_bound[0]:
             line_func(lower_threshold, ls='--', color="#808080", alpha=min(1., alpha), zorder=-1)
 
-def plot(df, x="x", y="y", panels="z", type="scatter", mask=None, palette=None, xinclude=None, yinclude=None, add_mad=True, xlabel=None, ylabel=None, title=None, filename="plot"):
-    panel_values = list(df[panels].unique())
-    panel_values.sort()
+def plot(df, x="x", y="y", panels="z", panel_order=None, type="scatter", mask=None, palette=None, xinclude=None, yinclude=None, add_mad=True, xlabel=None, ylabel=None, title=None, filename="plot"):
+    if panel_order is None:
+        panel_order = list(df[panels].unique())
+        panel_order.sort()
 
     if xlabel is None:
         xlabel = x
@@ -138,7 +139,7 @@ def plot(df, x="x", y="y", panels="z", type="scatter", mask=None, palette=None, 
                 upper = np.inf
             df.loc[(df[column] >= lower) & (df[column] <= upper), column + "include"] = True
 
-    nplots = len(panel_values)
+    nplots = len(panel_order)
     ncols = math.ceil(np.sqrt(nplots))
     nrows = math.ceil(nplots / ncols)
 
@@ -163,13 +164,13 @@ def plot(df, x="x", y="y", panels="z", type="scatter", mask=None, palette=None, 
             ax = axes[row_index, col_index]
 
         if i < nplots:
-            data = df.loc[df[panels] == panel_values[i], [x, y, x + "include", y + "include"]].copy()
+            data = df.loc[df[panels] == panel_order[i], [x, y, x + "include", y + "include"]].copy()
             if data.shape[0] == 0:
                 continue
 
             color = "#808080"
-            if palette is not None and panel_values[i] in palette:
-                color = palette[panel_values[i]]
+            if palette is not None and panel_order[i] in palette:
+                color = palette[panel_order[i]]
 
             data["hue"] = False
             data.loc[(data[x + "include"]) & (data[y + "include"]), "hue"] = True
@@ -208,7 +209,7 @@ def plot(df, x="x", y="y", panels="z", type="scatter", mask=None, palette=None, 
                                      data=data.loc[data["hue"], :],
                                      color=color,
                                      stat="percent",
-                                     alpha=1,
+                                     alpha=0.5,
                                      legend=False,
                                      ax=ax)
                 else:
@@ -234,69 +235,90 @@ def plot(df, x="x", y="y", panels="z", type="scatter", mask=None, palette=None, 
             n = data.shape[0]
             n_include = sum(data["hue"])
             n_exclude = n - n_include
+            y_pos = 0.9
+            y_pos_offset = -0.05
             ax.annotate(
                 'total N = {:,} [{:.0f}%]'.format(n, (100 / total_n) * n),
-                xy=(0.5, 0.90),
+                xy=(0.5, y_pos),
                 xycoords=ax.transAxes,
                 color="#000000",
                 fontsize=12,
                 fontweight='bold')
-            ax.annotate(
-                'N include = {:,} [{:.0f}%]'.format(n_include, (100 / n) * n_include),
-                xy=(0.5, 0.85),
-                xycoords=ax.transAxes,
-                color=color,
-                fontsize=12,
-                fontweight='bold')
-            ax.annotate(
-                'N exclude = {:,} [{:.0f}%]'.format(n_exclude, (100 / n) * n_exclude),
-                xy=(0.5, 0.80),
-                xycoords=ax.transAxes,
-                color="#000000",
-                fontsize=12,
-                fontweight='bold')
-            if type == "hist":
+            y_pos += y_pos_offset
+
+            if n_include > 0:
                 ax.annotate(
-                    'average x = {:.2f}'.format(data.loc[data["hue"], x].mean()),
-                    xy=(0.5, 0.75),
+                    'N include = {:,} [{:.0f}%]'.format(n_include, (100 / n) * n_include),
+                    xy=(0.5, y_pos),
                     xycoords=ax.transAxes,
                     color=color,
                     fontsize=12,
                     fontweight='bold')
-                ax.annotate(
-                    'average x = {:.2f}'.format(data.loc[~data["hue"], x].mean()),
-                    xy=(0.5, 0.70),
-                    xycoords=ax.transAxes,
-                    color="#000000",
-                    fontsize=12,
-                    fontweight='bold')
-            if type == "scatter":
-                ax.annotate(
-                    'average x = {:.2f}'.format(data[x].mean()),
-                    xy=(0.5, 0.75),
-                    xycoords=ax.transAxes,
-                    color="#000000",
-                    fontsize=12,
-                    fontweight='bold')
-                ax.annotate(
-                    'average y = {:.2f}'.format(data[y].mean()),
-                    xy=(0.5, 0.70),
-                    xycoords=ax.transAxes,
-                    color="#000000",
-                    fontsize=12,
-                    fontweight='bold')
+                y_pos += y_pos_offset
 
-                pearson_coef = np.nan
+            if n_exclude > 0:
+                ax.annotate(
+                    'N exclude = {:,} [{:.0f}%]'.format(n_exclude, (100 / n) * n_exclude),
+                    xy=(0.5, y_pos),
+                    xycoords=ax.transAxes,
+                    color="#000000",
+                    fontsize=12,
+                    fontweight='bold')
+                y_pos += y_pos_offset
+
+            if type == "hist":
+                if n_include > 0:
+                    ax.annotate(
+                        'average x = {:.2f}'.format(data.loc[data["hue"], x].mean()),
+                        xy=(0.5, y_pos),
+                        xycoords=ax.transAxes,
+                        color=color,
+                        fontsize=12,
+                        fontweight='bold')
+                    y_pos += y_pos_offset
+
+                if n_exclude > 0:
+                    ax.annotate(
+                        'average x = {:.2f}'.format(data.loc[~data["hue"], x].mean()),
+                        xy=(0.5, y_pos),
+                        xycoords=ax.transAxes,
+                        color="#000000",
+                        fontsize=12,
+                        fontweight='bold')
+                    y_pos += y_pos_offset
+
+            if type == "scatter":
+                if n_include > 0:
+                    ax.annotate(
+                        'average x = {:.2f}'.format(data[x].mean()),
+                        xy=(0.5, y_pos),
+                        xycoords=ax.transAxes,
+                        color="#000000",
+                        fontsize=12,
+                        fontweight='bold')
+                    y_pos += y_pos_offset
+
+                if n_exclude > 0:
+                    ax.annotate(
+                        'average y = {:.2f}'.format(data[y].mean()),
+                        xy=(0.5, y_pos),
+                        xycoords=ax.transAxes,
+                        color="#000000",
+                        fontsize=12,
+                        fontweight='bold')
+                    y_pos += y_pos_offset
+
                 if data[x].std() > 0 and data[y].std() > 0:
                     pearson_coef, _ = stats.pearsonr(data[y], data[x])
 
-                ax.annotate(
-                    'total r = {:.2f}'.format(pearson_coef),
-                    xy=(0.5, 0.65),
-                    xycoords=ax.transAxes,
-                    color="#000000",
-                    fontsize=12,
-                    fontweight='bold')
+                    ax.annotate(
+                        'total r = {:.2f}'.format(pearson_coef),
+                        xy=(0.5, y_pos),
+                        xycoords=ax.transAxes,
+                        color="#000000",
+                        fontsize=12,
+                        fontweight='bold')
+                    y_pos += y_pos_offset
 
             ax.set_xlabel(xlabel if row_index == (nrows - 1) else "",
                           fontsize=10,
@@ -304,7 +326,7 @@ def plot(df, x="x", y="y", panels="z", type="scatter", mask=None, palette=None, 
             ax.set_ylabel(ylabel if col_index == 0 else "",
                           fontsize=10,
                           fontweight='bold')
-            ax.set_title(panel_values[i],
+            ax.set_title(panel_order[i],
                          fontsize=14,
                          fontweight='bold')
         else:
@@ -360,7 +382,7 @@ if "Dataset" in barcode_qc:
     id_vars.append("Dataset")
 barcode_qcm = barcode_qc.melt(id_vars=id_vars, value_vars=args.barcode_qc_columns)
 
-for variable in barcode_qcm["variable"].unique():
+for variable in args.barcode_qc_columns:
     plot(
         df=barcode_qcm.loc[barcode_qcm["variable"] == variable, :].copy(),
         x="value",
@@ -377,13 +399,14 @@ for variable in barcode_qcm["variable"].unique():
 
 for cell_type in barcode_qcm[args.cell_level].unique():
     if cell_type in palette:
-        for variable in barcode_qcm["variable"].unique():
+        for variable in args.barcode_qc_columns:
             palette[variable] = palette[cell_type]
 
     plot(
         df=barcode_qcm.loc[barcode_qcm[args.cell_level] == cell_type, :].copy(),
         x="value",
         panels="variable",
+        panel_order=args.barcode_qc_columns,
         mask="mask",
         type="hist",
         palette=palette,

@@ -33,7 +33,7 @@ settings:
   percent_rb: [ 100 ] # max value
   percent_mt: [ 5 ] # max value
   malat1: [ 0 ] # min value
-  cap_barcodes: [ Null ] # max value
+  cap_barcodes: [ 10000 ] # max value
   cellranger_barcodes: [ False ]
 
   # Merge
@@ -53,7 +53,7 @@ pseudobulk_pool_memory: 8
 pseudobulk_pool_threads: 1
 pseudobulk_pool_time: 0
 
-visualise_barcode_qc_memory: 4
+visualise_barcode_qc_memory: 8
 visualise_barcode_qc_threads: 1
 visualise_barcode_qc_time: 0
 
