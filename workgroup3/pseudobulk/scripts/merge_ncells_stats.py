@@ -40,7 +40,8 @@ def get_key_value(setting):
 
 print("\nLoading ncells stats ...")
 data = {}
-order = ["Cell type"]
+setting_keys = []
+datasets = set()
 for i, fpath in enumerate(glob.glob(os.path.join(args.workdir, "*/*/*.pseudobulk.stats.tsv"))):
     fparts = fpath.split(os.sep)
 
@@ -52,30 +53,28 @@ for i, fpath in enumerate(glob.glob(os.path.join(args.workdir, "*/*/*.pseudobulk
         for setting in fpart.split("_"):
             key, value = get_key_value(setting)
             settings[key] = value
-            if key not in order:
-                order.append(key)
+            if key not in setting_keys:
+                setting_keys.append(key)
 
     stats = pd.read_csv(fpath, sep="\t", header=0, index_col=0)
-    if "Dataset" in stats.columns:
-        settings["ncells"] = stats.loc[cell_type, "Dataset"]
-        if "ncells" not in order:
-            order.append("ncells")
-    else:
-        for dataset in stats.columns:
-            settings[dataset] = stats.loc[cell_type, dataset]
-            if dataset not in order:
-                order.append(dataset)
-        settings["ncells"] = stats.loc[cell_type, :].sum()
-        if "ncells" not in order:
-            order.append("ncells")
+    settings.update(stats.groupby("Dataset").sum()["ncells"].to_dict())
+    settings["ncells"] = stats["ncells"].sum()
+    datasets.update(stats["Dataset"].unique())
     data[i] = settings
 if len(data) == 0:
     exit()
-stats = pd.DataFrame(data).T.loc[:, order]
+
+stats = pd.DataFrame(data).T
 print("\tLoaded cell stats with shape: {}".format(stats.shape))
 
-print("\nLoaded stats:")
+# Post-processing.
+datasets = list(datasets)
+datasets.sort()
+order = ["Cell type"] + datasets + ["ncells"]
+stats = stats.loc[:, order]
 stats.sort_values(by=["Cell type", "ncells"], ascending=[True, False], inplace=True)
+
+print("\nLoaded stats:")
 print(stats)
 
 print("\nSaving files")
