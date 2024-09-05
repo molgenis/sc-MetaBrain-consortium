@@ -2,7 +2,6 @@
 # Author: M. Vochteloo
 
 import argparse
-import numpy as np
 import pandas as pd
 from scipy import stats
 import gzip
@@ -12,17 +11,6 @@ import re
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--indir", required=True, type=str, help="")
-parser.add_argument("--snp_alleles_col", required=False, type=str, default="SNPAlleles", help="")
-parser.add_argument("--nom_pvalue_col", required=False, type=str, default="MetaP", help="")
-parser.add_argument("--n_samples_col", required=False, type=str, default="MetaPN", help="")
-parser.add_argument("--n_datasets_col", required=False, type=str, default="NrDatasets", help="")
-parser.add_argument("--dataset_zcore", required=False, type=str, default="DatasetZScores", help="")
-parser.add_argument("--n_tests_col", required=False, type=str, default="NrTestedSNPs", help="")
-parser.add_argument("--beta_adj_pvalue_col", required=False, type=str, default="BetaAdjustedMetaP", help="")
-parser.add_argument("--bonf_pvalue_col", required=False, type=str, default="BonfAdjustedMetaP", help="")
-parser.add_argument("--bonf_bh_fdr_col", required=False, type=str, default="BonfBHAdjustedMetaP", help="")
-parser.add_argument("--bh_fdr_col", required=False, type=str, default="bh_fdr", help="")
-parser.add_argument("--qvalue_col", required=False, type=str, default="qval", help="")
 parser.add_argument("--alpha", required=False, type=float, default=0.05, help="")
 parser.add_argument("--outfile", required=True, type=str, help="The output file where results will be saved.")
 args = parser.parse_args()
@@ -42,129 +30,135 @@ def gzopen(file, mode="r"):
     else:
         return open(file, mode)
 
-print(os.path.join(args.indir, "*/*-TopEffectsWithMulTest.txt"))
-
-# Create groups of columns that are handled the same way.
-counter_columns = [args.n_tests_col]
-average_columns = [args.n_samples_col, args.n_datasets_col]
-signif_columns = [args.nom_pvalue_col, args.beta_adj_pvalue_col, args.bonf_pvalue_col, args.bonf_bh_fdr_col, args.bh_fdr_col, args.qvalue_col]
-all_columns = [args.snp_alleles_col] + counter_columns + average_columns + signif_columns
+# Define the columns we want to keep track of and how we want to summarise them.
+columns = [
+    ("NrTestedSNPs", "sum"),
+    ("SNPAlleles", "snp"),
+    ("MetaPN", "average"),
+    ("NrDatasets", "average"),
+    ("MetaP", "signif"),
+    ("MetaP-Random", "signif"),
+    ("BetaAdjustedMetaP", "signif"),
+    ("BonfAdjustedMetaP", "signif"),
+    ("BonfBHAdjustedMetaP", "signif"),
+    ("DatasetZScores(DATASET)", "dataset_z_signif"),
+    ("DatasetFisherZ(DATASET)", "dataset_z_signif"),
+    ("DatasetFisherZ(DATASET)-Random", "dataset_z_signif"),
+    ("bh_fdr", "signif"),
+    ("qval", "signif"),
+]
+rename_columns = {"SNPAlleles": "NrSNPVariants", "MetaPN": "AvgMetaPN", "NrDatasets": "AvgNrDatasets"}
+columns_order = {column[0]: index for index, column in enumerate(columns)}
 
 print("Counting number of eQTLs ...")
-lookup = {}
 row_index = 0
 data = {}
-dataset_nom_pvalue_columns = []
+colnames_order = {}
 for i, fpath in enumerate(glob.glob(os.path.join(args.indir, "*/*-TopEffectsWithMultTest.txt"))):
+    # Parse the file path.
     cov = fpath.split(os.sep)[-2]
     prefix = fpath.split(os.sep)[-1].replace("-TopEffectsWithMultTest.txt", "")
+    if prefix != "Excitatory.neurons.BryoisEffects.QTLMeta.FISHERZMETA":
+        continue
 
-    if cov not in lookup:
-        lookup[cov] = {}
-    if prefix not in lookup[cov]:
-        lookup[cov][prefix] = row_index
-        row_index += 1
+    # Prepare the counters.
+    row = {"Cov": cov, "Prefix": prefix, "NrTestedGenes": 0}
 
-    current_row_index = lookup[cov][prefix]
-    print("\tProcessing covariate {} with prefix {} to row index: {}".format(cov, prefix, current_row_index))
-
-    row = {"Cov": cov, "Prefix": prefix, "NrTestedGenes": 0, "NrTopINDELS": 0}
-    for column in all_columns:
-        row[column] = 0
-
-    dataset_labels = {}
-    dataset_stats = {}
-    n_datasets = 0
+    # Loop through the file.
     indices = {}
+    sub_indices = {}
     with gzopen(fpath, 'r') as f:
         for j, line in enumerate(f):
             values = line.rstrip("\n").split("\t")
             if j == 0:
+                # Process the header.
                 found = False
-                for index, colname in enumerate(values):
-                    match = re.match("([A-Za-z]+)\(([^()]+)\)([-A-Za-z]*)", colname)
+                for index, value in enumerate(values):
+                    match = re.match("[A-Za-z]+\(([^()]+)\)[-A-Za-z]*", value)
                     if match:
-                        colname = match.group(1) + match.group(3)
-
-                        if colname.startswith(args.dataset_zcore):
-                            if found:
-                                print("Warning, multiple columns start with '{}', using first.".format(args.dataset_zcore))
-                                continue
-                            found = True
-                            for ds_index, dataset in enumerate(match.group(2).split(";")):
-                                dataset_labels[ds_index] = dataset
-                                dataset_stats[ds_index] = {}
-                                dataset_stats[ds_index]["NrTestedGenes"] = 0
-                                dataset_stats[ds_index][args.nom_pvalue_col] = 0
-                                n_datasets += 1
+                        colname = value.replace(match.group(1), "DATASET")
+                        ds_indices = {}
+                        for ds_index, dataset in enumerate(match.group(1).split(";")):
+                            ds_indices[ds_index] = dataset
+                            ds_colname = colname.replace("DATASET", dataset)
+                            if colname in columns_order:
+                                row[ds_colname] = 0
+                                if ds_colname not in colnames_order:
+                                    colnames_order[ds_colname] = columns_order[colname]
+                        sub_indices[colname] = ds_indices
+                    else:
+                        colname = value
+                        if colname in columns_order:
+                            row[colname] = 0
+                            if colname not in colnames_order:
+                                colnames_order[colname] = columns_order[colname]
 
                     indices[colname] = index
                 continue
 
-            if args.snp_alleles_col not in indices:
-                row["NrTopINDELS"] = np.nan
-            else:
-                snp_allele_len = len(values[indices[args.snp_alleles_col]])
-                if snp_allele_len < 3:
-                    print("Warning, unexpected SNP alleles length.")
-                    row["NrTopINDELS"] = np.nan
-                elif snp_allele_len > 3:
-                    row["NrTopINDELS"] += 1
-
-            for column in counter_columns + average_columns:
-                if column not in indices:
-                    row[column] = np.nan
-                else:
-                    row[column] += int(values[indices[column]])
-
-            for column in signif_columns:
-                if column not in indices:
-                    row[column] = np.nan
-                else:
-                    if float(values[indices[column]]) < args.alpha:
-                        row[column] += 1
-
-            if n_datasets > 1:
-                for ds_index, zscore in enumerate(values[indices[args.dataset_zcore]].split(";")):
-                    if zscore == "-":
-                        continue
-                    pvalue = stats.norm.cdf(-abs(float(zscore))) * 2
-                    dataset_stats[ds_index]["NrTestedGenes"] += 1
-                    if pvalue < args.alpha:
-                        dataset_stats[ds_index][args.nom_pvalue_col] += 1
+            # Count the row.
             row["NrTestedGenes"] += 1
+
+            # Process the columns of interest based on their mode.
+            for colname, mode in columns:
+                if colname in indices:
+                    value = values[indices[colname]]
+                    if mode == "snp":
+                        if len(value) == 3:
+                            row[colname] += 1
+                    elif mode == "sum" or mode == "average":
+                        row[colname] += int(value)
+                    elif mode == "signif":
+                        if float(value) < args.alpha:
+                            row[colname] += 1
+                    elif mode == "dataset_z_signif":
+                        for ds_index, ds_zscore in enumerate(value.split(";")):
+                            if ds_zscore == "-":
+                                continue
+                            ds_colname = colname.replace("DATASET", sub_indices[colname][ds_index])
+                            ds_pvalue = stats.norm.cdf(-abs(float(ds_zscore))) * 2
+                            if ds_pvalue < args.alpha:
+                                row[ds_colname] += 1
+                    else:
+                        print("Error, unexpected mode '{}'.".format(mode))
+                        exit()
     f.close()
 
-    for column in average_columns:
-        row[column] = row[column] / row["NrTestedGenes"]
+    # Post-process the averge columns.
+    for colname, mode in columns:
+        if mode == "average":
+            row[colname] = round(row[colname] / row["NrTestedGenes"], 1)
 
-    if n_datasets > 1:
-        for ds_index in range(n_datasets):
-            # Extract and print the stats per dataset.
-            dataset_label = dataset_labels[ds_index]
-            dataset_n = dataset_stats[ds_index]["NrTestedGenes"]
-            dataset_n_na = row["NrTestedGenes"] - dataset_n
-            dataset_n_nom = dataset_stats[ds_index][args.nom_pvalue_col]
-            print("\t  Dataset: {}\tNrTestedGenes: {:,} \tN-missing: {:,}\tN-nom signif. {:,} [{:.2f}%] (<{})".format(dataset_label, dataset_n, dataset_n_na, dataset_n_nom, (100 / dataset_n) * dataset_n_nom, args.alpha))
-
-            # Add number of nominal significant effects to the summary stats.
-            dataset_nom_pvalue_col = args.dataset_zcore + "ToP"
-            if dataset_nom_pvalue_col not in dataset_nom_pvalue_columns:
-                dataset_nom_pvalue_columns.append(dataset_nom_pvalue_col)
-            row[dataset_nom_pvalue_col] = dataset_n_nom
-
-    data[current_row_index] = row
+    # Save.
+    data[row_index] = row
+    row_index += 1
 
 if len(data) == 0:
     print("Error, no Data")
     exit()
 
+# Convert to Pandas.
+df = pd.DataFrame(data).T
+
+# Sort.
+pvalue_sort_col = "MetaP"
+if "MetaP-Random" in df:
+    df["tmpP"] = df[["MetaP", "MetaP-Random"]].min(axis=1)
+    pvalue_sort_col = "tmpP"
+df.sort_values(by=[pvalue_sort_col, "NrTestedGenes", "Cov", "Prefix"], ascending=[False, True, True, True])
+if "tmpP" in df.columns:
+    df.drop(["tmpP"], axis=1, inplace=True)
+
+# Reorder and rename.
+colnames_order = list(colnames_order.items())
+colnames_order.sort(key=lambda x: (x[1], x[0]))
+order = [co[0] for co in colnames_order]
+df = df.loc[:, ["Cov", "Prefix", "NrTestedGenes"] + order].rename(columns=rename_columns).T
+
 print("\nResults:")
-order = ["Cov", "Prefix", "NrTestedGenes"] + counter_columns + ["NrTopINDELS"] + average_columns + dataset_nom_pvalue_columns + signif_columns
-df = pd.DataFrame(data).T.loc[:, order].sort_values(by=[args.nom_pvalue_col, "NrTestedGenes", "Cov", "Prefix"], ascending=[False, True, True, True])
 print(df)
 
 print("\nWriting output ...")
-df.to_csv(args.outfile, sep="\t", header=True, index=False)
+df.to_csv(args.outfile, sep="\t", header=False, index=True)
 
 print("\nEND")
