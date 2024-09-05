@@ -1326,9 +1326,7 @@ rule run_qtl:
             {params.snplog} \
             --out {params.out} > {log} 2>&1
         
-        singularity exec --bind {params.bind} {params.sif} touch {output.all}
-        singularity exec --bind {params.bind} {params.sif} touch {output.all_perm}
-        singularity exec --bind {params.bind} {params.sif} touch {output.snplog}
+        singularity exec --bind {params.bind} {params.sif} touch {output.all} {output.all_perm} {output.snplog}
         """
 
 
@@ -1423,8 +1421,12 @@ rule results:
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/results.py",
         indir = config["outputs"]["output_dir"] + "output/",
+        snp_alleles_col = "snp_alleles_col",
         n_tests_col = "NrTestedSNPs",
-        nom_pvalue_col = "MetaP",
+        nom_pvalue_col = "MetaP" + ("-Random" if config["qtl_settings"]["meta_analysis_method"] == "fisherzmetarandom" else ""),
+        n_samples_col = "MetaPN",
+        n_datasets_col = "NrDatasets",
+        dataset_zcore = "DatasetZScores" if config["qtl_settings"]["meta_analysis_method"] == "empzmeta" else "DatasetFisherZ" if config["qtl_settings"]["meta_analysis_method"] in ["fisherzmeta", "fisherzmetarandom"] else "",
         beta_adj_pvalue_col = "BetaAdjustedMetaP",
         bonf_pvalue_col= "BonfAdjustedMetaP",
         bonf_bh_fdr_col = "BonfBHAdjustedMetaP",
@@ -1436,8 +1438,12 @@ rule results:
         """
         singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --indir {params.indir} \
-            --n_tests_col {params.n_tests_col} \
+            --snp_alleles_col {params.snp_alleles_col} \
             --nom_pvalue_col {params.nom_pvalue_col} \
+            --n_samples_col {params.n_samples_col} \
+            --n_datasets_col {params.n_datasets_col} \
+            --dataset_zcore {params.dataset_zcore} \
+            --n_tests_col {params.n_tests_col} \
             --beta_adj_pvalue_col {params.beta_adj_pvalue_col} \
             --bonf_pvalue_col {params.bonf_pvalue_col} \
             --bonf_bh_fdr_col {params.bonf_bh_fdr_col} \

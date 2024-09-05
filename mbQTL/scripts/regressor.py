@@ -27,7 +27,9 @@ if args.header is not None and args.header != 0:
     print("Error, header should be None or 0. Other values might show unintended behaviour.")
     exit()
 
-os.makedirs(os.path.dirname(args.outfile), exist_ok=True)
+dir = os.path.dirname(args.outfile)
+if dir != "":
+    os.makedirs(dir, exist_ok=True)
 
 
 def gzopen(file, mode="r"):
