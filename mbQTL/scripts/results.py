@@ -199,6 +199,6 @@ print("\nResults:")
 print(df)
 
 print("\nWriting output ...")
-df.to_csv(args.outfile, sep="\t", header=False, index=True)
+df.to_csv(args.outfile, sep="\t", header=True, index=False)
 
 print("\nEND")
