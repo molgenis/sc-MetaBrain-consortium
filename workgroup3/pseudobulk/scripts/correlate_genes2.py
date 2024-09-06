@@ -170,7 +170,7 @@ for i in range(n_features):
         featuresi = features[R_chunk]
         featuresj = features[C_chunk]
         for featurei, featurej, beta in zip(featuresi, featuresj, betas):
-            fh.write(f"{featurej}\t{featurej}\t{beta}\n")
+            fh.write(f"{featurei}\t{featurej}\t{beta}\n")
 
         print("\tCalculated {:,} / {:,} correlations".format(total_index, n_correlations))
         chunk_index = 0
@@ -190,7 +190,7 @@ if chunk_index > 0:
     featuresi = features[R_chunk]
     featuresj = features[C_chunk]
     for featurei, featurej, beta in zip(featuresi, featuresj, betas):
-        fh.write(f"{featurej}\t{featurej}\t{beta}\n")
+        fh.write(f"{featurei}\t{featurej}\t{beta}\n")
 fh.close()
 print("\tCalculated {:,} / {:,} correlations".format(total_index, n_correlations))
 

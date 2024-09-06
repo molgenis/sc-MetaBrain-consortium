@@ -165,7 +165,7 @@ for i in range(n_features):
         cov_xy = pre_weighted_cov(x, y, w, sw)
         beta = pre_weighted_corr(cov_x=cov_x, cov_y=cov_y, cov_xy=cov_xy)
 
-        fh.write(f"{featurej}\t{featurej}\t{beta}\n")
+        fh.write(f"{featurei}\t{featurej}\t{beta}\n")
 
         index += 1
 fh.close()
