@@ -16,6 +16,7 @@ parser = argparse.ArgumentParser(description="")
 parser.add_argument("--counts", required=True, type=str, help="")
 parser.add_argument("--feature_name", required=False, type=str, default="HGNC", choices=["HGNC", "ENSG", "HGNC_ENSG"], help="")
 parser.add_argument("--min_obs", required=False, type=int, default=10, help="")
+parser.add_argument("--chunk_size", required=False, type=int, default=10000, help="")
 parser.add_argument("--outfile", required=True, type=str, help="")
 args = parser.parse_args()
 
@@ -91,30 +92,6 @@ def get_features(m, indices):
         print("Unexpected feature name '{}'".format(args.feature_name))
         exit()
 
-def weight_matrix(m, weight):
-    """
-    https://stackoverflow.com/questions/38641691/weighted-correlation-coefficient-with-pandas
-    """
-    # wtd_cor
-    weight = weight / np.mean(weight)
-
-    # stdz
-    sw = np.sum(weight)
-    wtd_mean = np.sum(m * weight[:, np.newaxis], axis=0) / sw
-    m = m - wtd_mean
-    return m
-
-def pre_weighted_cov(x, y, w, sw):
-    """
-    https://stackoverflow.com/questions/38641691/weighted-correlation-coefficient-with-pandas
-    """
-    return np.sum(w * x * y) / sw
-
-def pre_weighted_corr(cov_x, cov_y, cov_xy):
-    """
-    https://stackoverflow.com/questions/38641691/weighted-correlation-coefficient-with-pandas
-    """
-    return cov_xy / np.sqrt(cov_x * cov_y)
 
 #############################################
 
@@ -136,8 +113,15 @@ del adata
 
 print("\nWeighing matrix ...")
 w = m.sum(axis=1)
-sw = np.sum(w)
-weighted_m = weight_matrix(m=m, weight=w)
+
+# Normalise the weights.
+norm_w = w / np.mean(w)
+
+# weight the matrix: m - (np.sum(m * weight[:, np.newaxis], axis=0) / np.sum(weight))
+weighted_m = m - (np.einsum('ij,i->j', m, norm_w) / np.sum(norm_w))
+
+# calculate the weighted cov matrix: np.sum(w[:, np.newaxis] * weighted_m * weighted_m) / np.sum(w)
+cov_m = np.einsum('ij,i->j', (weighted_m * weighted_m), w) / np.sum(w)
 
 print("\nCalculating correlation ...")
 n_features = weighted_m.shape[1]
@@ -147,29 +131,68 @@ print("\tCalculating {:,} correlations for {:,} features".format(n_correlations,
 fh = gzopen(args.outfile, "wt")
 fh.write("Feature1\tFeature2\tCorrelation\n")
 
-index = 0
+# Mimicks: R, C = np.triu_indices(n_features,1) to get the upper triangle but
+# creating that mask for 178M correlations takes too long and too much memory.
+# Instead, we create it ourselves in chunks and calculate the correlations for
+# one chunk all at once. This way we can balance memory and speed by adjusting
+# the chunk size.
+R_chunk = np.empty(args.chunk_size, dtype=int)
+C_chunk = np.empty(args.chunk_size, dtype=int)
+chunk_index = 0
+total_index = 0
 for i in range(n_features):
-    featurei = features[i]
-
-    x = weighted_m[:, i]
-    cov_x = pre_weighted_cov(x, x, w, sw)
     for j in range(n_features):
         if j >= i:
             continue
-        if index == 0 or index % 1e5 == 0:
-            print("\tCalculated {:,} / {:,} correlations".format(index, n_correlations), end='\r')
 
-        featurej = features[j]
-        y = weighted_m[:, j]
-        cov_y = pre_weighted_cov(y, y, w, sw)
-        cov_xy = pre_weighted_cov(x, y, w, sw)
-        beta = pre_weighted_corr(cov_x=cov_x, cov_y=cov_y, cov_xy=cov_xy)
+        R_chunk[chunk_index] = i
+        C_chunk[chunk_index] = j
 
+        chunk_index += 1
+        total_index += 1
+        if chunk_index < args.chunk_size:
+            continue
+
+        # The chunk is full. We can now calculate the pairwise cov
+        # between each x, y combination in the upper triangle indices
+        # of the current chunk. We can extract the cov's for x * x and y * y
+        # from the matrix uses the triangle indices.
+        cov_x = cov_m[R_chunk]
+        cov_y = cov_m[C_chunk]
+        cov_xy = np.einsum('ij,i->j', (weighted_m[:, R_chunk] * weighted_m[:, C_chunk]), w) / np.sum(w)
+
+        # Now calculate the weighted pearson correlations for the whole chunk at once.
+        betas = cov_xy / np.sqrt(cov_x * cov_y)
+
+        # Look up with genes we were processing and write the results to file.
+        # Is there a faster way to do this? Should I open and close the file
+        # for each chunk?
+        featuresi = features[R_chunk]
+        featuresj = features[C_chunk]
+        for featurei, featurej, beta in zip(featuresi, featuresj, betas):
+            fh.write(f"{featurej}\t{featurej}\t{beta}\n")
+
+        print("\tCalculated {:,} / {:,} correlations".format(total_index, n_correlations))
+        chunk_index = 0
+
+# Do not forget the final chunk.
+if chunk_index > 0:
+    # Cut off the end part of the chunk that we did not fill up.
+    R_chunk = R_chunk[:chunk_index]
+    C_chunk = C_chunk[:chunk_index]
+
+    # Process similar as above.
+    cov_x = cov_m[R_chunk]
+    cov_y = cov_m[C_chunk]
+    cov_xy = np.einsum('ij,i->j', (weighted_m[:, R_chunk] * weighted_m[:, C_chunk]), w) / np.sum(w)
+    betas = cov_xy / np.sqrt(cov_x * cov_y)
+
+    featuresi = features[R_chunk]
+    featuresj = features[C_chunk]
+    for featurei, featurej, beta in zip(featuresi, featuresj, betas):
         fh.write(f"{featurej}\t{featurej}\t{beta}\n")
-
-        index += 1
 fh.close()
-print("\tCalculated {:,} / {:,} correlations".format(index, n_correlations))
+print("\tCalculated {:,} / {:,} correlations".format(total_index, n_correlations))
 
 print("Done")
 
