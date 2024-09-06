@@ -43,6 +43,7 @@ qtl_settings:
   nrdatasets: 2 ### minimum number of datasets required in meta-analysis. Default '2'.
   mingenotypecount: 0 ### Minimal number of individuals per genotype group. Default: '0'.
   splitmultiallelic: False ### split multi allelic variants instead of skipping them. Default: 'False'.
+  onlytestsnps: False ### skip INDELs and only test SNPs.
   replacemissinggenotypes: False ### replace missing genotypes with average genotype: use this when both genotypes and expression data have missing values and perm > 0. Default 'False'.
   usehardgenotypecalls: False ### use hard genotype calls instead of dosages derived from genotype probabilities. Default: 'False'.
   norank: False ### do not rank expression data. Default 'False'.
@@ -143,3 +144,6 @@ settings_extra:
   java_memory_buffer: 1 ### increase job memory to this amount when running java applications to ensure '-Xmx' and '-Xms' do not overflow the max memory.
   force: False ### prevent snakemake from updating input settings that are unlogical. Use with caution.
   debug: False ### set logger to level DEBUG printing additional information.
+
+qtl_settings_extra:
+  mbqtl_jar: null ### use this mbQTL jar instead of the one in the singularity image.

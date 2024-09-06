@@ -47,6 +47,9 @@ if config["inputs"]["snplimit"] is not None and not os.path.exists(config["input
 if config["inputs"]["snpgenelimit"] is not None and not os.path.exists(config["inputs"]["snpgenelimit"]):
     logger.error("Critical, snpgenelimit does not exist.\n\nExiting.")
     exit("InvalidSNPGeneLimit")
+if config["qtl_settings_extra"]["mbqtl_jar"] is not None and not os.path.exists(config["qtl_settings_extra"]["mbqtl_jar"]):
+    logger.error("Critical, mbQTL jar does not exist.\n\nExiting.")
+    exit("InvalidmbQTLjar")
 
 # Checking settings with options to be valid.
 if config["general_settings"]["force_mega"] not in ["all", "cov", "qtl", "none", None]:
@@ -157,6 +160,8 @@ if config["inputs"]["snpgenelimit"] == "" and config["general_settings"]["n_gene
     logger.warning("\tWarning, you are running tests in multiple job files but the runtime for each "
                    "job is max {}. If you tink this is too long you should decrease "
                    "run_qtl_time to e.g. 0.".format(config["cluster_time"][config["run_qtl_time"]]))
+if config["qtl_settings_extra"]["mbqtl_jar"] is not None:
+    logger.warning("\tWarning, using a different mbQTL jar file than is included in the singularity image. This may cause issues if settings are added or removed.")
 
 logger.info("\nEvaluating input:")
 
@@ -508,7 +513,7 @@ def get_datasets(wildcards):
 def get_genes(wildcards):
     """
     :rule: create_batches and merge
-    :param wildcards: genes_file, annot_basename, ngenes, cov / cov, output_prefix
+    :param wildcards: genes_file, annot_basename, ngenes, cov, output_prefix / cov, output_prefix
     :return: the set of genes over which to create the batches. If snpgenelimit is given, return the gene column, else if
     genelimit is given return that, else return the QTL expression matrix.
     """
@@ -533,7 +538,7 @@ def get_genes(wildcards):
 def get_annotation(wildcards):
     """
     :rule: run_qtl and create_batches
-    :param wildcards: cov, batch / genes_file, annot_basename, cov
+    :param wildcards: cov, batch / genes_file, annot_basename, cov, output_prefix
     :return: return the gene annotation file. If the input is a gtf we need to convert this first using
     create_gene_annotation, else we return the input annotation file.
     """
@@ -587,7 +592,7 @@ def get_vcf_index(wildcards):
 def get_exp(wildcards):
     """
     :rule: create_batches, merge, and run_qtl
-    :param wildcards: genes_file, annot_basename, ngenes, cov / cov, output_prefix / cov, batch
+    :param wildcards: genes_file, annot_basename, ngenes, cov, output_prefix / cov, output_prefix / cov, batch
     :return: depending on the covariates the input is selected. If no covariates are removed (i.e. default or 0Pcs) the original
     input file can be returned. If covariates should be removed, we need to determine if this is done per dataset
     (output rule merge_exps) or not (output rule regressor).
@@ -664,7 +669,7 @@ def get_genelimit(wildcards):
         # The create_batches rule takes into account the genes from genelimit
         # if they are given.
         logger.debug("\tcalling 'get_genes' function")
-        fpath = "batches/{genes_file}_{annot_basename}_{ngenes}/{cov}/{batch}-genes.txt".format(**wildcards, genes_file=get_basename(get_genes(wildcards)), annot_basename=BASENAMES["annotation"], ngenes=config["general_settings"]["n_genes"])
+        fpath = "batches/{genes_file}_{annot_basename}_{ngenes}/{cov}/{output_prefix}/{batch}-genes.txt".format(**wildcards, genes_file=get_basename(get_genes(wildcards)), annot_basename=BASENAMES["annotation"], ngenes=config["general_settings"]["n_genes"], output_prefix=config["outputs"]["output_prefix"])
         logger.debug("\treturning output of checkpoint 'create_batches': " + fpath)
         return prefix + config["outputs"]["output_dir"] + fpath
     elif config["inputs"]["genelimit"] != "":
@@ -1209,14 +1214,13 @@ rule remove_gte_dataset:
         """
 
 
-# Note, cannot use output_prefix as wildcard here since it cannot be added as suffix to the directory value.
 checkpoint create_batches:
     priority: 50
     input:
         genes = get_genes,
         annotation = get_annotation
     output:
-        batches = directory(config["outputs"]["output_dir"] + "batches/{genes_file}_{annot_basename}_{ngenes}/{cov}/")
+        batches = directory(config["outputs"]["output_dir"] + "batches/{genes_file}_{annot_basename}_{ngenes}/{cov}/{output_prefix}/")
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["create_batches_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["create_batches_memory"],
@@ -1227,8 +1231,8 @@ checkpoint create_batches:
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/create_batches.py",
         n_genes = config["general_settings"]["n_genes"],
-        out = config["outputs"]["output_dir"] + "batches/{genes_file}_{annot_basename}_{ngenes}/{cov}/" + config["outputs"]["output_prefix"]
-    log: config["outputs"]["output_dir"] + "log/create_batches.{genes_file}.{annot_basename}.{ngenes}.{cov}.log"
+        out = config["outputs"]["output_dir"] + "batches/{genes_file}_{annot_basename}_{ngenes}/{cov}/{output_prefix}/" + config["outputs"]["output_prefix"]
+    log: config["outputs"]["output_dir"] + "log/create_batches.{genes_file}.{annot_basename}.{ngenes}.{cov}.{output_prefix}.log"
     shell:
         """
         mkdir -p {output.batches}
@@ -1266,7 +1270,7 @@ rule run_qtl:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         java_threads = config["run_qtl_threads"] * 2,
-        jar = "/opt/tools/MbQTL.jar",
+        jar = "/opt/tools/MbQTL.jar" if config["qtl_settings_extra"]["mbqtl_jar"] is None else config["qtl_settings_extra"]["mbqtl_jar"],
         analysis_type = config["qtl_settings"]["analysis_type"],
         meta_analysis_method = config["qtl_settings"]["meta_analysis_method"],
         seed = config["qtl_settings"]["seed"],
@@ -1283,6 +1287,7 @@ rule run_qtl:
         nrdatasets = config["qtl_settings"]["nrdatasets"],
         mingenotypecount = config["qtl_settings"]["mingenotypecount"],
         splitmultiallelic = "--splitmultiallelic" if config["qtl_settings"]["splitmultiallelic"] else "",
+        onlytestsnps = "--onlytestsnps" if config["qtl_settings"]["onlytestsnps"] else "",
         replacemissinggenotypes = "--replacemissinggenotypes" if config["qtl_settings"]["replacemissinggenotypes"] else "",
         usehardgenotypecalls = "--usehardgenotypecalls" if config["qtl_settings"]["usehardgenotypecalls"] else "",
         norank = "--norank" if config["qtl_settings"]["norank"] else "",
@@ -1318,6 +1323,7 @@ rule run_qtl:
             --nrdatasets {params.nrdatasets} \
             --mingenotypecount {params.mingenotypecount} \
             {params.splitmultiallelic} \
+            {params.onlytestsnps} \
             {params.replacemissinggenotypes} \
             {params.usehardgenotypecalls} \
             {params.norank} \

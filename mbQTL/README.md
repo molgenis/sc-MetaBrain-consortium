@@ -56,6 +56,7 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * `java_memory_buffer`: memory buffer in Gb to request in addition to what is set for `-Xmx` and `-Xms` to prevent out of memory isues in Java. Default `1`.
  * `force`: prevent snakemake from updating input settings that are unlogical. Use with caution. Default `False`.
  * `debug`: set logger to level DEBUG printing additional information. Default `False`.
+ * `mbqtl_jar`: use this mbQTL jar instead of the one in the singularity image. Default: `null`.
 
 **mbQTL standard inputs**:
  * `annotation`: `genes.gtf` of your alignment reference. If the file does not end with `.gtf` it assumes it is a mbQTL annotation file: tab seperated with gene ID, chromosome, gene start, gene end, and strand.
