@@ -212,11 +212,12 @@ rule pseudobulk_pool:
         rb_genes = config["inputs"]["rb_genes"],
         mt_genes = config["inputs"]["mt_genes"]
     output:
-        metadata = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.metadata.tsv.gz",
-        qc_metrics = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.qc_metrics.tsv.gz",
+        # metadata = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.metadata.tsv.gz",
+        # qc_metrics = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.qc_metrics.tsv.gz",
         full_metadata = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.full.metadata.tsv.gz",
         exp = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.pseudobulk.tsv.gz",
         stats = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.pseudobulk.stats.tsv.gz",
+        # h5 = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.{sample}.{cell_type}.counts.h5",
         done = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/{pool}.done",
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["pseudobulk_pool_memory"],
@@ -241,6 +242,7 @@ rule pseudobulk_pool:
         cr_barcodes = lambda wildcards: "--cr_barcodes" if get_pseudobulk_setting(wildcards, parameter="CRBarcodes") else "",
         feature_name = config["settings_extra"]["feature_name"],
         aggregate_fun = config["settings_extra"]["aggregate_fun"],
+        save_filtered_h5 = "--save_filtered_h5" if config["settings"]["save_filtered_h5"] else "",
         out = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/"
     log: config["outputs"]["output_dir"] + "log/pseudobulk_pool.{pb_setting}.{pool}.log"
     shell:
@@ -268,6 +270,7 @@ rule pseudobulk_pool:
             {params.cr_barcodes} \
             --feature_name {params.feature_name} \
             --aggregate_fun {params.aggregate_fun} \
+            --save_filtered_h5 {params.save_filtered_h5} \
             --out {params.out} > {log} 2>&1
         singularity exec --bind {params.bind} {params.sif} touch {output.exp}
         singularity exec --bind {params.bind} {params.sif} touch {output.stats}

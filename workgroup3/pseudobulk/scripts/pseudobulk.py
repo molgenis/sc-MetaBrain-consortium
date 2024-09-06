@@ -7,6 +7,7 @@ warnings.simplefilter("ignore", UserWarning)
 import numpy as np
 import pandas as pd
 import scanpy
+import h5py
 import argparse
 import gzip
 import os
@@ -34,6 +35,7 @@ parser.add_argument("--cap_barcodes", required=False, type=int, default=None, he
 parser.add_argument("--cr_barcodes", action="store_true", default=False, help="")
 parser.add_argument("--feature_name", required=False, type=str, default="HGNC", choices=["HGNC", "ENSG", "HGNC_ENSG"], help="")
 parser.add_argument("--aggregate_fun", required=False, type=str, default="sum", choices=["sum", "mean"], help="")
+parser.add_argument("--save_filtered_h5", action="store_true", default=False, help="")
 parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
 
@@ -142,11 +144,11 @@ def load_metadata(barcodes_fpath):
     return metadata, cr_barcodes
 
 def load_counts(counts_fpath):
-    count_data = scanpy.read_10x_h5(counts_fpath)
-    count_matrix = count_data.X
+    adata = scanpy.read_10x_h5(counts_fpath)
+    count_matrix = adata.X
     n_barcodes, n_genes = count_matrix.shape
-    genes = count_data.var_names.to_numpy()
-    barcodes = count_data.obs_names.to_numpy()
+    genes = adata.var_names.to_numpy()
+    barcodes = adata.obs_names.to_numpy()
     if np.size(genes) != n_genes:
         print("Error, matrix size does not match gene annotation.")
         exit()
@@ -161,11 +163,11 @@ def load_counts(counts_fpath):
         exit()
 
     # Parse the gene info
-    gene_ids = count_data.var['gene_ids']
+    gene_ids = adata.var['gene_ids']
     gene_ids = gene_ids.reset_index(drop=False)
     gene_ids = gene_ids.to_numpy()
     if not (genes == gene_ids[:, 0]).all():
-        print("Error, 'count_data.var_names' are expected to have the same order as 'count_data.var['gene_ids''.")
+        print("Error, 'count_data.var_names' are expected to have the same order as 'count_data.var['gene_ids'].")
         exit()
 
     # Set gene names.
@@ -177,14 +179,14 @@ def load_counts(counts_fpath):
     features_mask = np.in1d(features, dup)
     if np.sum(features_mask) > 0:
         print("\tRemoving {:,} duplicate genes.".format(np.sum(features_mask)))
-        count_matrix = count_matrix[:, ~features_mask]
-        features = features[~features_mask]
+        adata = adata[:, ~features_mask]
+        adata.var_names = features[~features_mask]
 
     # Parse the barcode info.
     # barcode_ids = count_data.var['feature_types'].to_numpy()
 
     print("\tLoaded expression with shape: {}".format(count_matrix.shape))
-    return count_matrix, barcodes, features
+    return adata
 
 def get_features(m, indices):
     if args.feature_name == "HGNC":
@@ -206,10 +208,10 @@ def get_malat1_feature():
     features = get_features(m=np.array([["ENSG00000251562", "MALAT1"]]), indices={"HGNC": 1, "ENSG": 0})
     return features[0]
 
-def calc_barcode_qc(counts, barcodes, features, cr_barcodes):
+def calc_barcode_qc(adata, cr_barcodes):
     print("  Adding UMI and feature counts")
-    info = pd.DataFrame(np.hstack((np.sum(counts, axis=1), np.sum(counts != 0, axis=1))), 
-                        columns=["nCount_RNA", "nFeature_RNA"], index=barcodes)
+    info = pd.DataFrame(np.hstack((np.sum(adata.X, axis=1), np.sum(adata.X != 0, axis=1))),
+                        columns=["nCount_RNA", "nFeature_RNA"], index=adata.obs_names)
 
     print("  Adding complexity")
     info["complexity"] = np.nan
@@ -219,8 +221,8 @@ def calc_barcode_qc(counts, barcodes, features, cr_barcodes):
 
     print("  Adding ribosomal %")
     rb_features = load_features(args.rb_genes)
-    rb_mask = np.in1d(features, rb_features)
-    info["rb"] = np.sum(counts[:, rb_mask], axis=1)
+    rb_mask = np.in1d(adata.var_names, rb_features)
+    info["rb"] = np.sum(adata.X[:, rb_mask], axis=1)
 
     info["percent.rb"] = np.nan
     mask = info["nCount_RNA"] > 0
@@ -229,8 +231,8 @@ def calc_barcode_qc(counts, barcodes, features, cr_barcodes):
 
     print("  Adding mitochondiral %")
     mt_features = load_features(args.mt_genes)
-    mt_mask = np.in1d(features, mt_features)
-    info["mt"] = np.sum(counts[:, mt_mask], axis=1)
+    mt_mask = np.in1d(adata.var_names, mt_features)
+    info["mt"] = np.sum(adata.X[:, mt_mask], axis=1)
 
     info["percent.mt"] = np.nan
     mask = info["nCount_RNA"] > 0
@@ -240,8 +242,8 @@ def calc_barcode_qc(counts, barcodes, features, cr_barcodes):
     print("  Adding MALAT1")
     info["MALAT1"] = 0
     malat1_feature = get_malat1_feature()
-    malat1_mask = features == malat1_feature
-    info["MALAT1"] = counts[:, malat1_mask].toarray()
+    malat1_mask = adata.var_names == malat1_feature
+    info["MALAT1"] = adata.X[:, malat1_mask].toarray()
     del malat1_feature, malat1_mask
 
     print("  Adding nCount_RNA index")
@@ -300,8 +302,8 @@ def apply_barcode_qc(barcode_qc):
 
     return barcode_qc
 
-def pseudobulk_per_ct(counts, features, metadata):
-    ncells = counts.shape[0]
+def pseudobulk_per_ct(adata, metadata):
+    ncells = adata.X.shape[0]
 
     expr_data = []
     expr_columns = []
@@ -357,12 +359,15 @@ def pseudobulk_per_ct(counts, features, metadata):
 
             # Aggregate the cells.
             if args.aggregate_fun == "sum":
-                expr_data.append(np.sum(counts[mask, :], axis=0))
+                expr_data.append(np.sum(adata.X[mask, :], axis=0))
             elif args.aggregate_fun == "mean":
-                expr_data.append(np.mean(counts[mask, :], axis=0))
+                expr_data.append(np.mean(adata.X[mask, :], axis=0))
             else:
                 print("Error, unexpected aggregate_fun type {}".format(args.aggregate_fun))
                 exit()
+
+            # Save as h5.
+            save_filtered_counts_h5(fpath=os.path.join(args.out, f"{args.pool}.{sample}.{cell_type}.counts.h5"), adata=adata[mask, :])
 
             # Add the column.
             expr_columns.append(sample + "_" + cell_type)
@@ -370,7 +375,7 @@ def pseudobulk_per_ct(counts, features, metadata):
     # Merge the data.
     expr_df = None
     if len(expr_data) > 0:
-        expr_df = pd.DataFrame(np.vstack(expr_data), columns=features, index=expr_columns)
+        expr_df = pd.DataFrame(np.vstack(expr_data), columns=adata.var_names, index=expr_columns)
 
     stats_df = None
     if len(stats_data) > 0:
@@ -378,6 +383,34 @@ def pseudobulk_per_ct(counts, features, metadata):
         print("\tCombined {:,} cells over {:,} samples.".format(stats_df["ncells"].sum(), expr_df.shape[0] if expr_df is not None else 0))
 
     return expr_df, stats_df
+
+def save_filtered_counts_h5(fpath, adata):
+    """
+    Write hdf5 file from Cell Ranger v4 or later versions.
+    Source: https://github.com/scverse/anndata/issues/595
+    """
+    if os.path.exists(fpath):
+        raise FileExistsError(f"There already is a file `{fpath}`.")
+
+    int_max = lambda x: int(max(np.floor(len(str(int(max(x)))) / 4), 1) * 4)
+    str_max = lambda x: max([len(i) for i in x])
+
+    # Save.
+    w = h5py.File(fpath, 'w')
+    grp = w.create_group("matrix")
+    grp.create_dataset("barcodes", data=np.array(adata.obs_names, dtype=f'|S{str_max(adata.obs_names)}'))
+    grp.create_dataset("data", data=np.array(adata.X.data, dtype=f'<i{int_max(adata.X.data)}'))
+    ftrs = grp.create_group("features")
+    # this group will lack the following keys:
+    # '_all_tag_keys', 'feature_type', 'genome', 'id', 'name', 'pattern', 'read', 'sequence'
+    ftrs.create_dataset("feature_type", data=np.array(adata.var.feature_types, dtype=f'|S{str_max(adata.var.feature_types)}'))
+    ftrs.create_dataset("genome", data=np.array(adata.var.genome, dtype=f'|S{str_max(adata.var.genome)}'))
+    ftrs.create_dataset("id", data=np.array(adata.var.gene_ids, dtype=f'|S{str_max(adata.var.gene_ids)}'))
+    ftrs.create_dataset("name", data=np.array(adata.var.index, dtype=f'|S{str_max(adata.var.index)}'))
+    grp.create_dataset("indices", data=np.array(adata.X.indices, dtype=f'<i{int_max(adata.X.indices)}'))
+    grp.create_dataset("indptr", data=np.array(adata.X.indptr, dtype=f'<i{int_max(adata.X.indptr)}'))
+    grp.create_dataset("shape", data=np.array(list(adata.X.shape)[::-1], dtype=f'<i{int_max(adata.X.shape)}'))
+
 
 #############################################
 
@@ -398,17 +431,17 @@ print("  Barcodes fpath: " + barcodes_fpath)
 print("\nCreating metadata ...")
 metadata, cr_barcodes = load_metadata(barcodes_fpath=barcodes_fpath)
 
-print("\tSaving file")
-metadata.to_csv(os.path.join(args.out, str(args.pool) + ".metadata.tsv.gz"), sep="\t", header=True, index=False, compression="gzip")
+# print("\tSaving file")
+# metadata.to_csv(os.path.join(args.out, str(args.pool) + ".metadata.tsv.gz"), sep="\t", header=True, index=False, compression="gzip")
 
 print("\nLoading counts matrix ...")
-counts, barcodes, features = load_counts(counts_fpath=counts_fpath)
+adata = load_counts(counts_fpath=counts_fpath)
 
 print("\nCalculating barcode QC stats ...")
-barcode_qc = calc_barcode_qc(counts=counts, barcodes=barcodes, features=features, cr_barcodes=cr_barcodes)
+barcode_qc = calc_barcode_qc(adata=adata, cr_barcodes=cr_barcodes)
 
-print("\tSaving file")
-barcode_qc.to_csv(os.path.join(args.out, str(args.pool) + ".qc_metrics.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
+# print("\tSaving file")
+# barcode_qc.to_csv(os.path.join(args.out, str(args.pool) + ".qc_metrics.tsv.gz"), sep="\t", header=True, index=True, compression="gzip")
 
 print("\nApplying barcode QC ...")
 barcode_qc = apply_barcode_qc(barcode_qc=barcode_qc)
@@ -423,13 +456,13 @@ barcode_qc = barcode_qc.rename(columns={"index": "barcode"})
 barcode_qc["Barcode"] = barcode_qc["barcode"].str.split("-", n=1, expand=True)[0] + "_" + str(args.pool)
 
 # Merge on Barcode and reorder by the count matrix (barcode column).
-metadata = metadata.merge(barcode_qc, on="Barcode", how="inner").set_index("barcode").loc[barcodes, :]
+metadata = metadata.merge(barcode_qc, on="Barcode", how="inner").set_index("barcode").loc[adata.obs_names, :]
 
 print("\tSaving file")
 metadata.to_csv(os.path.join(args.out, str(args.pool) + ".full.metadata.tsv.gz"), sep="\t", header=True, index=False, compression="gzip")
 
 print("\nPseudobulking per cell type ...")
-expr, stats = pseudobulk_per_ct(counts=counts, features=features, metadata=metadata)
+expr, stats = pseudobulk_per_ct(adata=adata, metadata=metadata)
 
 print("\nExpression output:")
 print(expr)
