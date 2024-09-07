@@ -121,7 +121,10 @@ norm_w = w / np.mean(w)
 weighted_m = m - (np.einsum('ij,i->j', m, norm_w) / np.sum(norm_w))
 
 # calculate the weighted cov matrix: np.sum(w[:, np.newaxis] * weighted_m * weighted_m) / np.sum(w)
-cov_m = np.einsum('ij,i->j', (weighted_m * weighted_m), w) / np.sum(w)
+sw = np.sum(w)
+weighted_m_sq = np.einsum('ij,ij->ij', weighted_m, weighted_m)
+cov_a = np.einsum('ij,i->j', weighted_m_sq, w) / sw
+del weighted_m_sq
 
 print("\nCalculating correlation ...")
 n_features = weighted_m.shape[1]
@@ -145,11 +148,16 @@ for i in range(n_features):
         if j >= i:
             continue
 
+        # Save the upper triangle indices.
         R_chunk[chunk_index] = i
         C_chunk[chunk_index] = j
 
+        # Increment counters.
         chunk_index += 1
         total_index += 1
+
+        # Check if the chunk is full, if not
+        # grap the next upper triangle indices.
         if chunk_index < args.chunk_size:
             continue
 
@@ -157,20 +165,22 @@ for i in range(n_features):
         # between each x, y combination in the upper triangle indices
         # of the current chunk. We can extract the cov's for x * x and y * y
         # from the matrix uses the triangle indices.
-        cov_x = cov_m[R_chunk]
-        cov_y = cov_m[C_chunk]
-        cov_xy = np.einsum('ij,i->j', (weighted_m[:, R_chunk] * weighted_m[:, C_chunk]), w) / np.sum(w)
+        cov_xx = cov_a[R_chunk]
+        cov_yy = cov_a[C_chunk]
+        cov_xx_yy = np.einsum('i,i->i', cov_xx, cov_yy)
+        weighted_m_sq_pairs = np.einsum('ij,ij->ij', weighted_m[:, R_chunk], weighted_m[:, C_chunk])
+        cov_xy = np.einsum('ij,i->j', weighted_m_sq_pairs, w) / sw
+        del weighted_m_sq_pairs
 
         # Now calculate the weighted pearson correlations for the whole chunk at once.
-        betas = cov_xy / np.sqrt(cov_x * cov_y)
+        betas = cov_xy / np.sqrt(cov_xx_yy)
 
-        # Look up with genes we were processing and write the results to file.
-        # Is there a faster way to do this? Should I open and close the file
-        # for each chunk?
+        # Look up with genes we were processing and write the results to a
+        # file line by line.
         featuresi = features[R_chunk]
         featuresj = features[C_chunk]
-        for featurei, featurej, beta in zip(featuresi, featuresj, betas):
-            fh.write(f"{featurei}\t{featurej}\t{beta}\n")
+        for chunk_i in range(chunk_index):
+            fh.write(f"{featuresi[chunk_i]}\t{featuresj[chunk_i]}\t{betas[chunk_i]}\n")
 
         print("\tCalculated {:,} / {:,} correlations".format(total_index, n_correlations), end='\r')
         chunk_index = 0
@@ -182,15 +192,18 @@ if chunk_index > 0:
     C_chunk = C_chunk[:chunk_index]
 
     # Process similar as above.
-    cov_x = cov_m[R_chunk]
-    cov_y = cov_m[C_chunk]
-    cov_xy = np.einsum('ij,i->j', (weighted_m[:, R_chunk] * weighted_m[:, C_chunk]), w) / np.sum(w)
-    betas = cov_xy / np.sqrt(cov_x * cov_y)
+    cov_xx = cov_a[R_chunk]
+    cov_yy = cov_a[C_chunk]
+    cov_xx_yy = np.einsum('i,i->i', cov_xx, cov_yy)
+    weighted_m_sq_pairs = np.einsum('ij,ij->ij', weighted_m[:, R_chunk], weighted_m[:, C_chunk])
+    cov_xy = np.einsum('ij,i->j', weighted_m_sq_pairs, w) / sw
+    del weighted_m_sq_pairs
+    betas = cov_xy / np.sqrt(cov_xx_yy)
 
     featuresi = features[R_chunk]
     featuresj = features[C_chunk]
-    for featurei, featurej, beta in zip(featuresi, featuresj, betas):
-        fh.write(f"{featurei}\t{featurej}\t{beta}\n")
+    for chunk_i in range(chunk_index):
+        fh.write(f"{featuresi[chunk_i]}\t{featuresj[chunk_i]}\t{betas[chunk_i]}\n")
 fh.close()
 print("\tCalculated {:,} / {:,} correlations".format(total_index, n_correlations))
 
