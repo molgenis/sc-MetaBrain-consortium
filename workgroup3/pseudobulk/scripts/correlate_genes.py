@@ -125,7 +125,7 @@ adata = load_counts(counts_fpath=args.counts)
 
 print("\nFiltering genes ...")
 feature_mask = np.sum(adata.X > 0, axis=0) >= args.min_obs
-print("\tExcluding {:,} features due to min_obs >={} filter".format(np.sum(feature_mask), args.min_obs))
+print("\tExcluding {:,} features due to min_obs >={} filter".format(np.size(feature_mask) - np.sum(feature_mask), args.min_obs))
 adata = adata[:, feature_mask]
 del feature_mask
 

@@ -102,7 +102,7 @@ adata = load_counts(counts_fpath=args.counts)
 
 print("\nFiltering genes ...")
 feature_mask = np.sum(adata.X > 0, axis=0) >= args.min_obs
-print("\tExcluding {:,} features due to min_obs >={} filter".format(np.sum(feature_mask), args.min_obs))
+print("\tExcluding {:,} features due to min_obs >={} filter".format(np.size(feature_mask) - np.sum(feature_mask), args.min_obs))
 adata = adata[:, feature_mask]
 del feature_mask
 
@@ -172,7 +172,7 @@ for i in range(n_features):
         for featurei, featurej, beta in zip(featuresi, featuresj, betas):
             fh.write(f"{featurei}\t{featurej}\t{beta}\n")
 
-        print("\tCalculated {:,} / {:,} correlations".format(total_index, n_correlations))
+        print("\tCalculated {:,} / {:,} correlations".format(total_index, n_correlations), end='\r')
         chunk_index = 0
 
 # Do not forget the final chunk.
