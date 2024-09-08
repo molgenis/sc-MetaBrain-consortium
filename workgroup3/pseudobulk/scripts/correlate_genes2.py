@@ -108,17 +108,26 @@ del feature_mask
 
 # Converting to dense matrix.
 m = adata.X.A
+w = m.sum(axis=1)
 features = adata.var_names
 del adata
 
-print("\nWeighing matrix ...")
-w = m.sum(axis=1)
+# # Test example.
+# x = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
+# y = np.array([1, 2, 1, 3, 3, 2, 2, 3, 4, 1, 3, 3, 1, 1, 3, 3, 3, 3, 0, 1])
+# w = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0])
+# m = np.vstack((x, y)).T
+# features = np.array(["GeneA", "GeneB"])
+# #   correlation   std.err   t.value   p.value
+# # Y  -0.2694926 0.2269819 -1.187287 0.2505473
 
+print("\nWeighing matrix ...")
 # Normalise the weights.
 norm_w = w / np.mean(w)
 
 # weight the matrix: m - (np.sum(m * weight[:, np.newaxis], axis=0) / np.sum(weight))
 weighted_m = m - (np.einsum('ij,i->j', m, norm_w) / np.sum(norm_w))
+del m
 
 # calculate the weighted cov matrix: np.sum(w[:, np.newaxis] * weighted_m * weighted_m) / np.sum(w)
 sw = np.sum(w)
@@ -128,7 +137,7 @@ del weighted_m_sq
 
 print("\nCalculating correlation ...")
 n_features = weighted_m.shape[1]
-n_correlations = int(((n_features * n_features) / 2) - n_features)
+n_correlations = int(((n_features * n_features) - n_features) / 2)
 print("\tCalculating {:,} correlations for {:,} features".format(n_correlations, n_features))
 
 fh = gzopen(args.outfile, "wt")
@@ -167,13 +176,13 @@ for i in range(n_features):
         # from the matrix uses the triangle indices.
         cov_xx = cov_a[R_chunk]
         cov_yy = cov_a[C_chunk]
-        cov_xx_yy = np.einsum('i,i->i', cov_xx, cov_yy)
+        cov_xx_yy = np.sqrt(np.einsum('i,i->i', cov_xx, cov_yy))
         weighted_m_sq_pairs = np.einsum('ij,ij->ij', weighted_m[:, R_chunk], weighted_m[:, C_chunk])
         cov_xy = np.einsum('ij,i->j', weighted_m_sq_pairs, w) / sw
         del weighted_m_sq_pairs
 
         # Now calculate the weighted pearson correlations for the whole chunk at once.
-        betas = cov_xy / np.sqrt(cov_xx_yy)
+        betas = cov_xy / cov_xx_yy
 
         # Look up with genes we were processing and write the results to a
         # file line by line.
@@ -194,11 +203,11 @@ if chunk_index > 0:
     # Process similar as above.
     cov_xx = cov_a[R_chunk]
     cov_yy = cov_a[C_chunk]
-    cov_xx_yy = np.einsum('i,i->i', cov_xx, cov_yy)
+    cov_xx_yy = np.sqrt(np.einsum('i,i->i', cov_xx, cov_yy))
     weighted_m_sq_pairs = np.einsum('ij,ij->ij', weighted_m[:, R_chunk], weighted_m[:, C_chunk])
     cov_xy = np.einsum('ij,i->j', weighted_m_sq_pairs, w) / sw
     del weighted_m_sq_pairs
-    betas = cov_xy / np.sqrt(cov_xx_yy)
+    betas = cov_xy / cov_xx_yy
 
     featuresi = features[R_chunk]
     featuresj = features[C_chunk]

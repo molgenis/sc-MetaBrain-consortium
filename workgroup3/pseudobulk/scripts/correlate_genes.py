@@ -131,17 +131,26 @@ del feature_mask
 
 # Converting to dense matrix.
 m = adata.X.A
+w = m.sum(axis=1)
 features = adata.var_names
 del adata
 
+# # Test example.
+# x = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
+# y = np.array([1, 2, 1, 3, 3, 2, 2, 3, 4, 1, 3, 3, 1, 1, 3, 3, 3, 3, 0, 1])
+# w = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0])
+# m = np.vstack((x, y)).T
+# features = np.array(["GeneA", "GeneB"])
+# #   correlation   std.err   t.value   p.value
+# # Y  -0.2694926 0.2269819 -1.187287 0.2505473
+
 print("\nWeighing matrix ...")
-w = m.sum(axis=1)
 sw = np.sum(w)
 weighted_m = weight_matrix(m=m, weight=w)
 
 print("\nCalculating correlation ...")
 n_features = weighted_m.shape[1]
-n_correlations = int(((n_features * n_features) / 2) - n_features)
+n_correlations = int(((n_features * n_features) - n_features) / 2)
 print("\tCalculating {:,} correlations for {:,} features".format(n_correlations, n_features))
 
 fh = gzopen(args.outfile, "wt")
