@@ -1,0 +1,346 @@
+#!/usr/bin/env python
+import pandas as pd
+import os
+
+# Set logger level.
+if config["settings_extra"]["debug"]:
+    logger.set_level("DEBUG")
+
+# Check required input arguments.
+if config["inputs"]["singularity_image"] is None or not os.path.exists(config["inputs"]["singularity_image"]):
+    logger.error("Critical, singularity_image does not exist.\n\nExiting.")
+    exit("MissingsingularityImage")
+if config["inputs"]["repo_dir"] is None or not os.path.exists(config["inputs"]["repo_dir"]):
+    logger.error("Critical, repo_dir does not exist.\n\nExiting.")
+    exit("MissingRepoDir")
+if config["inputs"]["poolsheet"] is None or not os.path.exists(config["inputs"]["poolsheet"]):
+    logger.error("Critical, poolsheet file does not exist.\n\nExiting.")
+    exit("MissingsingPoolSheet")
+if config["inputs"]["psam"] is None or not os.path.exists(config["inputs"]["psam"]):
+    logger.error("Critical, psam file does not exist.\n\nExiting.")
+    exit("MissingsingPSAM")
+if config["inputs"]["cell_annotation"] is None or not os.path.exists(config["inputs"]["cell_annotation"]):
+    logger.error("Critical, cell annotation file does not exist.\n\nExiting.")
+    exit("MissingsingCellAnnotation")
+if config["inputs"]["droplet_type_annotation"] is None or not os.path.exists(config["inputs"]["droplet_type_annotation"]):
+    logger.error("Critical, droplet type annotation file does not exist.\n\nExiting.")
+    exit("MissingsingDropletTypeAnnotation")
+if config["inputs"]["cell_type_annotation"] is None or not os.path.exists(config["inputs"]["cell_type_annotation"]):
+    logger.error("Critical, cell type annotation file does not exist.\n\nExiting.")
+    exit("MissingsingCellTypeAnnotation")
+if config["inputs"]["rb_genes"] is None or not os.path.exists(config["inputs"]["rb_genes"]):
+    logger.error("Critical, RB genes does file not exist.\n\nExiting.")
+    exit("MissingsingRBGenes")
+if config["inputs"]["mt_genes"] is None or not os.path.exists(config["inputs"]["mt_genes"]):
+    logger.error("Critical, MT genes does file not exist.\n\nExiting.")
+    exit("MissingsingMTGenes")
+if config["inputs"]["gtf"] is None or not os.path.exists(config["inputs"]["gtf"]):
+    logger.error("Critical, GTF genes does file not exist.\n\nExiting.")
+    exit("MissingsingGTF")
+if config["outputs"]["output_dir"] is None:
+    logger.error("Critical, the output_dir cannot be empty.\n\nExiting.")
+    exit("MissingOutputDir")
+
+# Add trailing /.
+if not config["outputs"]["output_dir"].endswith("/"):
+    config["outputs"]["output_dir"] += "/"
+
+# Create the output directory.
+os.makedirs(config["outputs"]["output_dir"], exist_ok=True)
+
+# Loading poolsheet.
+logger.info("Loading the input poolsheet")
+POOL_DF = pd.read_csv(config["inputs"]["poolsheet"], sep="\t", dtype=str)
+logger.info("\tLoaded {} with shape: {}".format(os.path.basename(config["inputs"]["poolsheet"]), POOL_DF.shape))
+
+POOL_DF.fillna("NA", inplace=True)
+POOL_DF.index = POOL_DF["Pool"]
+
+if "Pool" not in POOL_DF.columns:
+    logger.info("\tError, missing 'Pool' column in poolsheet file for the selected methods.\n\nExiting.")
+    stop("InvalidPoolSheetFile")
+if not POOL_DF["Pool"].is_unique:
+    logger.info("\tError, your 'Pool' column contains duplicates, please make sure all values are unique.\n\nExiting.")
+    stop("InvalidPoolSheetFile")
+
+logger.info("\tValid.")
+POOLS = POOL_DF["Pool"].tolist()
+
+
+wildcard_constraints:
+    pool = "[\w-]+",
+    pool_sample = "[\w-.]+",
+    cell_type = "[A-Za-z.]+"
+
+
+def print_wildcards(wildcards):
+    out = []
+    for key, value in wildcards.items():
+        out.append(key + "=" + value)
+    return ", ".join(out)
+
+def get_pool_samples(wildcards):
+    logger.debug("get_pool_samples({})".format(print_wildcards(wildcards)))
+    pool_samples = {"pool": [], "sample": []}
+    for pool in POOLS:
+        # Per pool, look which samples it contained for the current cell type.
+        out_dir = checkpoints.filter_split_counts.get(**wildcards, pool=pool).output["data_dir"]
+        glob_fpath = os.path.join(out_dir, pool + ".{sample}." + wildcards.cell_type + ".raw.counts.h5")
+        logger.debug("\tglob path: " + glob_fpath)
+        samples = glob_wildcards(glob_fpath).sample
+        logger.debug("\tpool = {} has samples = {}".format(pool, ", ".join(samples)))
+        if len(samples) == 0:
+            continue
+        pool_samples["pool"].extend([pool] * len(samples))
+        pool_samples["sample"].extend(samples)
+
+    logger.debug("\tfound '{:,}' samples".format(len(pool_samples)))
+    return pool_samples
+
+
+rule all:
+    input:
+        gene_correlations = expand(config["outputs"]["output_dir"] + "correlations/{cell_type}.chr{chr}.corr.txt.gz", cell_type=config["settings"]["cell_type"], chr=config["settings"]["chromosomes"])
+
+
+checkpoint filter_split_counts:
+    input:
+        poolsheet = config["inputs"]["poolsheet"],
+        psam = config["inputs"]["psam"],
+        cell_annotation = config["inputs"]["cell_annotation"],
+        droplet_type_annotation = config["inputs"]["droplet_type_annotation"],
+        cell_type_annotation = config["inputs"]["cell_type_annotation"],
+        rb_genes = config["inputs"]["rb_genes"],
+        mt_genes = config["inputs"]["mt_genes"]
+    output:
+        full_metadata = config["outputs"]["output_dir"] + "expression/{pool}/{pool}.full.metadata.tsv.gz",
+        # weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.raw.counts.h5",
+        # counts = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.raw.weights.txt.gz",
+        data_dir = directory(config["outputs"]["output_dir"] + "expression/{pool}/data/"),
+        stats = config["outputs"]["output_dir"] + "expression/{pool}/{pool}.pseudobulk.stats.tsv.gz",
+        done = config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done",
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["filter_split_counts_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["filter_split_counts_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["filter_split_counts_time"]],
+    threads: config["filter_split_counts_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/filter_split_counts.py",
+        ct_pairing = lambda wildcards: "--ct_pairing " + config["inputs"]["cell_type_pairing"] if config["inputs"]["cell_type_pairing"] is not None else "",
+        sample_aggregate = config["settings_extra"]["sample_aggregate"],
+        ancestry = config["settings"]["ancestry"],
+        cell_level = config["settings"]["cell_level"],
+        ncount_rna = config["barcode_qc_settings"]["ncount_rna"],
+        nfeature_rna = config["barcode_qc_settings"]["nfeature_rna"],
+        complexity = config["barcode_qc_settings"]["complexity"],
+        percent_rb = config["barcode_qc_settings"]["percent_rb"],
+        percent_mt = config["barcode_qc_settings"]["percent_mt"],
+        malat1 = config["barcode_qc_settings"]["malat1"],
+        cap_barcodes = lambda wildcards: "--cap_barcodes " + str(config["barcode_qc_settings"]["cap_barcodes"]) if config["barcode_qc_settings"]["cap_barcodes"] is not None else "",
+        cr_barcodes = lambda wildcards: "--cr_barcodes" if config["barcode_qc_settings"]["cellranger_barcodes"] else "",
+        min_cells = config["barcode_qc_settings"]["min_cells"],
+        feature_name = config["settings_extra"]["feature_name"],
+        out = config["outputs"]["output_dir"] + "expression/{pool}/"
+    log: config["outputs"]["output_dir"] + "log/filter_split_counts.{pool}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --poolsheet {input.poolsheet} \
+            --pool {wildcards.pool} \
+            --psam {input.psam} \
+            --cell_annotation {input.cell_annotation} \
+            --droplet_type_annotation {input.droplet_type_annotation} \
+            --cell_type_annotation {input.cell_type_annotation} \
+            {params.ct_pairing} \
+            --feature_name {params.feature_name} \
+            --rb_genes {input.rb_genes} \
+            --mt_genes {input.mt_genes} \
+            --sample_aggregate {params.sample_aggregate} \
+            --ancestry {params.ancestry} \
+            --cell_level {params.cell_level} \
+            --ncount_rna {params.ncount_rna} \
+            --nfeature_rna {params.nfeature_rna} \
+            --complexity {params.complexity} \
+            --percent_rb {params.percent_rb} \
+            --percent_mt {params.percent_mt} \
+            --malat1 {params.malat1} \
+            {params.cap_barcodes} \
+            {params.cr_barcodes} \
+            --min_cells {params.min_cells} \
+            --out {params.out} > {log} 2>&1
+        singularity exec --bind {params.bind} {params.sif} touch {output.stats} {output.done}
+        """
+
+
+rule average_read_counts:
+    input:
+        fsc_done = expand(config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done", pool=POOLS),
+        weights = lambda wildcards: expand(config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.{dtype}.weights.txt.gz", zip, **get_pool_samples(wildcards), allow_missing=True)
+    output:
+        avg_read_depth = config["outputs"]["output_dir"] + "expression/{dtype}.avg_read_depth.{cell_type}.json"
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["average_read_counts_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["average_read_counts_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["average_read_counts_time"]],
+    threads: config["average_read_counts_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/average_read_counts.py",
+        feature_name = config["settings_extra"]["feature_name"],
+        min_obs_per_gene = config["correlate_settings"]["min_obs_per_gene"],
+        chunk_size = config["correlate_settings"]["chunk_size"],
+        workdir = config["outputs"]["output_dir"] + "expression/"
+    log: config["outputs"]["output_dir"] + "log/average_read_counts.{dtype}.{cell_type}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --read_counts {input.weights} \
+            --outfile {output.avg_read_depth} > {log} 2>&1
+        """
+
+
+rule proportional_fit_and_log:
+    input:
+        weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.raw.counts.h5",
+        avg_rd = config["outputs"]["output_dir"] + "expression/raw.avg_read_depth.{cell_type}.json"
+    output:
+        out = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1p.counts.h5",
+        weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1p.weights.txt.gz"
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["proportional_fit_and_log_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["proportional_fit_and_log_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["proportional_fit_and_log_time"]],
+    threads: config["proportional_fit_and_log_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/normalise.py",
+        out = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1p."
+    log: config["outputs"]["output_dir"] + "log/proportional_fit_and_log.{pool}.{sample}.{cell_type}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --counts {input.weights} \
+            --avg_rd {input.avg_rd} \
+            --log1p \
+            --out {output.out} > {log} 2>&1
+        """
+
+
+rule proportional_fit:
+    input:
+        weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1p.counts.h5",
+        avg_rd = config["outputs"]["output_dir"] + "expression/pflog1p.avg_read_depth.{cell_type}.json"
+    output:
+        out = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1ppf.counts.h5",
+        weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1ppf.weights.txt.gz"
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["proportional_fit_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["proportional_fit_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["proportional_fit_time"]],
+    threads: config["proportional_fit_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/normalise.py",
+        out = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1ppf."
+    log: config["outputs"]["output_dir"] + "log/proportional_fit_and_log.{pool}.{sample}.{cell_type}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --counts {input.weights} \
+            --pf_value {input.avg_rd} \
+            --out {output.out} > {log} 2>&1
+        """
+
+
+rule correlate_genes:
+    input:
+        counts = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1ppf.counts.h5"
+    output:
+        out = config["outputs"]["output_dir"] + "correlations/{pool}/data/{pool}.{sample}.{cell_type}.corr.txt.gz"
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["correlate_genes_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["correlate_genes_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["correlate_genes_time"]],
+    threads: config["correlate_genes_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/correlate_genes.py",
+        feature_name = config["settings_extra"]["feature_name"],
+        min_obs_per_gene = config["correlate_settings"]["min_obs_per_gene"],
+        chunk_size = config["correlate_settings"]["chunk_size"],
+        workdir = config["outputs"]["output_dir"] + "correlations/{pool}/data/"
+    log: config["outputs"]["output_dir"] + "log/correlate_genes.{pool}.{sample}.{cell_type}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --counts {input.counts} \
+            --feature_name {params.feature_name} \
+            --min_obs {params.min_obs_per_gene} \
+            --chunk_size {params.chunk_size} \
+            --outfile {output.out} > {log} 2>&1
+        """
+
+
+rule aggregate_sample_correlations:
+    input:
+        fsc_done = expand(config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done", pool=POOLS),
+        corr = lambda wildcards: expand(config["outputs"]["output_dir"] + "correlations/{pool}/data/{pool}.{sample}.{cell_type}.corr.txt.gz", zip, **get_pool_samples(wildcards), allow_missing=True)
+    output:
+        corr = config["outputs"]["output_dir"] + "correlations/{cell_type}.chr{chr}.corr.txt.gz",
+        gene_pairs = config["outputs"]["output_dir"] + "correlations/{cell_type}.chr{chr}.gene_pairs.txt.gz",
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["aggregate_sample_correlations_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["aggregate_sample_correlations_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["aggregate_sample_correlations_time"]],
+    threads: config["aggregate_sample_correlations_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/aggregate_correlations.py",
+        indir = config["outputs"]["output_dir"] + "correlations/pools/data/",
+        out = config["outputs"]["output_dir"] + "correlations/"
+    log: config["outputs"]["output_dir"] + "log/aggregate_sample_correlations.{cell_type}.chr{chr}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --indir {params.indir} \
+            --chr {wildcards.chr} \
+            --out {params.out} > {log} 2>&1
+        """
+
+
+rule create_annotation:
+    input:
+        gtf = config["inputs"]["gtf"],
+        gene_pairs = config["outputs"]["output_dir"] + "correlations/{cell_type}.chr{chr}.gene_pairs.txt.gz",
+    output:
+        dupl_annotation = temp(config["outputs"]["output_dir"] + "annotation/{cell_type}.chr{chr}.annotation.WithDuplicates.txt.gz"),
+        annotation = config["outputs"]["output_dir"] + "annotation/{cell_type}.chr{chr}.annotation.txt.gz"
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["create_annotation_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["create_annotation_memory"],
+        time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["create_annotation_time"]]
+    threads: config["create_annotation_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/create_annotation_file.py",
+        feature_name = config["create_annotation_settings"]["feature_name"],
+        autosomes_only = "--autosomes_only " if config["create_annotation_settings"]["autosomes_only"] else "",
+        out = config["outputs"]["output_dir"] + "create_annotation/{cell_type}.chr{chr}.annotation"
+    log: config["outputs"]["output_dir"] + "log/create_gene_annotation.{cell_type}.chr{chr}.log"
+    shell:
+        """
+        singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --in_gtf {input.gtf} \
+            --gene_pairs {input.gene_pairs} \
+            --feature_name {params.feature_name} \
+            {params.autosomes_only} \
+            --out {params.out} > {log} 2>&1
+        """

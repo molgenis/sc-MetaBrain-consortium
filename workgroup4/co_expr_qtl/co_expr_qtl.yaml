@@ -1,0 +1,87 @@
+##############################################################################################################
+##### The following arguments need to be changed by the user to indicating file locations on your system #####
+##############################################################################################################
+inputs:
+  bind_path:
+  singularity_image:
+  repo_dir:
+  poolsheet:
+  psam:
+  cell_annotation:
+  droplet_type_annotation:
+  cell_type_annotation:
+  rb_genes:
+  mt_genes:
+  gtf:
+
+  # optional
+  cell_type_pairing:
+
+outputs:
+  output_dir:
+
+settings:
+  ancestry: "EUR"
+  cell_level: "L1"
+  cell_type: ["EX"]
+  chromosomes: [ 1 ]
+
+cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
+
+##############################################################################################################
+##### The following arguments are common parameters that may need to be changed depending on the dataset #####
+##############################################################################################################
+filter_split_counts_memory: 4
+filter_split_counts_threads: 1
+filter_split_counts_time: 0
+
+average_read_counts_memory: 4
+average_read_counts_threads: 1
+average_read_counts_time: 0
+
+proportional_fit_and_log_memory: 4
+proportional_fit_and_log_threads: 1
+proportional_fit_and_log_time: 0
+
+proportional_fit_memory: 4
+proportional_fit_threads: 1
+proportional_fit_time: 0
+
+correlate_genes_memory: 4
+correlate_genes_threads: 1
+correlate_genes_time: 0
+
+aggregate_sample_correlations_memory: 4
+aggregate_sample_correlations_threads: 1
+aggregate_sample_correlations_time: 0
+
+create_annotation_memory: 4
+create_annotation_threads: 1
+create_annotation_time: 0
+
+############################################################################################################################################
+##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####
+############################################################################################################################################
+barcode_qc_settings:
+  ncount_rna: 500 # min value
+  nfeature_rna: 0 # min value
+  complexity: 100 # max value
+  percent_rb: 100 # max value
+  percent_mt: 5 # max value
+  malat1: 0 # min value
+  cap_barcodes: 10000 # max value
+  cellranger_barcodes: False
+  min_cells: 5
+
+create_annotation_settings:
+  feature_name: "gene_name" ### the info column that in your gtf that describes the names of the genes in your expression matrix. Default `gene_name`.
+  autosomes_only: True ### whether or not to only include autosomal chromosomes. Default 'True'.
+
+correlate_settings:
+  min_obs_per_gene: 10
+  chunk_size: 10000
+
+settings_extra:
+  feature_name: "HGNC"
+  sample_aggregate: "Assignment"
+  debug: True
