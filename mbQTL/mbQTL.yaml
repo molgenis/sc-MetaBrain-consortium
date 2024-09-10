@@ -21,7 +21,9 @@ outputs:
   output_prefix: ### the output filename prefix.
 
 general_settings:
+  preflight_checks: False ### perform pre-flight checks such as checking the samples overlap between the input files. No other results will be generated. Default `False`.
   plot_pca: False ### whether or not to PCA visualise the expression matrix. Default `False`.
+  map_qtls: True ### whether or not to eQTLs should be mapped, e.g. if you wish to inspect the PCA plots first. Default `True`.
   include_modes: null ### which modes to run (options: `all`, `default`, `cov`, `covXPcs`, `XPcs`).
   force_mega: null ### force the covariate correction and / or eQTL mapping to be done over all samples at once (options: 'all', 'cov', 'qtl').
   n_pcs: null ### how many PCs should be removed from the expression matrix (e.g. `[0, 5, 10]`).
@@ -56,6 +58,10 @@ cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ##
 ##############################################################################################################
 ##### The following arguments are common parameters that may need to be changed depending on the dataset #####
 ##############################################################################################################
+
+preflight_checks_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+preflight_checks_threads: 1 ### Number of threads to use
+preflight_checks_time: 0 ### The time setting to use
 
 create_gene_annotation_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 create_gene_annotation_threads: 1 ### Number of threads to use

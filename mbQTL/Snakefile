@@ -274,6 +274,12 @@ def get_input(wildcards):
     input = []
     exp_basename = get_basename(config["inputs"]["exp"])
 
+    if config["general_settings"]["preflight_checks"]:
+        input_fpath = "preflights.finished".format(**wildcards)
+        logger.debug("\trequesting output of rule 'preflight_checks': " + input_fpath)
+        input.append(config["outputs"]["output_dir"] + input_fpath)
+        return input
+
     if config["general_settings"]["plot_pca"]:
         input_fpath = "pca/all/{exp_basename}.done".format(**wildcards, exp_basename=exp_basename)
         logger.debug("\trequesting output of rule 'pca' on the input 'exp': " + input_fpath)
@@ -314,16 +320,17 @@ def get_input(wildcards):
                     logger.debug("\trequesting output of rule 'pca' on the output of rule 'merge_exps': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
                     input.extend(input_fpaths)
 
-    # Output of mbQTL.
-    input_fpaths = expand(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithMultTest.txt", cov=covariates, output_prefix=config["outputs"]["output_prefix"])
-    logger.debug("\trequesting output of rule 'run_qtl': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
-    input.extend(input_fpaths)
+    if config["general_settings"]["map_qtls"]:
+        # Output of mbQTL.
+        input_fpaths = expand(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithMultTest.txt", cov=covariates, output_prefix=config["outputs"]["output_prefix"])
+        logger.debug("\trequesting output of rule 'run_qtl': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
+        input.extend(input_fpaths)
 
-    # Output of results.
-    if covariates:
-        input_fpath = "output/mbQTL-results.txt"
-        logger.debug("\trequesting output of rule 'results': " + input_fpath)
-        input.append(config["outputs"]["output_dir"] + input_fpath)
+        # Output of results.
+        if covariates:
+            input_fpath = "output/mbQTL-results.txt"
+            logger.debug("\trequesting output of rule 'results': " + input_fpath)
+            input.append(config["outputs"]["output_dir"] + input_fpath)
 
     return input
 
@@ -823,6 +830,35 @@ def get_top_hits_finished(wildcards):
 
 rule all:
     input: get_input
+
+
+rule preflight_checks:
+    input:
+        gte = config["inputs"]["gte"],
+        vcf = config["inputs"]["vcf"],
+        exp = config["inputs"]["exp"],
+        cov = config["inputs"]["cov"],
+    output:
+        finished = temp(config["outputs"]["output_dir"] + "preflights.finished")
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["preflight_checks_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["preflight_checks_memory"],
+        time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["preflight_checks_time"]]
+    threads: config["preflight_checks_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/check_sample_overlap.py",
+        cov = "--cov " + config["inputs"]["cov"] if "cov" != "" else config["inputs"]["cov"],
+    shell:
+        """
+        singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --gte {input.gte} \
+            --vcf {input.vcf} \
+            --exp {input.exp} \
+            {params.cov}
+        singularity exec --bind {params.bind} {params.sif} touch {output.finished}
+        """
 
 
 rule create_gene_annotation:

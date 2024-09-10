@@ -174,7 +174,7 @@ def plot_embedding(data, z=None, label_mask=None, annot=None, title='', filename
                     for index, point in data.loc[data[label_mask], :].iterrows():
                         color = "#b22222"
                         if cmap is not None and cmap[point[z]] == "#D55E00":
-                            color = "#00000"
+                            color = "#000000"
 
                         ax.annotate(
                             str(index),

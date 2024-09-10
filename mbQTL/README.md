@@ -41,7 +41,9 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * `cov`: covariate file. Tab-separated file containing the covariate values of each feature per sample. The first column contains the covariates. The rest of the columns are the sample names. Non-numerical covariates are automatically one-hot encoded where the most abundant category is excluded. If a `gte` file is given the dataset column will be used os covariate. Expression PCs can be automatically added as covariates by using `n_pcs`.
 
 **Pipeline specific settings**:
- * `plot_pca`: whether or not to PCA visualise the expression matrix. Default `False`.
+ * `preflight_checks`: perform pre-flight checks such as checking the samples overlap between the input files. No other results will be generated. Default `False`.
+ * `plot_pca`: whether or not to PCA visualise the expression matrix. Default `False`. 
+ * `map_qtls`: whether or not to eQTLs should be mapped, e.g. if you wish to inspect the PCA plots first. Default `True`.
  * `include_modes`: which modes to run (options: `all`, `default`, `cov`, `covXPcs`, `XPcs`). For more info, see modes. Default `null`.
  * `force_mega`: force the covariate correction and / or eQTL mapping to be done over all samples at once (options: `all`, `cov`, `qtl`, `none`). Default: `null`.
  * `n_pcs`: how many PCs should be removed from the expression matrix (e.g. `[0, 5, 10]`). If `cov` is also used these PCs are added to those covariates. Default `null`.
@@ -74,7 +76,7 @@ The following arguments of mbQTL are not (yet) implemented: `--expgroups`, `--nr
 
 ## Usage  
 
-Before running the pipeline it is adviced to perform a `dryrun` to check if all input and settings are valid. Be sure to check the top of the output as import warnings and info are printed.
+Before running the pipeline it is advised to set `preflight_checks` to True and run a `Run (local)` to check if all input and settings are valid and that the sample overlap is as expected. Be sure to check the top of the output as import warnings and info are printed.
 
 #### Visualise pipeline:
 This script that will generate a `dag.svg` file that shows the rules that will be executed and in what order.
