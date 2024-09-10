@@ -357,9 +357,6 @@ def filter_split(adata, metadata):
             if n_sample_ct_pass_cells < args.min_cells:
                 continue
 
-            # Aggregate the cells.
-            save_file(df=pd.DataFrame(np.sum(adata.X[mask, :], axis=1), index=adata.obs_names[mask], columns=[sample]).T, outpath=os.path.join(data_out, f"{args.pool}.{sample}.{cell_type}.raw.weights.txt.gz"))
-
             # Save as h5.
             save_filtered_counts_h5(fpath=os.path.join(data_out, f"{args.pool}.{sample}.{cell_type}.raw.counts.h5"), adata=adata[mask, :])
             n_samples += 1
