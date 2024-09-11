@@ -299,7 +299,8 @@ rule proportional_fit:
 
 rule correlate_genes:
     input:
-        counts = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.pflog1ppf.counts.h5"
+        counts = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.pflog1ppf.counts.h5",
+        weights = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.raw.weights.h5"
     output:
         out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/{sample}.corr.txt.gz"
     resources:
@@ -320,6 +321,7 @@ rule correlate_genes:
         """
          singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --counts {input.counts} \
+            --weights {input.weights} \
             --feature_name {params.feature_name} \
             --min_obs {params.min_obs_per_gene} \
             --chunk_size {params.chunk_size} \

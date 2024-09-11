@@ -2,6 +2,7 @@
 # Author: M. Vochteloo
 
 import argparse
+import pandas as pd
 import numpy as np
 import scanpy
 import gzip
@@ -14,6 +15,7 @@ profiler.enable()
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--counts", required=True, type=str, help="")
+parser.add_argument("--weights", required=True, type=str, help="")
 parser.add_argument("--feature_name", required=False, type=str, default="HGNC", choices=["HGNC", "ENSG", "HGNC_ENSG"], help="")
 parser.add_argument("--min_obs", required=False, type=int, default=10, help="")
 parser.add_argument("--chunk_size", required=False, type=int, default=10000, help="")
@@ -97,6 +99,7 @@ def get_features(m, indices):
 
 print("\nLoading counts ...")
 adata = load_counts(counts_fpath=args.counts)
+weights = pd.read_csv(args.weights, sep="\t", header=0, index_col=0)
 
 # TODO: check for NaN or INF
 
@@ -108,7 +111,7 @@ del feature_mask
 
 # Converting to dense matrix.
 m = adata.X.A
-w = m.sum(axis=1)
+w = weights[adata.obs_names][:, 0].to_numpy()
 features = adata.var_names
 del adata
 
