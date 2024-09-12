@@ -12,7 +12,10 @@ LABEL about.summary=""
 LABEL about.documentation="https://github.com/molgenis/sc-MetaBrain-consortium/tree/main/mbQTL"
 LABEL about.tags="Genomics"
 
-# Build syntax: docker build ./ -t mbqtl:2024.05.13.0 --progress=plain > build.log 2>&1
+# Build syntax:
+# docker build ./ -t mbqtl:2024.09.12.0 --progress=plain > build.log 2>&1
+# docker save -o 20240912-0-mbqtl-pipeline.tar mbqtl:2024.09.12.0
+# singularity build 20240912-0-mbQTL-pipeline.sif docker-archive://20240912-0-mbqtl-pipeline.tar
 
 ################## MAINTAINER ######################
 
@@ -51,7 +54,20 @@ RUN apt-get update -y \
     # ca-certificates openssl
     && apt-get install -y --no-install-recommends ca-certificates \
     # libpsl5 wget
-    && apt-get install -y --no-install-recommends wget
+    && apt-get install -y --no-install-recommends wget \
+    # Required for htslib
+    # libbz2-dev
+    && apt-get install -y --no-install-recommends libbz2-dev \
+    # Required for htslib
+    # liblzma-dev
+    && apt-get install -y --no-install-recommends liblzma-dev \
+    # Required for htslib
+    # libbrotli1 libcurl4 libcurl4-openssl-dev libldap-2.5-0 libnghttp2-14
+    # librtmp1 libsasl2-2 libsasl2-modules-db libssh-4
+    && apt-get install -y --no-install-recommends libcurl4-openssl-dev \
+    # Required for htslib
+    # zlib1g-dev
+    && apt-get install -y --no-install-recommends zlib1g-dev
 
 ##################################
 ############# PYTHON #############
@@ -145,7 +161,7 @@ RUN apt-get install -y --no-install-recommends cmake \
     # liblzma-dev libncurses-dev libncurses5-dev libpcre16-3 libpcre2-16-0
     # libpcre2-32-0 libpcre2-dev libpcre2-posix3 libpcre3-dev libpcre32-3
     # libpcrecpp0v5 libpng-dev libreadline-dev libxmuu1 pkg-config r-base-dev
-    # xauth zlib1g-dev
+    # xauth
     && apt-get install -y --no-install-recommends r-base-dev
 
 # remotes_2.4.2.1
@@ -196,10 +212,20 @@ RUN apt-get install -y --no-install-recommends openjdk-17-jdk
 ##################################
 
 RUN cd /opt \
-    && wget 'https://jenkins.harmjanwestra.nl/view/all/job/systemsgenetics_hjw/lastBuild/nl.systemsgenetics$MbQTL/artifact/nl.systemsgenetics/MbQTL/1.5.0-SNAPSHOT/MbQTL-1.5.0-SNAPSHOT-jar-with-dependencies.jar' \
+    && wget 'https://jenkins.harmjanwestra.nl/view/all/job/systemsgenetics_hjw/lastBuild/nl.systemsgenetics$MbQTL/artifact/nl.systemsgenetics/MbQTL/1.5.1-SNAPSHOT/MbQTL-1.5.1-SNAPSHOT-jar-with-dependencies.jar' \
     && mkdir tools \
-    && mv MbQTL-1.5.0-SNAPSHOT-jar-with-dependencies.jar tools/MbQTL.jar \
+    && mv MbQTL-1.5.1-SNAPSHOT-jar-with-dependencies.jar tools/MbQTL.jar \
     && chmod 777 tools/MbQTL.jar
+
+RUN cd /opt \
+    && wget https://github.com/samtools/htslib/releases/download/1.18/htslib-1.18.tar.bz2 \
+    && tar xjf htslib-1.18.tar.bz2 \
+    && rm htslib-1.18.tar.bz2 \
+    && cd htslib-1.18 \
+      && ./configure \
+      && make \
+      && make install \
+    && rm -rf /opt/htslib-1.18/test
 
 ####################################
 ################ CLEAN #############

@@ -12,6 +12,7 @@ The snakemake implements the following additions to the standard mbQTL software:
  * correct expression input for covariates and / or N expression PCs (possibly per dataset in parallel)
  * QTL analysis in arbitrary number of batches on the HPC in parallel (including merging of output files)
  * perform multiple testing correction over top effects (Bonferroni, Benjamini-Hochberg, [qvalue](https://github.com/StoreyLab/qvalue))
+ * TSS distance plots of the top variant per gene
  * summarise number of eQTLs detected (possibly per N expression PCs removed)
 
 Furthermore, quality of life settings and setting warnings are added to make the use of mbQTL even easier.
@@ -44,6 +45,8 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * `preflight_checks`: perform pre-flight checks such as checking the samples overlap between the input files. No other results will be generated. Default `False`.
  * `plot_pca`: whether or not to PCA visualise the expression matrix. Default `False`. 
  * `map_qtls`: whether or not to eQTLs should be mapped, e.g. if you wish to inspect the PCA plots first. Default `True`.
+ * `visualise`: whether or not to the top eQTL results should be visualised. Default `True`.
+
  * `include_modes`: which modes to run (options: `all`, `default`, `cov`, `covXPcs`, `XPcs`). For more info, see modes. Default `null`.
  * `force_mega`: force the covariate correction and / or eQTL mapping to be done over all samples at once (options: `all`, `cov`, `qtl`, `none`). Default: `null`.
  * `n_pcs`: how many PCs should be removed from the expression matrix (e.g. `[0, 5, 10]`). If `cov` is also used these PCs are added to those covariates. Default `null`.
@@ -55,10 +58,10 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * `autosomes_only`: whether or not to only include autosomal chromosomes. Default `True`.
  * `eval_n_pcs`: how many PCs to evaluate for outlier detection; same number of Pcs is plotted. Default `3`. 
  * `sample_outlier_zscore`: max absolute zscore calculated over `eval_n_pcs` number of PCs, higher than this number is defined as outlier. Note that outlier samples are not automatically excluded from the analysis. Default `3`.
+ * `mbqtl_jar`: use this mbQTL jar instead of the one in the singularity image. Default: `null`.
  * `java_memory_buffer`: memory buffer in Gb to request in addition to what is set for `-Xmx` and `-Xms` to prevent out of memory isues in Java. Default `1`.
  * `force`: prevent snakemake from updating input settings that are unlogical. Use with caution. Default `False`.
  * `debug`: set logger to level DEBUG printing additional information. Default `False`.
- * `mbqtl_jar`: use this mbQTL jar instead of the one in the singularity image. Default: `null`.
 
 **mbQTL standard inputs**:
  * `annotation`: `genes.gtf` of your alignment reference. If the file does not end with `.gtf` it assumes it is a mbQTL annotation file: tab seperated with gene ID, chromosome, gene start, gene end, and strand.
@@ -69,7 +72,7 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
 **Additional to mbQTL manual**:
  * In this implementation `snpgenelimit` has priority over `genelimit`, `snplimit`. As a result, if `snpgenelimit` is given and `filter_vcf` is True, any effects that are in the `snplimit` file but not in `snpgenelimit` file will not be tested. Similarly, if `ngenes`>1 the batches will be created over the genes in `snpgenelimit` and extra genes in `genelimit` will not be tested.
  * The `--out` mbQTL argument is created by `output_dir` + `output_prefix`
- * The `--outputall` mbQTL argument is automatically set to `True` if `snpgenelimit` is used.
+ * The `--outputall` mbQTL argument is automatically set to `True` if `snpgenelimit` is used. Moreover, if True, the effects will be outputted per batch. If `chr`, the effects will instead be outputted per chromosome with a tabix index using a separate job.
  * The `--perm` mbQTL argument is automatically set to `0` if `snpgenelimit` is used.
 
 The following arguments of mbQTL are not (yet) implemented: `--expgroups`, `--nriters`, `--sortbyz`, and `--testnonparseablechr`.
@@ -185,13 +188,15 @@ Please keep in mind that:
 ## Output
 
 Each eQTL run is outputted in a seperate folder: e.g. no covariate or PCs (`default`), cov (`cov`), 5 Pcs (`5Pcs`), or cov + 5 Pcs (`cov5Pcs`) all get their own folder in `output` containing the default mbQTL output files. In addition, the following extra files are created:
- * if `plot_pca` is True, a `*.Pcs.png` and `*.Scree.png` figure containing visualisations of the expression matrix PCA. If covariates are corrected a plot after correction is created as well.
+ * if `plot_pca` is True, a `*.Pcs.png` and `*.Scree.png` figure containing visualisations of the expression matrix PCA is created. If covariates are corrected a plot after correction is created as well.
  * a `-TopEffectsWithqval.txt` file with a couple of columns added:
    * `BonfAdjustedMetaP`: nominal p-value (`MetaP`) multiplied by the number of tests performed for that gene (`NrTestedSNPs`).
    * `BonfBHAdjustedMetaP`: boneferroni corrected p-value (`BonfAdjustedMetaP`) converted to Benjamini-Hochberg FDR values.
    * `PvalueNominalThreshold`: nominal p-value thresholds based on the permutation beta distribution (`BetaDistAlpha` and `BetaDistBeta`, only if `perm: >0`).
    * `bh_fdr`: Benjamini-Hochberg FDR values calculated over the p-values (using `BetaAdjustedMetaP` if `perm: >0` else `MetaP`).
    * `qval`: [qvalue](https://github.com/StoreyLab/qvalue) q-values calculated over the p-values (using `BetaAdjustedMetaP` if `perm: >0` else `MetaP`).
+ * if `visualise` is True, two `-TopEffects-TSSDistance-*.png` figures containing visualisations of the TSS distane to the top variant per gene is created.
+ * if `outputall` is `chr`, all tested variant - gene combinations are outputted per chromosome and indexed using [tabix](https://www.htslib.org/doc/tabix.html).
  * a `-results.txt` file with the number of effects, tests, and significance values (e.g. `MetaP   BetaAdjustedMetaP`, `BonfAdjustedMetaP`, `BonfBHAdjustedMetaP`, `bh_fdr`, and `qval`) below the significance threshold (`<0.05`) per QTL run (e.g. 0Pcs removed, 5Pcs removed, etc.). If a meta-analysis was performed the per dataset, the number of nominal significant effects (based on `DatasetZScores`) are also counted.
 
 ## Author  
