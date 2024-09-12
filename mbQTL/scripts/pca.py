@@ -244,7 +244,8 @@ pca = prcomp(x=m, center=args.center, scale=args.scale)
 pca_indices = ["PC{}_exp".format(i) for i in range(1, len(samples) + 1)]
 projection_df = pd.DataFrame(pca["x"], index=samples, columns=pca_indices).astype(float).T
 rotation_df = pd.DataFrame(pca["rotation"], columns=pca_indices)
-expl_var_df = pd.Series((pca["sdev"] ** 2) / np.sum(pca["sdev"] ** 2), index=pca_indices, name="Explained Variance")
+expl_var_df = pd.DataFrame({"expl var %": ((pca["sdev"] ** 2) / np.sum(pca["sdev"] ** 2)) * 100}, index=pca_indices)
+expl_var_df["cum expl var %"] = expl_var_df["expl var %"].cumsum()
 
 # print(projection_df)
 # print(rotation_df)
@@ -279,15 +280,12 @@ include_df.to_csv(args.data_out + "samples_include.txt", sep="\t", header=False,
 exclude_df.to_csv(args.data_out + "samples_exclude.txt", sep="\t", header=False, index=False)
 
 print("\nPlotting embedding...")
-scree_df = expl_var_df.to_frame().rename(columns={"Explained Variance": "var"}).reset_index(drop=True).reset_index()
-scree_df["var"] = scree_df["var"] * 100
-scree_df["cumsum"] = scree_df["var"].cumsum()
-
+expl_var_df["index"] = range(len(expl_var_df))
 plot_scree(
-    data=scree_df,
+    data=expl_var_df,
     x="index",
-    y1="var",
-    y2="cumsum",
+    y1="expl var %",
+    y2="cum expl var %",
     xlabel="Component Number",
     ylabel1="% of variance explained",
     ylabel2="cummulative explained variance",
@@ -296,10 +294,10 @@ plot_scree(
     filename="Scree"
 )
 
-expl_var = expl_var_df.to_dict()
+expl_var = dict(zip(expl_var_df.index, expl_var_df["expl var %"]))
 annot = {}
 for label in projection_df.index:
-    annot[label] = "{}\n{:.2f}%".format(label, expl_var[label] * 100)
+    annot[label] = "{}\n{:.2f}%".format(label, expl_var[label])
 
 projection_df = projection_df.iloc[:args.eval_n_pcs, :].T
 projection_df["outlier"] = False
