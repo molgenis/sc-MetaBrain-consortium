@@ -108,7 +108,7 @@ if config["settings_extra"]["force"]:
     logger.warning("\tWarning, unlogical input arguments will not be automatically updated. Use with caution!")
 else:
     if config["general_settings"]["visualise"] and not config["general_settings"]["map_qtls"]:
-        logger.error("Critical, setting visualise to False since map_qtls is False.\n\nExiting.")
+        logger.warning("\tWarning, setting visualise to False since map_qtls is False.")
         config["general_settings"]["visualise"] = False
     if (config["inputs"]["snpgenelimit"] != "" or config["inputs"]["snplimit"] != "") and config["general_settings"]["use_snpannotation"]:
         logger.warning("\tWarning, setting use_snpannotation to False since snpgenelimit / snplimit is used.")
