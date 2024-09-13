@@ -124,7 +124,7 @@ checkpoint filter_split_counts:
         mt_genes = config["inputs"]["mt_genes"]
     output:
         full_metadata = config["outputs"]["output_dir"] + "expression/{pool}/{pool}.full.metadata.tsv.gz",
-        # counts = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.raw.weights.txt.gz",
+        # counts = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.raw.counts.h5",
         data_dir = directory(config["outputs"]["output_dir"] + "expression/{pool}/data/"),
         stats = config["outputs"]["output_dir"] + "expression/{pool}/{pool}.pseudobulk.stats.tsv.gz",
         done = config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done",
@@ -300,7 +300,7 @@ rule proportional_fit:
 rule correlate_genes:
     input:
         counts = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.pflog1ppf.counts.h5",
-        weights = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.raw.weights.h5"
+        weights = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.raw.weights.txt.gz"
     output:
         out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/{sample}.corr.txt.gz"
     resources:
