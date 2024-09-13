@@ -280,7 +280,7 @@ rule pseudobulk_pool:
             {params.cr_barcodes} \
             --feature_name {params.feature_name} \
             --aggregate_fun {params.aggregate_fun} \
-            --save_filtered_h5 {params.save_filtered_h5} \
+            {params.save_filtered_h5} \
             --out {params.out} > {log} 2>&1
         singularity exec --bind {params.bind} {params.sif} touch {output.exp}
         singularity exec --bind {params.bind} {params.sif} touch {output.stats}
