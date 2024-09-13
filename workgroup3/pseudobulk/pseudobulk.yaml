@@ -34,7 +34,7 @@ settings:
   percent_rb: [ 100 ] # max value
   percent_mt: [ 5 ] # max value
   malat1: [ 0 ] # min value
-  cap_barcodes: [ 10000 ] # max value
+  cap_barcodes: [ "dynamic" ] # max value
   cellranger_barcodes: [ False ]
 
   # Merge

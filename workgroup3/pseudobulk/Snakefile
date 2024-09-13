@@ -60,9 +60,17 @@ if "Pool" not in POOL_DF.columns:
 if not POOL_DF["Pool"].is_unique:
     logger.info("\tError, your 'Pool' column contains duplicates, please make sure all values are unique.\n\nExiting.")
     stop("InvalidPoolSheetFile")
+if not "Dataset" in POOL_DF:
+    POOL_DF["Dataset"] = "Dataset"
 
 logger.info("\tValid.")
 POOLS = POOL_DF["Pool"].tolist()
+POOL_TO_DATASET = dict(zip(POOL_DF["Pool"], POOL_DF["Dataset"]))
+
+DYNAMIC_CAP_BARC0DES = None
+if isinstance(config["settings"]["cap_barcodes"], dict):
+    DYNAMIC_CAP_BARC0DES = config["settings"]["cap_barcodes"]
+    config["settings"]["cap_barcodes"] = ["Dynamic"]
 
 # Create the settings.
 logger.info("\nDetermine expected output:")
@@ -134,6 +142,8 @@ def get_pseudobulk_setting(wildcards, parameter):
         value = match.group(7)
         if value == 'None':
             value = None
+        if value == 'Dynamic':
+            value = str(DYNAMIC_CAP_BARC0DES[POOL_TO_DATASET[wildcards.pool]])
     elif parameter == "CRBarcodes":
         value = match.group(8)
         if value == 'True':
@@ -339,7 +349,6 @@ rule merge_pseudobulk_expr:
         indir = config["outputs"]["output_dir"] + "expression/{pb_setting}/pools/",
         min_cells = lambda wildcards: get_merge_setting(wildcards, parameter="MinCells"),
         aggregate_fun = config["settings_extra"]["aggregate_fun"],
-        split_per_dataset = "--split_per_dataset" if config["settings"]["split_per_dataset"] else "",
         out = config["outputs"]["output_dir"] + "expression/{pb_setting}/{merge_setting}/"
     log: config["outputs"]["output_dir"] + "log/merge_pseudobulk_expr.{pb_setting}.{merge_setting}.{cell_type}.log"
     shell:
@@ -350,7 +359,6 @@ rule merge_pseudobulk_expr:
             --cell_type {wildcards.cell_type} \
             --min_cells {params.min_cells} \
             --aggregate_fun {params.aggregate_fun} \
-            {params.split_per_dataset} \
             --out {params.out} > {log} 2>&1
         singularity exec --bind {params.bind} {params.sif} touch {output.exp} {output.gte} {output.gte_nodataset} {output.stats}
         """

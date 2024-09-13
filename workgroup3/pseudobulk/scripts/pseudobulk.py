@@ -415,7 +415,12 @@ def save_filtered_counts_h5(fpath, adata):
 #############################################
 
 print("\nLoading poolsheet ...")
-fpaths = load_file(args.poolsheet, must_contain=args.pool).to_dict("index")
+fpaths_df = load_file(args.poolsheet, must_contain=args.pool)
+if fpaths_df.shape[0] > 1:
+    fpaths_df = fpaths_df.loc[fpaths_df["Pool"] == args.pool, :].reset_index()
+fpaths = fpaths_df.to_dict("index")
+del fpaths_df
+
 if len(fpaths) != 1:
     print("Error, pool is not unique.")
     exit()

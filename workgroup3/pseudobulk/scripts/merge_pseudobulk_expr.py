@@ -13,7 +13,6 @@ parser.add_argument("--indir", required=True, type=str, help="")
 parser.add_argument("--cell_type", required=True, type=str, help="")
 parser.add_argument("--min_cells", required=False, type=int, default=0, help="")
 parser.add_argument("--aggregate_fun", required=False, type=str, default="sum", choices=["sum", "mean"], help="")
-parser.add_argument("--split_per_dataset", action="store_true", default=False, help="")
 parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
 
@@ -129,7 +128,7 @@ for _, row in poolsheet.iterrows():
     stats_data.append(stats_df)
     pool_index += 1
 
-print("\tParsed {:,} / {:,} genes".format(pool_index, n_pools))
+print("\tParsed {:,} / {:,} pools".format(pool_index, n_pools))
 
 if len(expr_data) == 0:
     print("\tError, no data.")
