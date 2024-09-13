@@ -32,7 +32,7 @@ filter_vcf_time: 0 ### The time setting to use
 
 combine_vcf_memory: 8 ### Amount of gigs that will be used for memory and disk space per thread
 combine_vcf_threads: 4 ### Number of threads to use
-combine_vcf_time: 0 ### The time setting to use
+combine_vcf_time: 1 ### The time setting to use
 
 combine_files_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 combine_files_threads: 1 ### Number of threads to use
