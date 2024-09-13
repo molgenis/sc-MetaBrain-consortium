@@ -507,7 +507,8 @@ class main():
             '    --configfile {} \\'.format(configfile),
             '    --dryrun \\',
             '    --cores {} \\'.format(cores),
-            '    --reason'
+            '    --reason \\',
+            '    --printshellcmds'
         ]
         self.write_lines_to_file(
             lines=lines,
@@ -539,6 +540,7 @@ class main():
             '  snakemake \\',
             '    --snakefile {} \\'.format(snakefile),
             '    --configfile {} \\'.format(configfile),
+            '    --printshellcmds \\',
             '    --rerun-incomplete \\',
             '    --jobs {} \\'.format(jobs),
             '    --use-singularity \\',
