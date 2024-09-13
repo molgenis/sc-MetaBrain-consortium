@@ -84,4 +84,4 @@ correlate_settings:
 settings_extra:
   feature_name: "HGNC"
   sample_aggregate: "Assignment"
-  debug: True
+  debug: False

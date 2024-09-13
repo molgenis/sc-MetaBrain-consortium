@@ -38,7 +38,7 @@ print("Calculating average read counts ...")
 for sample, fpaths in sample_fpaths.items():
     counts_outpath = os.path.join(args.out, "{sample}.raw.counts.h5".format(sample=sample))
     weights_outpath = os.path.join(args.out, "{sample}.raw.weights.txt.gz".format(sample=sample))
-    if len(fpaths) == 0:
+    if len(fpaths) == 1:
         # Copy file.
         fh = open(counts_outpath, "w")
         fh.close()
