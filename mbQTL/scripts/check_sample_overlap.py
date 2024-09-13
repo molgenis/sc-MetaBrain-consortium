@@ -58,11 +58,11 @@ def load_cov(fpath, ref_expr_samples):
     cov_matrix_expr_samples = get_individuals_from_matrix(fpath=fpath)
 
     # We assume it is the one with the highest overlap.
-    cov_gte_expr_overlap = len(cov_gte_expr_samples.intersection(ref_expr_samples))
-    cov_matrix_expr_overlap = len(cov_matrix_expr_samples.intersection(ref_expr_samples))
-    if cov_gte_expr_overlap > cov_matrix_expr_overlap:
+    cov_gte_expr_overlap = cov_gte_expr_samples.intersection(ref_expr_samples)
+    cov_matrix_expr_overlap = cov_matrix_expr_samples.intersection(ref_expr_samples)
+    if len(cov_gte_expr_overlap) > len(cov_matrix_expr_overlap):
         return cov_gte_expr_samples
-    elif cov_gte_expr_overlap < cov_matrix_expr_overlap:
+    elif len(cov_gte_expr_overlap) < len(cov_matrix_expr_overlap):
         return cov_matrix_expr_overlap
     else:
         print("Error, unable to determine if cov is a GTE file or a matrix.")
