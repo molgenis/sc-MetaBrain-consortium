@@ -92,16 +92,16 @@ def get_plot_replication_stats_input(wildcards):
                     repl_standard_ct = repl_ct
                     if cell_type_names is not None:
                         repl_standard_ct = cell_type_names[repl_ct] if repl_ct in cell_type_names else repl_ct
-                    logger.debug("\tdisc_standard_ct: {}\trepl_standard_ct: {}".format(disc_standard_ct, repl_standard_ct))
 
+                    combination_str = "disc_settings={}, disc_ct={} [{}], repl_settings={}, repl_ct={} [{}]".format(disc_settings, disc_ct, disc_standard_ct, repl_settings, repl_ct, repl_standard_ct)
                     if config["settings"]["only_matching"] and disc_ct != repl_ct and disc_standard_ct != repl_standard_ct:
-                        logger.debug("\tskipping 'disc_settings={}, disc_ct={}, repl_settings={}, repl_ct={}' due to only_matching.".format(disc_settings,disc_ct,repl_settings,repl_ct))
+                        logger.debug("\tskipping '{}' due to only_matching.".format(combination_str))
                         continue
                     if not os.path.exists(disc_fpath.replace("<CT>", disc_ct)) or not os.path.exists(repl_fpath.replace("<CT>", repl_ct)):
-                        logger.debug("\tskipping 'disc_settings={}, disc_ct={}, repl_settings={}, repl_ct={}' due to non existing filepaths.".format(disc_settings,disc_ct,repl_settings,repl_ct))
+                        logger.debug("\tskipping '{}' due to non existing filepaths.".format(combination_str))
                         continue
 
-                    logger.debug("\trequesting 'disc_settings={}, disc_ct={}, repl_settings={}, repl_ct={}'.".format(disc_settings, disc_ct, repl_settings, repl_ct))
+                    logger.debug("\trequesting '{}'.".format(combination_str))
                     input_files.append(config["outputs"]["output_dir"] + "replication_data/{disc_name}{disc_settings}discovery_{repl_name}{repl_settings}replication/{disc_name}{disc_settings}_{disc_ct}_Disc_{repl_name}{repl_settings}_{repl_ct}_Repl_ReplicationStats.txt.gz".format(disc_name=config["inputs"]["discovery_name"], disc_settings=disc_settings, disc_ct=disc_ct, repl_name=config["inputs"]["replication_name"], repl_settings=repl_settings, repl_ct=repl_ct))
     return input_files
 

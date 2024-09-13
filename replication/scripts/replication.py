@@ -52,6 +52,7 @@ rinterface.embedded.set_initoptions(options=["rpy2", "--quiet", "--no-save", "--
 rinterface.initr()
 from rpy2.robjects.packages import importr
 import rpy2.robjects as robjects
+from rpy2.rinterface_lib.embedded import RRuntimeError
 
 # Local application imports.
 
@@ -370,6 +371,10 @@ class main():
         # Making sure the snp, gene, and effect data are actually present before we start doing anything.
         self.check_data_availability(class_object=disc, class_type="discovery")
         self.check_data_availability(class_object=repl, class_type="replication")
+
+        # Compile the regex for speed-up.
+        disc.compile_columns()
+        repl.compile_columns()
 
         # First get the top effect per gene in the discovery dataset.
         print("### Loading discovery data... ###")
@@ -1291,13 +1296,30 @@ class Dataset:
     def get_columns(self):
         return self.columns
 
+    def compile_columns(self):
+        columns = self.get_columns()
+        compiled_columns = {}
+        for column, query in columns.items():
+            compiled_columns[column] = self.compile_regex(query=query)
+
+        self.columns = compiled_columns
+
+    @staticmethod
+    def compile_regex(query):
+        compiled_query = []
+        for (column, pattern, suffix) in query:
+            if isinstance(pattern, str):
+                pattern = re.compile(pattern)
+            compiled_query.append((column, pattern, suffix))
+        return compiled_query
+
     def get_column(self, column):
         if column not in self.columns:
             return self.na
         return self.columns[column]
 
     def has_column(self, column):
-        return self.get_column(column=column) != self.na
+        return self.get_column(column) != self.na
 
     def contains_data(self, label):
         # This method determines if a method has certain info column taking into
@@ -1508,7 +1530,7 @@ class Dataset:
             # Save full column value.
             if pattern is None:
                 info += str(data[column])
-            elif isinstance(pattern, str):
+            elif isinstance(pattern, str) or isinstance(pattern, re.Pattern):
                 # Extract part of column value based on regex pattern.
                 try:
                     info += re.match(pattern, str(data[column])).group(1)
@@ -1522,7 +1544,7 @@ class Dataset:
                     return None
                 info += pattern[data[column]]
             else:
-                print("Error, unexpected input in extract_info()")
+                print("Error, unexpected pattern '{}' ({}) in extract_info()".format(pattern, type(pattern)))
                 exit()
 
             # Add the suffix.
@@ -1651,7 +1673,7 @@ class Dataset:
         try:
             return self.get_effects_wrapper(
                 inpath=self.get_all_effects_path(),
-                label_dict={"key": self.get_column(column=gene), "value": self.get_column(column="nominal_pvalue")},
+                label_dict={"key": self.get_column(gene), "value": self.get_column("nominal_pvalue")},
                 func=self.extract_top_effects
             )
         except FileNotFoundError as e:
@@ -1691,7 +1713,7 @@ class Dataset:
             # This function loads in specific gene-SNP combos from the 'all_effects_path' file.
             return self.get_effects_wrapper(
                 inpath=self.get_all_effects_path(),
-                label_dict={"key": self.get_column(column=gene), "value": self.get_column(column=snp)},
+                label_dict={"key": self.get_column(gene), "value": self.get_column(snp)},
                 func=self.extract_specific_effects,
                 effects=effects
             )
@@ -1703,7 +1725,7 @@ class Dataset:
             # Using the top file instead.
             return self.get_effects_wrapper(
                 inpath=self.get_top_effects_path(),
-                label_dict={"key": self.get_column(column=gene), "value": self.get_column(column=snp)},
+                label_dict={"key": self.get_column(gene), "value": self.get_column(snp)},
                 func=self.extract_specific_effects,
                 effects=effects
             )
@@ -2480,7 +2502,7 @@ class LIMIX(Dataset):
             # This function loads in specific gene-SNP combos from the 'all_effects_path' file.
             return self.get_effects_wrapper(
                 inpath=self.get_all_effects_path(),
-                label_dict={"key": self.get_column(column=gene), "value": self.get_column(column=snp)},
+                label_dict={"key": self.get_column(gene), "value": self.get_column(snp)},
                 func=self.extract_specific_effects,
                 effects=effects
             )
@@ -2498,7 +2520,7 @@ class LIMIX(Dataset):
             # Using the top file instead.
             return self.get_effects_wrapper(
                 inpath=self.get_top_effects_path(),
-                label_dict={"key": self.get_column(column=gene), "value": self.get_column(column=snp)},
+                label_dict={"key": self.get_column(gene), "value": self.get_column(snp)},
                 func=self.extract_specific_effects,
                 effects=effects
             )
@@ -2551,7 +2573,7 @@ class LIMIX(Dataset):
                                           "start": "feature_start",
                                           "end": "feature_end"})
 
-        feature_id_to_gene_dict = self.create_dict_from_df(df=ffea_df, key=[("feature_id", None, None)], value=self.get_column(column=gene))
+        feature_id_to_gene_dict = self.create_dict_from_df(df=ffea_df, key=[("feature_id", None, None)], value=self.get_column(gene))
         if effects is not None:
             if len(set(effects.keys()).intersection(set(feature_id_to_gene_dict.values()))) == 0:
                 print("\tWarning, skipping: '{}' no overlapping features.".format(chunk))
@@ -2562,7 +2584,7 @@ class LIMIX(Dataset):
                                  columns={"chromosome": "snp_chromosome",
                                           "position": "snp_position"})
 
-        snp_to_snp_id_dict = self.create_dict_from_df(df=fsnp_df, key=self.get_column(column=snp), value=[("snp_id", None, None)])
+        snp_to_snp_id_dict = self.create_dict_from_df(df=fsnp_df, key=self.get_column(snp), value=[("snp_id", None, None)])
         if effects is not None:
             if len(set(self.get_effect_snps(effects=effects)).intersection(set(snp_to_snp_id_dict.keys()))) == 0:
                 print("\tWarning, skipping: '{}' no overlapping SNPs.".format(chunk))
@@ -2809,7 +2831,7 @@ class eQTLMappingPipeline(Dataset):
         try:
             return self.get_effects_wrapper(
                 inpath=self.get_top_effects_path(),
-                label_dict={"key": self.get_column(column=gene), "value": self.get_column(column="nominal_pvalue")},
+                label_dict={"key": self.get_column(gene), "value": self.get_column("nominal_pvalue")},
                 func=self.extract_top_effects
             )
         except FileNotFoundError as e:
@@ -2819,7 +2841,7 @@ class eQTLMappingPipeline(Dataset):
         try:
             return self.get_effects_wrapper(
                 inpath=self.get_all_effects_path(),
-                label_dict={"key": self.get_column(column=gene), "value": self.get_column(column="nominal_pvalue")},
+                label_dict={"key": self.get_column(gene), "value": self.get_column("nominal_pvalue")},
                 func=self.extract_top_effects
             )
         except FileNotFoundError as e:
@@ -2979,10 +3001,10 @@ class Bryois(Dataset):
         # TODO: implement alternative option to load from
         #  'top_effects_path' if 'all_effects_path' is missing.
 
-        snp_pos_df = self.load_snp_pos_data(effects=self.get_effect_snps(effects=effects), specific_entries_cols={"key": self.get_column(column=snp)})
-        label_dict = {"key": self.get_column(column=gene), "value": self.get_column(column=snp)}
+        snp_pos_df = self.load_snp_pos_data(effects=self.get_effect_snps(effects=effects), specific_entries_cols={"key": self.get_column(snp)})
+        label_dict = {"key": self.get_column(gene), "value": self.get_column(snp)}
 
-        if self.get_column(column=snp)[0][0] not in self.all_effects_columns:
+        if self.get_column(snp)[0][0] not in self.all_effects_columns:
             extra_info = self.create_dict_from_df(
                 df=snp_pos_df,
                 key=[("SNP", None, None)],
