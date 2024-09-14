@@ -125,8 +125,8 @@ run_qtl_memory: 2 ### Amount of gigs that will be used for memory and disk space
 run_qtl_threads: 2 ### Number of threads to use
 run_qtl_time: 1 ### The time setting to use
 
-export_all_effects_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
-export_all_effects_threads: 10 ### Number of threads to use
+export_all_effects_memory: 5 ### Amount of gigs that will be used for memory and disk space per thread
+export_all_effects_threads: 6 ### Number of threads to use
 export_all_effects_time: 1 ### The time setting to use
 
 merge_top_effects_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
@@ -160,6 +160,6 @@ qtl_settings_extra:
   mbqtl_jar: null ### use this mbQTL jar instead of the one in the singularity image.
 
 settings_extra:
-  java_memory_buffer: 1 ### increase job memory to this amount when running java applications to ensure '-Xmx' and '-Xms' do not overflow the max memory.
+  java_memory_buffer: 2 ### increase job memory to this amount when running java applications to ensure '-Xmx' and '-Xms' do not overflow the max memory.
   force: False ### prevent snakemake from updating input settings that are unlogical. Use with caution.
   debug: False ### set logger to level DEBUG printing additional information.
