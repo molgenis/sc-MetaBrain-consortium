@@ -622,7 +622,7 @@ class main():
                 exit()
             elif self.rm_dupl == "all":
                 print("Warning, replication contains duplicate indices. Resolving this by removing"
-                      "all duplicates. ")
+                      " all duplicates. ")
                 repl_df = self.remove_duplicates(repl_df=repl_df)
             elif self.rm_dupl == "mismatched":
                 print("Warning, replication contains duplicate indices. Attempting to resolve duplicates"
@@ -1257,8 +1257,11 @@ class Dataset:
         else:
             return None
 
-        _, tmp_fpath = self.replace_wildcards(fpath=fpath)
-        example_fpath, _, _ = self.get_existing_fpath(fpath=tmp_fpath)
+        wildcards, tmp_fpath = self.replace_wildcards(fpath=fpath)
+        if "<CHR>" in wildcards or "<BATCH>" in wildcards:
+            example_fpath, _, _ = self.search_chr_batch_fpath(fpath=tmp_fpath)
+        else:
+            example_fpath, _, _ = self.get_existing_fpath(fpath=tmp_fpath)
 
         return example_fpath
 

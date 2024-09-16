@@ -82,11 +82,11 @@ def plot(df, title="", filename="heatmap"):
                 n_digits=0 if metric == "AC" else 2
             )
 
-            if args.repl_settings == ["Main"]:
+            if args.repl_settings == "Main":
                 value_df.index = [index.split("_")[1] for index in value_df.index]
                 annot_df.index = [index.split("_")[1] for index in annot_df.index]
 
-            if args.disc_settings == ["Main"]:
+            if args.disc_settings == "Main":
                 value_df.columns = [column.split("_")[1] for column in value_df.columns]
                 annot_df.columns = [column.split("_")[1] for column in annot_df.columns]
 
@@ -162,7 +162,7 @@ def create_pivot_table(df, index_col, column_col, value_col, n_digits=2):
     annot_df = pd.DataFrame("", index=index, columns=columns)
     for index, row in df.iterrows():
         value_df.loc[row[index_col], row[column_col]] = row[value_col]
-        annot_df.loc[row[index_col], row[column_col]] = "{:,}\n{} = {:.{}f}".format(row["N"], value_col, row[value_col], n_digits)
+        annot_df.loc[row[index_col], row[column_col]] = "{:.{}f}\n[n={:,}]".format(row[value_col], n_digits, row["N"])
 
     return value_df, annot_df
 
