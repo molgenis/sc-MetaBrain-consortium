@@ -109,7 +109,7 @@ DISC_FPATHS = build_paths(ref_path=config["inputs"]["discovery_path"], inputs=co
 REPL_FPATHS = build_paths(ref_path=config["inputs"]["replication_path"], inputs=config["settings"]["repl_inputs"])
 plot_replication_stats_input = get_plot_replication_stats_input(wildcards={})
 input_files = []
-if len(plot_replication_stats_input):
+if len(plot_replication_stats_input) == 1:
     input_files = plot_replication_stats_input
 else:
     input_files.append(config["outputs"]["output_dir"] + "replication_data/{disc_name}discovery_{repl_name}replication/{disc_name}_Disc_{repl_name}_Repl_ReplicationStats.txt.gz".format(disc_name=config["inputs"]["discovery_name"],repl_name=config["inputs"]["replication_name"]))
