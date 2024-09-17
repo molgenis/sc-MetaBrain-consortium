@@ -65,11 +65,12 @@ if not POOL_DF["Pool"].is_unique:
 
 logger.info("\tValid.")
 POOLS = POOL_DF["Pool"].tolist()
+POOLS = ["EGAN00003565274", "EGAN00003565254", "EGAN00003565275"]
 
 
 wildcard_constraints:
     pool = "[\w-]+",
-    pool_sample = "[\w-.]+",
+    sample = "[\w-]+",
     cell_type = "[A-Za-z.]+"
 
 
@@ -82,6 +83,7 @@ def print_wildcards(wildcards):
 def get_pool_samples(wildcards):
     logger.debug("get_pool_samples({})".format(print_wildcards(wildcards)))
     pool_samples = {"pool": [], "sample": []}
+    n_samples = 0
     for pool in POOLS:
         # Per pool, look which samples it contained for the current cell type.
         out_dir = checkpoints.filter_split_counts.get(**wildcards, pool=pool).output["data_dir"]
@@ -93,19 +95,11 @@ def get_pool_samples(wildcards):
             continue
         pool_samples["pool"].extend([pool] * len(samples))
         pool_samples["sample"].extend(samples)
+        n_samples += len(samples)
 
-    logger.debug("\tfound '{:,}' samples".format(len(pool_samples)))
+    logger.debug("\tfound '{:,}' samples".format(n_samples))
     return pool_samples
 
-
-def get_samples(wildcards):
-    logger.debug("get_samples({})".format(print_wildcards(wildcards)))
-    out_dir = checkpoints.merge_sample_counts.get(**wildcards).output["data_dir"]
-    glob_fpath = os.path.join(out_dir, "{sample}.raw.counts.h5")
-    logger.debug("\tglob path: " + glob_fpath)
-    samples = glob_wildcards(glob_fpath).sample
-    logger.debug("\tfound '{:,}' samples: {}".format(len(samples), ", ".join(samples)))
-    return samples
 
 
 rule all:
@@ -124,6 +118,7 @@ checkpoint filter_split_counts:
         mt_genes = config["inputs"]["mt_genes"]
     output:
         full_metadata = config["outputs"]["output_dir"] + "expression/{pool}/{pool}.full.metadata.tsv.gz",
+        # weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.raw.weights.txt.gz",
         # counts = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.raw.counts.h5",
         data_dir = directory(config["outputs"]["output_dir"] + "expression/{pool}/data/"),
         stats = config["outputs"]["output_dir"] + "expression/{pool}/{pool}.pseudobulk.stats.tsv.gz",
@@ -183,41 +178,11 @@ checkpoint filter_split_counts:
         """
 
 
-checkpoint merge_sample_counts:
-    input:
-        fsc_done = expand(config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done", pool=POOLS),
-        counts = lambda wildcards: expand(config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.raw.counts.h5", zip, **get_pool_samples(wildcards), allow_missing=True)
-    output:
-        # weights = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.raw.counts.h5",
-        # counts = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.raw.weights.txt.gz",
-        data_dir = directory(config["outputs"]["output_dir"] + "expression/data/{cell_type}/"),
-        done = config["outputs"]["output_dir"] + "expression/data/{cell_type}/merge_sample_counts.done"
-    resources:
-        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_sample_counts_memory"],
-        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["merge_sample_counts_memory"],
-        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["merge_sample_counts_time"]],
-    threads: config["merge_sample_counts_threads"]
-    params:
-        bind = config["inputs"]["bind_path"],
-        sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/merge_sample_counts.py",
-        input = config["outputs"]["output_dir"] + "expression/*/data/*.raw.counts.h5"
-    log: config["outputs"]["output_dir"] + "log/merge_sample_counts.{cell_type}.log"
-    shell:
-        """
-         singularity exec --bind {params.bind} {params.sif} python {params.script} \
-            --input '{params.input}' \
-            --cell_type {wildcards.cell_type} \
-            --out {output.data_dir} > {log} 2>&1
-        singularity exec --bind {params.bind} {params.sif} touch {output.done}
-        """
-
-
 # Important to check if merge_sample_counts is done to prevent snakemake errors.
 rule average_read_counts:
     input:
-        merge_done = config["outputs"]["output_dir"] + "expression/data/{cell_type}/merge_sample_counts.done",
-        weights = lambda wildcards: expand(config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.{dtype}.weights.txt.gz", sample=get_samples(wildcards), allow_missing=True)
+        fsc_done = expand(config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done", pool=POOLS),
+        weights = lambda wildcards: expand(config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.{dtype}.weights.txt.gz", zip, **get_pool_samples(wildcards), allow_missing=True)
     output:
         avg_read_depth = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{dtype}.avg_read_depth.json"
     resources:
@@ -244,11 +209,11 @@ rule average_read_counts:
 
 rule proportional_fit_and_log:
     input:
-        weights = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.raw.counts.h5",
+        weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.raw.weights.txt.gz",
         avg_rd = config["outputs"]["output_dir"] + "expression/data/{cell_type}/raw.avg_read_depth.json"
     output:
-        out = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.pflog1p.counts.h5",
-        weights = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.pflog1p.weights.txt.gz"
+        out = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1p.counts.h5",
+        weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1p.weights.txt.gz"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["proportional_fit_and_log_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["proportional_fit_and_log_memory"],
@@ -258,8 +223,8 @@ rule proportional_fit_and_log:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/normalise.py",
-        out = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.pflog1p."
-    log: config["outputs"]["output_dir"] + "log/proportional_fit_and_log.{cell_type}.{sample}.log"
+        out = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1p."
+    log: config["outputs"]["output_dir"] + "log/proportional_fit_and_log.{cell_type}.{pool}.{sample}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} python {params.script} \
@@ -272,11 +237,11 @@ rule proportional_fit_and_log:
 
 rule proportional_fit:
     input:
-        weights = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.pflog1p.counts.h5",
+        weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1p.counts.h5",
         avg_rd = config["outputs"]["output_dir"] + "expression/data/{cell_type}/pflog1p.avg_read_depth.json"
     output:
-        out = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.pflog1ppf.counts.h5",
-        weights = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.pflog1ppf.weights.txt.gz"
+        out = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1ppf.counts.h5",
+        weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1ppf.weights.txt.gz"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["proportional_fit_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["proportional_fit_memory"],
@@ -286,8 +251,8 @@ rule proportional_fit:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/normalise.py",
-        out = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.pflog1ppf."
-    log: config["outputs"]["output_dir"] + "log/proportional_fit_and_log.{cell_type}.{sample}.log"
+        out = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1ppf."
+    log: config["outputs"]["output_dir"] + "log/proportional_fit_and_log.{cell_type}.{pool}.{sample}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} python {params.script} \
@@ -299,10 +264,10 @@ rule proportional_fit:
 
 rule correlate_genes:
     input:
-        counts = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.pflog1ppf.counts.h5",
-        weights = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{sample}.raw.weights.txt.gz"
+        counts = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1ppf.counts.h5",
+        weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.raw.weights.txt.gz"
     output:
-        out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/{sample}.corr.txt.gz"
+        out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/{pool}.{sample}.corr.txt.gz"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["correlate_genes_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["correlate_genes_memory"],
@@ -316,7 +281,7 @@ rule correlate_genes:
         min_obs_per_gene = config["correlate_settings"]["min_obs_per_gene"],
         chunk_size = config["correlate_settings"]["chunk_size"],
         workdir = config["outputs"]["output_dir"] + "correlations/data/"
-    log: config["outputs"]["output_dir"] + "log/correlate_genes.{cell_type}.{sample}.log"
+    log: config["outputs"]["output_dir"] + "log/correlate_genes.{cell_type}.{pool}.{sample}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} python {params.script} \
@@ -334,7 +299,7 @@ rule correlate_genes:
 rule aggregate_sample_correlations:
     input:
         fsc_done = expand(config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done", pool=POOLS),
-        corr = lambda wildcards: expand(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/{sample}.corr.txt.gz", sample=get_samples(wildcards), allow_missing=True)
+        corr = lambda wildcards: expand(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/{pool}.{sample}.corr.txt.gz", zip, **get_pool_samples(wildcards), allow_missing=True)
     output:
         corr = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr{chr}.corr.txt.gz",
         gene_pairs = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr{chr}.gene_pairs.txt.gz",

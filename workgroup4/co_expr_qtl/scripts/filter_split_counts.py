@@ -357,8 +357,12 @@ def filter_split(adata, metadata):
             if n_sample_ct_pass_cells < args.min_cells:
                 continue
 
+            # Save number of reads per cell.
+            sample_id = f"{args.pool}.{sample}.{cell_type}"
+            pd.DataFrame(adata[mask, :].X.sum(axis=1), index=adata.obs_names[mask], columns=[sample_id]).to_csv(os.path.join(data_out,f"{sample_id}.raw.weights.txt.gz"), sep="\t", header=True, index=True)
+
             # Save as h5.
-            save_filtered_counts_h5(fpath=os.path.join(data_out, f"{args.pool}.{sample}.{cell_type}.raw.counts.h5"), adata=adata[mask, :])
+            save_filtered_counts_h5(fpath=os.path.join(data_out, f"{sample_id}.raw.counts.h5"), adata=adata[mask, :])
             n_samples += 1
 
     stats_df = None
