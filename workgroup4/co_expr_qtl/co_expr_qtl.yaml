@@ -7,6 +7,8 @@ inputs:
   repo_dir:
   poolsheet:
   psam:
+  gene_list:
+  gene_annotation:
   cell_annotation:
   droplet_type_annotation:
   cell_type_annotation:
@@ -35,6 +37,10 @@ filter_split_counts_memory: 4
 filter_split_counts_threads: 1
 filter_split_counts_time: 0
 
+split_chromosome_memory: 4
+split_chromosome_threads: 1
+split_chromosome_time: 0
+
 average_read_counts_memory: 4
 average_read_counts_threads: 1
 average_read_counts_time: 0
@@ -49,11 +55,15 @@ proportional_fit_time: 0
 
 correlate_genes_memory: 4
 correlate_genes_threads: 1
-correlate_genes_time: 0
+correlate_genes_time: 2
 
 aggregate_sample_correlations_memory: 4
 aggregate_sample_correlations_threads: 1
-aggregate_sample_correlations_time: 0
+aggregate_sample_correlations_time: 2
+
+transpose_matrix_memory: 4
+transpose_matrix_threads: 1
+transpose_matrix_time: 2
 
 create_annotation_memory: 4
 create_annotation_threads: 1
