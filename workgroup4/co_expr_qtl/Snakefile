@@ -281,6 +281,7 @@ rule correlate_genes:
         feature_name = config["settings_extra"]["feature_name"],
         min_obs_per_gene = config["correlate_settings"]["min_obs_per_gene"],
         chunk_size = config["correlate_settings"]["chunk_size"],
+        feature_path = config["inputs"]["gene_list"],   
         workdir = config["outputs"]["output_dir"] + "correlations/data/"
     log: config["outputs"]["output_dir"] + "log/correlate_genes.{cell_type}.{pool}.{sample}.log"
     shell:
@@ -291,6 +292,7 @@ rule correlate_genes:
             --feature_name {params.feature_name} \
             --min_obs {params.min_obs_per_gene} \
             --chunk_size {params.chunk_size} \
+            --feature_list {params.feature_path} \
             --outfile {output.out} > {log} 2>&1
         """
 
