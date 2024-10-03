@@ -394,10 +394,9 @@ rule transpose_matrix:
 rule create_annotation:
     input:
         gtf = config["inputs"]["gtf"],
-        gene_pairs = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr{chr}.gene_pairs.txt.gz",
+        gene_pairs = config["outputs"]["output_dir"] + "correlations/data/gene.pairs.chr.{chr}.txt.gz",
     output:
-        dupl_annotation = temp(config["outputs"]["output_dir"] + "annotation/{cell_type}/chr{chr}.annotation.WithDuplicates.txt.gz"),
-        annotation = config["outputs"]["output_dir"] + "annotation/{cell_type}/chr{chr}.annotation.txt.gz"
+        annotation = config["outputs"]["output_dir"] + "annotation/{cell_type}/chr.{chr}.annotation.txt.gz"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["create_annotation_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["create_annotation_memory"],
@@ -409,14 +408,13 @@ rule create_annotation:
         script = config["inputs"]["repo_dir"] + "scripts/create_annotation_file.py",
         feature_name = config["create_annotation_settings"]["feature_name"],
         autosomes_only = "--autosomes_only " if config["create_annotation_settings"]["autosomes_only"] else "",
-        out = config["outputs"]["output_dir"] + "create_annotation/{cell_type}/chr{chr}.annotation"
-    log: config["outputs"]["output_dir"] + "log/create_gene_annotation.{cell_type}.chr{chr}.log"
+        out = config["outputs"]["output_dir"] + "annotation/{cell_type}/"
+    log: config["outputs"]["output_dir"] + "log/create_gene_annotation.{cell_type}.chr.{chr}.log"
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --in_gtf {input.gtf} \
             --gene_pairs {input.gene_pairs} \
-            --feature_name {params.feature_name} \
-            {params.autosomes_only} \
+            --chr {wildcards.chr} \
             --out {params.out} > {log} 2>&1
         """
