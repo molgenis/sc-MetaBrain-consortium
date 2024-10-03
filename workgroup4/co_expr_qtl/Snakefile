@@ -351,6 +351,45 @@ rule aggregate_sample_correlations:
             --out {output.corr} > {log} 2>&1
         """
 
+rule transpose_matrix:
+    input:
+        corr = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr.{chr}.corr.txt.gz"
+    output:
+        final_out = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr.{chr}.corr.final.txt.gz",
+        tmp0 = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr.{chr}.corr.dat",
+        tmp1 = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr.{chr}.corr.rows.txt",
+        tmp3 = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr.{chr}.corr.cols.txt",
+        tmp4 = config["outputs"]["output_dir"] + "/correlations/{cell_type}/tmp.transpose.chr.{chr}.corr.dat",
+        tmp5 = config["outputs"]["output_dir"] + "/correlations/{cell_type}/tmp.transpose.chr.{chr}.corr.rows.txt",
+        tmp6 = config["outputs"]["output_dir"] + "/correlations/{cell_type}/tmp.transpose.chr.{chr}.corr.cols.txt"
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["transpose_matrix_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["transpose_matrix_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["transpose_matrix_time"]]
+    threads: config["transpose_matrix_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        out = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr.{chr}.corr",
+        tmp_out = config["outputs"]["output_dir"] + "/correlations/{cell_type}/tmp.transpose.chr.{chr}.corr",
+        script = config["inputs"]["repo_dir"] + "scripts/",
+    shell:
+        """
+        singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.mem_per_thread_gb}g -Xms{resources.mem_per_thread_gb}g -jar {params.script}2024-06-20-BinaryMatrixTools.jar" \
+            txttobin \
+            {input.corr} \
+            {params.out}
+        singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.mem_per_thread_gb}g -Xms{resources.mem_per_thread_gb}g -jar {params.script}2024-06-20-BinaryMatrixTools.jar" \
+            transpose \
+            {params.out} \
+            {params.tmp_out} \
+            1
+        singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.mem_per_thread_gb}g -Xms{resources.mem_per_thread_gb}g -jar {params.script}2024-06-20-BinaryMatrixTools.jar" \
+            bintotxt \
+            {params.tmp_out}\
+            {output.final_out}
+        """
+
 
 rule create_annotation:
     input:
