@@ -20,6 +20,7 @@ parser.add_argument("--feature_name", required=False, type=str, default="HGNC", 
 parser.add_argument("--min_obs", required=False, type=int, default=10, help="")
 parser.add_argument("--chunk_size", required=False, type=int, default=10000, help="")
 parser.add_argument("--outfile", required=True, type=str, help="")
+parser.add_argument("--feature_list", required=True, type=str, help="")
 args = parser.parse_args()
 
 dir = os.path.dirname(args.outfile)
@@ -30,7 +31,6 @@ print("Options in effect:")
 for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
-
 
 def gzopen(file, mode="r"):
     if file.endswith(".gz"):
@@ -51,12 +51,10 @@ def load_counts(counts_fpath):
         print("Error, matrix size does not match barcodes annotation.")
         exit()
     print("\tLoaded raw matrix with {:,} barcodes and {:,} genes.".format(n_barcodes, n_genes))
-
     # Check for unique barcodes.
     if len(np.unique(barcodes)) != np.size(barcodes):
         print("Error, not all barcodes are unique.")
         exit()
-
     # Parse the gene info
     gene_ids = adata.var['gene_ids']
     gene_ids = gene_ids.reset_index(drop=False)
@@ -64,10 +62,8 @@ def load_counts(counts_fpath):
     if not (genes == gene_ids[:, 0]).all():
         print("Error, 'count_data.var_names' are expected to have the same order as 'count_data.var['gene_ids''.")
         exit()
-
     # Set gene names.
     features = get_features(m=gene_ids, indices={"HGNC": 0, "ENSG": 1})
-
     # Remove duplicates.
     u, c = np.unique(features, return_counts=True)
     dup = u[c > 1]
@@ -79,7 +75,6 @@ def load_counts(counts_fpath):
 
     # Parse the barcode info.
     # barcode_ids = count_data.var['feature_types'].to_numpy()
-
     print("\tDuplicate filtered matrix has shape: {}".format(count_matrix.shape))
     return adata
 
@@ -101,19 +96,34 @@ print("\nLoading counts ...")
 adata = load_counts(counts_fpath=args.counts)
 weights = pd.read_csv(args.weights, sep="\t", header=0, index_col=0)
 
-# TODO: check for NaN or INF
+if not weights.index.equals(adata.obs_names):
+    print("Error, weight cell barcodes do not match matrix cell barcodes")
+    exit()
 
-print("\nFiltering genes ...")
 feature_mask = np.sum(adata.X > 0, axis=0) >= args.min_obs
 print("\tExcluding {:,} features due to min_obs >={} filter".format(np.size(feature_mask) - np.sum(feature_mask), args.min_obs))
 adata = adata[:, feature_mask]
 del feature_mask
 
+print("\nFiltering features using provided feature list ...")
+gene_list = pd.read_csv(args.feature_list,sep="\t").iloc[:,0].tolist()
+# # Sort var_names
+adata = adata[:, adata.var_names.isin(gene_list)]
+print(f"Remaining features: {len(adata.var_names)}")
+del gene_list
+
 # Converting to dense matrix.
 m = adata.X.A
-w = weights[adata.obs_names][:, 0].to_numpy()
+if np.isnan(m).any():
+    print("Error, count matrix contains NaN values")
+    exit()
+
+w = weights.iloc[:,0].to_numpy(dtype=int)
+if np.isnan(w).any():
+    print("Error, weights array contains NaN values")
+    exit()
+
 features = adata.var_names
-del adata
 
 # # Test example.
 # x = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
