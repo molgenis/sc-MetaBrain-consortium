@@ -209,7 +209,7 @@ rule average_read_counts:
 
 rule proportional_fit_and_log:
     input:
-        weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.raw.weights.txt.gz",
+        counts = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.raw.counts.h5",
         avg_rd = config["outputs"]["output_dir"] + "expression/data/{cell_type}/raw.avg_read_depth.json"
     output:
         out = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1p.counts.h5",
@@ -228,9 +228,10 @@ rule proportional_fit_and_log:
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} python {params.script} \
-            --counts {input.weights} \
+            --counts {input.counts} \
             --avg_rd {input.avg_rd} \
             --log1p \
+            --weights_out {output.weights} \
             --out {output.out} > {log} 2>&1
         """
 
