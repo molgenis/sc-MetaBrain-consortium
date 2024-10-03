@@ -296,6 +296,33 @@ rule correlate_genes:
             --outfile {output.out} > {log} 2>&1
         """
 
+rule split_per_chromsome: # Create chromosome annotation files for aggregation step
+    input: 
+        config["inputs"]["gene_annotation"]
+    output:
+        config["outputs"]["output_dir"] + "correlations/data/gene.pairs.chr.{chr}.txt.gz"
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["split_chromosome_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["split_chromosome_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["split_chromosome_time"]]
+    threads: config["split_chromosome_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/split_chromosome.py",
+        out = config["outputs"]["output_dir"] + "correlations/data/",
+        feature_path = config["inputs"]["gene_list"],
+        autosomes_only = "--autosomes_only " if config["create_annotation_settings"]["autosomes_only"] else ""
+    log: config["outputs"]["output_dir"] + "log/split_chromosome_annotation_chr_{chr}.log"
+    shell:
+        """
+        singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --annot {input} \
+            --out {params.out} \
+            {params.autosomes_only} \
+            --chr {wildcards.chr} \
+            --feature_path {params.feature_path} > {log} 2>&1
+        """
 
 # Important to check if filter_split_counts is done to for all pools to prevent snakemake errors
 # and force reruns if the pools changed.
