@@ -329,10 +329,10 @@ rule split_per_chromsome: # Create chromosome annotation files for aggregation s
 rule aggregate_sample_correlations:
     input:
         fsc_done = expand(config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done", pool=POOLS),
+        gene_pairs = config["outputs"]["output_dir"] + "correlations/data/gene.pairs.chr.{chr}.txt.gz",
         corr = lambda wildcards: expand(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/{pool}.{sample}.corr.txt.gz", zip, **get_pool_samples(wildcards), allow_missing=True)
     output:
-        corr = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr{chr}.corr.txt.gz",
-        gene_pairs = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr{chr}.gene_pairs.txt.gz",
+        corr = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr.{chr}.corr.txt.gz"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["aggregate_sample_correlations_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["aggregate_sample_correlations_memory"],
@@ -342,15 +342,13 @@ rule aggregate_sample_correlations:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/aggregate_correlations.py",
-        indir = config["outputs"]["output_dir"] + "correlations/pools/data/",
-        out = config["outputs"]["output_dir"] + "correlations/"
     log: config["outputs"]["output_dir"] + "log/aggregate_sample_correlations.{cell_type}.chr{chr}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} python {params.script} \
-            --indir {params.indir} \
-            --chr {wildcards.chr} \
-            --out {params.out} > {log} 2>&1
+            --input {input.corr} \
+            --gene_pairs {input.gene_pairs} \
+            --out {output.corr} > {log} 2>&1
         """
 
 
