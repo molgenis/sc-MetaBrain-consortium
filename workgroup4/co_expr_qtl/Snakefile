@@ -238,11 +238,11 @@ rule proportional_fit_and_log:
 
 rule proportional_fit:
     input:
-        weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1p.counts.h5",
+        counts = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1p.counts.h5",
         avg_rd = config["outputs"]["output_dir"] + "expression/data/{cell_type}/pflog1p.avg_read_depth.json"
     output:
         out = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1ppf.counts.h5",
-        weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1ppf.weights.txt.gz"
+        # weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1ppf.weights.txt.gz"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["proportional_fit_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["proportional_fit_memory"],
@@ -257,8 +257,8 @@ rule proportional_fit:
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} python {params.script} \
-            --counts {input.weights} \
-            --pf_value {input.avg_rd} \
+            --counts {input.counts} \
+            --avg_rd {input.avg_rd} \
             --out {output.out} > {log} 2>&1
         """
 
