@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Author: M. Vochteloo
+# Author: A. Kooijmans
 
 import argparse
 import gzip
@@ -42,10 +42,10 @@ fileOut.write("\t")
 fileOut.write("\t".join(gene_pairs))
 fileOut.write("\n")
 
-corr_array = np.full(n_gene_pairs, np.nan)
 header = None
 counter = 0
 for file in args.input:
+    corr_array = np.full(n_gene_pairs, np.nan)
     sample_id = get_sample_id(file)
     print(f"Processing {sample_id}...")
     with gzip.open(file,"rt") as f:
