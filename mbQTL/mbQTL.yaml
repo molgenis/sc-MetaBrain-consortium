@@ -12,6 +12,7 @@ inputs:
   gte: ### genotype to expression coupling file. This is a tab-separated file with three columns; genotype ID, expression ID, dataset (name). There is no header.
 
   cov: ### covariate file. Tab-separated file containing the covariate values of each feature per sample. The first column contains the covariates. The rest of the columns are the sample names.
+  expgroups: ### File defining groups of phenotypes. File with one line per gene ID - group. No Header.
   genelimit: ### Gene limit file. File with one line per gene ID. No Header.
   snplimit: ### SNP limit file. File with one line per SNP ID. No Header.
   snpgenelimit: ### SNP - gene limit file. Tab-seperated file with one line per SNP - gene ID. The first column contains the SNP IDs and the second column the gene IDs. No Header.

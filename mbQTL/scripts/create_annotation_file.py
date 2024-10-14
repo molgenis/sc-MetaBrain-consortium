@@ -31,7 +31,7 @@ print("Parsing annotation file...")
 
 tmp_fpath = args.out + ".WithDuplicates.txt.gz"
 fhtmp = gzopen(tmp_fpath, mode="w")
-fhtmp.write("\t".join(["Platform", "ArrayAddress", "Symbol", "Chr", "ChrStart", "ChrEnd", "Probe", "Strand"]) + "\n")
+fhtmp.write("\t".join(["Gene", "GeneSymbol", "Chr", "ChrStart", "ChrEnd", "Strand"]) + "\n")
 
 accepted_chr = [str(i) for i in range(1, 23)]
 if not args.autosomes_only:
@@ -58,7 +58,7 @@ with gzopen(args.in_gtf, mode="r") as f:
         if seqname not in accepted_chr:
             continue
 
-        fhtmp.write("\t".join([source, attributes[args.feature_name], attributes["gene_name"], seqname, start, end, attributes["gene_id"], strand]) + "\n")
+        fhtmp.write("\t".join([attributes[args.feature_name], attributes["gene_name"], seqname, start, end, strand]) + "\n")
         features.add(attributes[args.feature_name])
 f.close()
 fhtmp.close()

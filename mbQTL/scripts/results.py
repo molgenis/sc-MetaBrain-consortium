@@ -82,6 +82,7 @@ for i, fpath in enumerate(glob.glob(os.path.join(args.indir, "*/*-TopEffectsWith
     # Loop through the file.
     indices = {}
     sub_indices = {}
+    warnings = {}
     with gzopen(fpath, 'r') as f:
         for j, line in enumerate(f):
             values = line.rstrip("\n").split("\t")
@@ -132,7 +133,7 @@ for i, fpath in enumerate(glob.glob(os.path.join(args.indir, "*/*-TopEffectsWith
             # Process the columns of interest based on their mode.
             for colname, mode in columns:
                 if colname in indices:
-                    # Extract the value of the current column usin the index dict
+                    # Extract the value of the current column using the index dict
                     # we created from the header.
                     value = values[indices[colname]]
 
@@ -146,21 +147,53 @@ for i, fpath in enumerate(glob.glob(os.path.join(args.indir, "*/*-TopEffectsWith
                         row[colname] += int(value)
                     elif mode == "signif":
                         # Check if a value is below a certain threshold.
-                        if float(value) < args.alpha:
+                        try:
+                            value = float(value)
+                        except ValueError:
+                            if colname not in warnings:
+                                warnings[colname] = {}
+                            if "ValueError" not in warnings[colname]:
+                                warnings[colname]["ValueError"] = 0
+                            warnings[colname]["ValueError"] += 1
+                            continue
+
+                        if value < args.alpha:
                             row[colname] += 1
                     elif mode == "dataset_z_signif":
                         # Per dataset, convert the z-score to p-values and
                         # check if it is below a certain threshold.
                         for ds_index, ds_zscore in enumerate(value.split(";")):
-                            if ds_zscore == "-":
-                                continue
                             ds_colname = colname.replace("DATASET", sub_indices[colname][ds_index])
-                            if abs(float(ds_zscore)) >= alpha_zscore:
+                            try:
+                                ds_zscore = float(ds_zscore)
+                            except ValueError:
+                                if ds_colname not in warnings:
+                                    warnings[ds_colname] = {}
+                                if "ValueError" not in warnings[ds_colname]:
+                                    warnings[ds_colname]["ValueError"] = 0
+                                warnings[ds_colname]["ValueError"] += 1
+                                continue
+
+                            if abs(ds_zscore) >= alpha_zscore:
                                 row[ds_colname] += 1
                     else:
                         print("Error, unexpected mode '{}'.".format(mode))
                         exit()
     f.close()
+
+    # Print warnings.
+    for colname, colname_warnings in warnings.items():
+        warnings_str = ""
+        total_warning_count = 0
+        for warning_label, warning_count in colname_warnings.items():
+            warnings_str += "{} {}s".format(warning_count, warning_label)
+            total_warning_count += warning_count
+        print("  File {} column '{}' had {}".format(os.sep.join(fpath.split(os.sep)[-2:]), colname, warnings_str))
+
+        if total_warning_count == row["NrTestedGenes"]:
+            row[colname] = float("nan")
+    if warnings:
+        print("")
 
     # Post-process the average columns.
     for colname, mode in columns:
