@@ -65,8 +65,7 @@ if not POOL_DF["Pool"].is_unique:
 
 logger.info("\tValid.")
 POOLS = POOL_DF["Pool"].tolist()
-POOLS = ["EGAN00003565274", "EGAN00003565254", "EGAN00003565275"]
-
+POOLS = ["R9473965"]
 
 wildcard_constraints:
     pool = "[\w-]+",
@@ -80,14 +79,14 @@ def print_wildcards(wildcards):
         out.append(key + "=" + value)
     return ", ".join(out)
 
-def get_pool_samples(wildcards):
-    logger.debug("get_pool_samples({})".format(print_wildcards(wildcards)))
+def get_pool_samples(wildcards, cell_type):
+    logger.debug("get_pool_samples({}, cell_type=)".format(print_wildcards(wildcards)))
     pool_samples = {"pool": [], "sample": []}
     n_samples = 0
     for pool in POOLS:
         # Per pool, look which samples it contained for the current cell type.
         out_dir = checkpoints.filter_split_counts.get(**wildcards, pool=pool).output["data_dir"]
-        glob_fpath = os.path.join(out_dir, pool + ".{sample}." + wildcards.cell_type + ".raw.counts.h5")
+        glob_fpath = os.path.join(out_dir, pool + ".{sample}." + cell_type + ".raw.counts.h5")
         logger.debug("\tglob path: " + glob_fpath)
         samples = glob_wildcards(glob_fpath).sample
         logger.debug("\tpool = {} has samples = {}".format(pool, ", ".join(samples)))
@@ -101,10 +100,29 @@ def get_pool_samples(wildcards):
     return pool_samples
 
 
+def get_input_all(wildcards):
+    logger.debug("get_input_all({})".format(print_wildcards(wildcards)))
+    input_files = []
+    for cell_type in config["settings"]["cell_type"]:
+        for chr in config["settings"]["chromosomes"]:
+            pool_samples = get_pool_samples(wildcards, cell_type=cell_type)
+            for pool, sample in zip(pool_samples["pool"], pool_samples["sample"]):
+                input_files.append(config["outputs"]["output_dir"] + "correlations/data/log/{cell_type}/{pool}.{sample}.chr.{chr}.corr.done".format(cell_type=cell_type, pool=pool, sample=sample,chr=chr))
+    logger.debug("\requesting '{:,}' input files".format(len(input_files)))
+    return input_files
+
+def get_samples(wildcards):
+    logger.debug("get_samples({})".format(print_wildcards(wildcards)))
+    samples = []
+    for cell_type in config["settings"]["cell_type"]:
+        pool_samples = get_pool_samples(wildcards, cell_type=cell_type)
+        for sample in pool_samples["sample"]:
+            samples.append(sample)
+    return samples
 
 rule all:
     input:
-        gene_correlations = expand(config["outputs"]["output_dir"] + "correlations/{cell_type}/chr{chr}.corr.txt.gz", cell_type=config["settings"]["cell_type"], chr=config["settings"]["chromosomes"])
+        gene_correlations = get_input_all
 
 
 checkpoint filter_split_counts:
@@ -181,8 +199,8 @@ checkpoint filter_split_counts:
 # Important to check if merge_sample_counts is done to prevent snakemake errors.
 rule average_read_counts:
     input:
-        fsc_done = expand(config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done", pool=POOLS),
-        weights = lambda wildcards: expand(config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.{dtype}.weights.txt.gz", zip, **get_pool_samples(wildcards), allow_missing=True)
+        fsc_done = expand(config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done",pool=POOLS,allow_missing=True),
+        weights = lambda wildcards: expand(config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.{dtype}.weights.txt.gz", pool=POOLS, sample = get_samples(wildcards),allow_missing=True)
     output:
         avg_read_depth = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{dtype}.avg_read_depth.json"
     resources:
@@ -197,7 +215,6 @@ rule average_read_counts:
         feature_name = config["settings_extra"]["feature_name"],
         min_obs_per_gene = config["correlate_settings"]["min_obs_per_gene"],
         chunk_size = config["correlate_settings"]["chunk_size"],
-        workdir = config["outputs"]["output_dir"] + "expression/"
     log: config["outputs"]["output_dir"] + "log/average_read_counts.{cell_type}.{dtype}.log"
     shell:
         """
@@ -266,9 +283,9 @@ rule proportional_fit:
 rule correlate_genes:
     input:
         counts = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1ppf.counts.h5",
-        weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.raw.weights.txt.gz"
+        weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.raw.weights.txt.gz",
     output:
-        out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/{pool}.{sample}.corr.txt.gz"
+        done = config["outputs"]["output_dir"] + "correlations/data/log/{cell_type}/{pool}.{sample}.chr.{chr}.corr.done"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["correlate_genes_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["correlate_genes_memory"],
@@ -279,142 +296,26 @@ rule correlate_genes:
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/correlate_genes.py",
         feature_name = config["settings_extra"]["feature_name"],
+        gene_annotation = config["inputs"]["gene_annotation"],
+        egene_list = config["inputs"]["e_gene_list"],
+        coegene_list = config["inputs"]["co_egene_list"],
         min_obs_per_gene = config["correlate_settings"]["min_obs_per_gene"],
         chunk_size = config["correlate_settings"]["chunk_size"],
-        feature_path = config["inputs"]["gene_list"],   
-        workdir = config["outputs"]["output_dir"] + "correlations/data/"
-    log: config["outputs"]["output_dir"] + "log/correlate_genes.{cell_type}.{pool}.{sample}.log"
+        out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/{pool}.{sample}"
+    log: config["outputs"]["output_dir"] + "log/correlate_genes.{cell_type}/{pool}.{sample}.chr.{chr}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --counts {input.counts} \
             --weights {input.weights} \
             --feature_name {params.feature_name} \
+            --geneannotation {params.gene_annotation} \
+            --chr {wildcards.chr} \
+            --egenelist {params.egene_list} \
+            --coegenelist {params.coegene_list} \
             --min_obs {params.min_obs_per_gene} \
             --chunk_size {params.chunk_size} \
-            --feature_list {params.feature_path} \
-            --outfile {output.out} > {log} 2>&1
-        """
-
-rule split_per_chromsome: # Create chromosome annotation files for aggregation step
-    input: 
-        config["inputs"]["gene_annotation"]
-    output:
-        config["outputs"]["output_dir"] + "correlations/data/gene.pairs.chr.{chr}.txt.gz"
-    resources:
-        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["split_chromosome_memory"],
-        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["split_chromosome_memory"],
-        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["split_chromosome_time"]]
-    threads: config["split_chromosome_threads"]
-    params:
-        bind = config["inputs"]["bind_path"],
-        sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/split_chromosome.py",
-        out = config["outputs"]["output_dir"] + "correlations/data/",
-        feature_path = config["inputs"]["gene_list"],
-        autosomes_only = "--autosomes_only " if config["create_annotation_settings"]["autosomes_only"] else ""
-    log: config["outputs"]["output_dir"] + "log/split_chromosome_annotation_chr_{chr}.log"
-    shell:
-        """
-        singularity exec --bind {params.bind} {params.sif} python {params.script} \
-            --annot {input} \
-            --out {params.out} \
-            {params.autosomes_only} \
-            --chr {wildcards.chr} \
-            --feature_path {params.feature_path} > {log} 2>&1
-        """
-
-# Important to check if filter_split_counts is done to for all pools to prevent snakemake errors
-# and force reruns if the pools changed.
-rule aggregate_sample_correlations:
-    input:
-        fsc_done = expand(config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done", pool=POOLS),
-        gene_pairs = config["outputs"]["output_dir"] + "correlations/data/gene.pairs.chr.{chr}.txt.gz",
-        corr = lambda wildcards: expand(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/{pool}.{sample}.corr.txt.gz", zip, **get_pool_samples(wildcards), allow_missing=True)
-    output:
-        corr = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr.{chr}.corr.txt.gz"
-    resources:
-        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["aggregate_sample_correlations_memory"],
-        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["aggregate_sample_correlations_memory"],
-        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["aggregate_sample_correlations_time"]],
-    threads: config["aggregate_sample_correlations_threads"]
-    params:
-        bind = config["inputs"]["bind_path"],
-        sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/aggregate_correlations.py",
-    log: config["outputs"]["output_dir"] + "log/aggregate_sample_correlations.{cell_type}.chr{chr}.log"
-    shell:
-        """
-         singularity exec --bind {params.bind} {params.sif} python {params.script} \
-            --input {input.corr} \
-            --gene_pairs {input.gene_pairs} \
-            --out {output.corr} > {log} 2>&1
-        """
-
-rule transpose_matrix:
-    input:
-        corr = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr.{chr}.corr.txt.gz"
-    output:
-        final_out = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr.{chr}.corr.final.txt.gz",
-        tmp0 = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr.{chr}.corr.dat",
-        tmp1 = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr.{chr}.corr.rows.txt",
-        tmp3 = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr.{chr}.corr.cols.txt",
-        tmp4 = config["outputs"]["output_dir"] + "/correlations/{cell_type}/tmp.transpose.chr.{chr}.corr.dat",
-        tmp5 = config["outputs"]["output_dir"] + "/correlations/{cell_type}/tmp.transpose.chr.{chr}.corr.rows.txt",
-        tmp6 = config["outputs"]["output_dir"] + "/correlations/{cell_type}/tmp.transpose.chr.{chr}.corr.cols.txt"
-    resources:
-        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["transpose_matrix_memory"],
-        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["transpose_matrix_memory"],
-        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["transpose_matrix_time"]]
-    threads: config["transpose_matrix_threads"]
-    params:
-        bind = config["inputs"]["bind_path"],
-        sif = config["inputs"]["singularity_image"],
-        out = config["outputs"]["output_dir"] + "correlations/{cell_type}/chr.{chr}.corr",
-        tmp_out = config["outputs"]["output_dir"] + "/correlations/{cell_type}/tmp.transpose.chr.{chr}.corr",
-        script = config["inputs"]["repo_dir"] + "scripts/",
-    shell:
-        """
-        singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.mem_per_thread_gb}g -Xms{resources.mem_per_thread_gb}g -jar {params.script}2024-06-20-BinaryMatrixTools.jar \
-            txttobin \
-            {input.corr} \
-            {params.out}
-        singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.mem_per_thread_gb}g -Xms{resources.mem_per_thread_gb}g -jar {params.script}2024-06-20-BinaryMatrixTools.jar \
-            transpose \
-            {params.out} \
-            {params.tmp_out} \
-            1
-        singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.mem_per_thread_gb}g -Xms{resources.mem_per_thread_gb}g -jar {params.script}2024-06-20-BinaryMatrixTools.jar \
-            bintotxt \
-            {params.tmp_out}\
-            {output.final_out}
-        """
-
-
-rule create_annotation:
-    input:
-        gtf = config["inputs"]["gtf"],
-        gene_pairs = config["outputs"]["output_dir"] + "correlations/data/gene.pairs.chr.{chr}.txt.gz",
-    output:
-        annotation = config["outputs"]["output_dir"] + "annotation/{cell_type}/chr.{chr}.annotation.txt.gz"
-    resources:
-        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["create_annotation_memory"],
-        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["create_annotation_memory"],
-        time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["create_annotation_time"]]
-    threads: config["create_annotation_threads"]
-    params:
-        bind = config["inputs"]["bind_path"],
-        sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/create_annotation_file.py",
-        feature_name = config["create_annotation_settings"]["feature_name"],
-        autosomes_only = "--autosomes_only " if config["create_annotation_settings"]["autosomes_only"] else "",
-        out = config["outputs"]["output_dir"] + "annotation/{cell_type}/"
-    log: config["outputs"]["output_dir"] + "log/create_gene_annotation.{cell_type}.chr.{chr}.log"
-    shell:
-        """
-        singularity exec --bind {params.bind} {params.sif} python {params.script} \
-            --in_gtf {input.gtf} \
-            --gene_pairs {input.gene_pairs} \
-            --chr {wildcards.chr} \
+            --binary \
             --out {params.out} > {log} 2>&1
+        singularity exec --bind {params.bind} {params.sif} touch {output.done}
         """

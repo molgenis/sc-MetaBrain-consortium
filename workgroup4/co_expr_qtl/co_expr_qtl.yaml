@@ -15,7 +15,8 @@ inputs:
   rb_genes:
   mt_genes:
   gtf:
-
+  e_gene_list:
+  co_egene_list:
   # optional
   cell_type_pairing:
 
