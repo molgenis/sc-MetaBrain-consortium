@@ -65,7 +65,6 @@ if not POOL_DF["Pool"].is_unique:
 
 logger.info("\tValid.")
 POOLS = POOL_DF["Pool"].tolist()
-POOLS = ["R9473965"]
 
 wildcard_constraints:
     pool = "[\w-]+",
@@ -295,24 +294,19 @@ rule correlate_genes:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/correlate_genes.py",
-        feature_name = config["settings_extra"]["feature_name"],
         gene_annotation = config["inputs"]["gene_annotation"],
-        egene_list = config["inputs"]["e_gene_list"],
-        coegene_list = config["inputs"]["co_egene_list"],
         min_obs_per_gene = config["correlate_settings"]["min_obs_per_gene"],
         chunk_size = config["correlate_settings"]["chunk_size"],
-        out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/{pool}.{sample}"
+        out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/{pool}.{sample}",
+        gene_list = config["inputs"]["e_gene_list"]
     log: config["outputs"]["output_dir"] + "log/correlate_genes.{cell_type}/{pool}.{sample}.chr.{chr}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --counts {input.counts} \
             --weights {input.weights} \
-            --feature_name {params.feature_name} \
             --geneannotation {params.gene_annotation} \
             --chr {wildcards.chr} \
-            --egenelist {params.egene_list} \
-            --coegenelist {params.coegene_list} \
             --min_obs {params.min_obs_per_gene} \
             --chunk_size {params.chunk_size} \
             --binary \
