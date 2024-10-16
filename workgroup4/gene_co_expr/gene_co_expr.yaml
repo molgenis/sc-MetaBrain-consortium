@@ -56,19 +56,7 @@ proportional_fit_time: 0
 
 correlate_genes_memory: 4
 correlate_genes_threads: 1
-correlate_genes_time: 2
-
-aggregate_sample_correlations_memory: 4
-aggregate_sample_correlations_threads: 1
-aggregate_sample_correlations_time: 2
-
-transpose_matrix_memory: 4
-transpose_matrix_threads: 1
-transpose_matrix_time: 2
-
-create_annotation_memory: 4
-create_annotation_threads: 1
-create_annotation_time: 0
+correlate_genes_time: 0
 
 ############################################################################################################################################
 ##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####
