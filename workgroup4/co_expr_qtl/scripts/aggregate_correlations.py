@@ -15,6 +15,7 @@ profiler.enable()
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--indir", required=True, type=str,  help="Input directory")
 parser.add_argument("--geneannotation", required=False, type=str, help="Gene chromosome annotation")
+parser.add_argument("--feature_name", required=False, type=str, default="HGNC", choices=["HGNC", "ENSG", "HGNC_ENSG"], help="")
 parser.add_argument("--chr", required=False, type=str, help="Limit correlation calculation to gene pairs where the first gene is on specified chromosome")
 parser.add_argument("--egenelist", required=False, type=str, help="List of all valid eQTL genes")
 parser.add_argument("--coegenelist", required=False, type=str, help="List of all valid co-eQTL genes")
@@ -135,6 +136,10 @@ sys.stdout.flush()
 
 # find matching files
 filename_suffix = ".corr." + ("dat" if args.binary_in else "txt.gz")
+
+if args.chr is not None:
+    filename_suffix = ".chr" + args.chr + ".corr." + ("dat" if args.binary_in else "txt.gz")
+
 print(f"Looking for correlation files ending with *{filename_suffix} in {args.indir}")
 files = glob.glob(args.indir + f"/*{filename_suffix}*")
 n_files = len(files)
@@ -265,14 +270,15 @@ else:
 
 filectr = 0
 startTime = time.time_ns()
+
+if args.binary_out:
+    fho_rows = open(args.out + ".rows.txt", 'wt')
+
 for file in files:
     # Get the sample ID.
-    samplename = os.path.basename(file).replace(filename_suffix, "")
-
-    if args.binary_out:
-        fho_rows = open(args.out + ".rows.txt", 'wt')
-        fho_rows.write(samplename + "\n")
-        fho_rows.close()
+    filename_prefix = os.path.basename(file).replace(filename_suffix, "")
+    pool,sample = filename_prefix.split(".")[0:2]
+    samplename = pool + "." + sample
 
     # Parse the file completely.
     fh = None
@@ -349,6 +355,7 @@ for file in files:
     print(f"\tWriting sample")
     if args.binary_out:
         fho.write(byteout)
+        fho_rows.write(samplename + "\n")
     else:
         fho.write(samplename+"\t")
         fho.write("\t".join(outln))
@@ -367,6 +374,9 @@ for file in files:
     print(f"\n{perc_done:.2f} % done. Time spent: {to_time_str(delta_time)}. Time left: {to_time_str(time_left)}.")
     sys.stdout.flush()
 
+if args.binary_out:
+    fho_rows.close()
+    
 fho.close()
 print("Done.")
 
