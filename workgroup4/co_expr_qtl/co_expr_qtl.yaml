@@ -1,0 +1,69 @@
+##############################################################################################################
+##### The following arguments need to be changed by the user to indicating file locations on your system #####
+##############################################################################################################
+inputs:
+  bind_path:
+  singularity_image:
+  gene_annotation: 
+  repo_dir:
+  egenes:  
+  top_effects:
+  genotype:
+
+settings:
+  chromosomes: 
+  cell_type: 
+  batches: 
+
+outputs:
+  output_dir: 
+
+cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
+
+##############################################################################################################
+##### The following arguments are common parameters that may need to be changed depending on the dataset #####
+##############################################################################################################
+
+aggregate_correlation_memory: 12
+aggregate_correlation_threads: 1
+aggregate_correlation_time: 1
+
+transpose_matrix_memory: 12
+transpose_matrix_threads: 1
+transpose_matrix_time: 1
+
+remove_nan_memory: 12
+remove_nan_threads: 1
+remove_nan_time: 1
+
+create_linkfile_memory: 12
+create_linkfile_threads: 1
+create_linkfile_time: 0
+
+get_significant_eqtls_memory: 12
+get_significant_eqtls_threads: 1
+get_significant_eqtls_time: 0
+
+get_gene_pairs_memory: 12
+get_gene_pairs_threads: 1
+get_gene_pairs_time: 0
+
+create_snp_gene_pair_triplet_memory: 12
+create_snp_gene_pair_triplet_threads: 1
+create_snp_gene_pair_triplet_time: 0
+
+create_annotation_memory: 12
+create_annotation_threads: 1
+create_annotation_time: 0
+
+create_batches_memory: 12
+create_batches_threads: 1
+create_batches_time: 0
+
+run_co_eqtl_memory: 12
+run_co_eqtl_threads: 1
+run_co_eqtl_time: 1
+
+merge_co_eqtls_memory: 12
+merge_co_eqtls_threads: 1
+merge_co_eqtls_time: 0
