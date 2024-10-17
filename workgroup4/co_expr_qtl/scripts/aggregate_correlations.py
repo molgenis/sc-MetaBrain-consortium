@@ -5,7 +5,6 @@ import glob
 import time
 import struct
 import sys
-import math
 
 import cProfile
 import pstats
@@ -275,15 +274,16 @@ if args.binary_out:
     fho_rows = open(args.out + ".rows.txt", 'wt')
 
 for file in files:
+    # Check if the input file is in binary format.
+    isbinary = file.endswith(".dat")
+
     # Get the sample ID.
-    filename_prefix = os.path.basename(file).replace(filename_suffix, "")
-    pool,sample = filename_prefix.split(".")[0:2]
-    samplename = pool + "." + sample
+    samplename = os.path.basename(file).replace(filename_suffix, "")
 
     # Parse the file completely.
     fh = None
     header_info = None
-    if file.endswith(".dat"):
+    if isbinary:
         # Open the file and read the header.
         fh = gzopen(file, mode='rb')
         header_info = parse_binary_header(fh=fh)
@@ -298,8 +298,9 @@ for file in files:
     corrctr = 0
     writtenctr = 0
     for corrctr in range(file_n_correlations):
-        if file.endswith(".dat"):
-            value_index, beta = struct.unpack(">id", fh.read(12))
+        if isbinary:
+            value_index = struct.unpack(">i", fh.read(4))[0]
+            beta = fh.read(8)
         else:
             values = fh.readline().rstrip("\n").split("\t")
             value_index = int(values[0])
@@ -307,7 +308,7 @@ for file in files:
             del values
             
         # Translate the value index to i, j positions and find the corresponding gene names.
-        i = math.floor(value_index / file_n_coegenes)
+        i = value_index // file_n_coegenes
         j = value_index if i == 0 else value_index % file_n_coegenes
         feature_i = file_features[i]
         feature_j = file_features[j]
@@ -320,30 +321,35 @@ for file in files:
         # We look op the position of the genes in the output matrix. Correlation are only stored
         # one way (geneA-geneB = geneB-geneA). We therefore need to look up both combinations
         # of eGene and co-eGene.
-        out_indices = []
+        out_indices = [None, None]
         egene_i = egenes_indices.get(feature_i)
         coegene_j = coegenes_indices.get(feature_j)
         if egene_i is not None and coegene_j is not None:
-            out_indices.append((egene_i * n_coegenes) + coegene_j)
+            out_indices[0] = ((egene_i * n_coegenes) + coegene_j)
 
         egene_j = egenes_indices.get(feature_j)
         coegene_i = coegenes_indices.get(feature_i)
         if egene_j is not None and coegene_i is not None:
-            out_indices.append((egene_j * n_coegenes) + coegene_i)
+            out_indices[1] = (egene_j * n_coegenes) + coegene_i
 
         for out_index in out_indices:
             if out_index is None:
                 continue
-            print(f"{feature_i} [{i}]\t{feature_j} [{j}]\tvalue_index={value_index}\tbeta={beta}\tout={out_index}")
+            # print(f"{feature_i} [{i}]\t{feature_j} [{j}]\tvalue_index={value_index}\tbeta={beta}\tout={out_index}")
 
             # Store the correlation value.
             if args.binary_out:
                 byteidx = out_index * N_BYTES_DOUBLE
                 byteidxend = byteidx + N_BYTES_DOUBLE
-                v = struct.pack('>d', beta) # TODO: I am unpacking and packing the same number here
-                byteout[byteidx:byteidxend] = v[0:N_BYTES_DOUBLE]
+                if args.binary_in:
+                    byteout[byteidx:byteidxend] = beta
+                else:
+                    byteout[byteidx:byteidxend] = struct.pack('>d', beta)
             else:
-                outln[out_index] = str(beta)
+                if args.binary_in:
+                    outln[out_index] = str(struct.unpack(">d", beta)[0])
+                else:
+                    outln[out_index] = str(beta)
 
             writtenctr += 1
         if corrctr % 100000 == 0:
