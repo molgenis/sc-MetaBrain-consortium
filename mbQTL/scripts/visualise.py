@@ -103,6 +103,10 @@ def plot(data, x="x", hue=None, hline=None, vline=None, palette=None, title="", 
 print("Loading data ...")
 df = pd.read_csv(args.data, sep="\t", header=0, index_col=None)
 print("\tLoaded dataframe: {} with shape: {}".format(os.path.basename(args.data), df.shape))
+if df.shape[0] == 0:
+    plt.savefig(args.out + '-TSSDistance-VariantType.png')
+    plt.savefig(args.out + '-TSSDistance-PValBins.png')
+    exit()
 
 # Adding variant type column.
 df["VariantType"] = df["SNPAlleles"].str.len().map({0: "NA", 1: "NA", 2: "NA", 3: "SNP"}, na_action=None)

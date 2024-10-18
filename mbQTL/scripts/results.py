@@ -49,6 +49,7 @@ alpha_zscore = abs(pvalue_to_zscore(pvalue=args.alpha))
 
 # Define the columns we want to keep track of and how we want to summarise them.
 columns = [
+    ("NrTestedGroups", "sum"),
     ("NrTestedSNPs", "sum"),
     ("SNPAlleles", "snp"),
     ("MetaPN", "average"),
@@ -77,11 +78,12 @@ for i, fpath in enumerate(glob.glob(os.path.join(args.indir, "*/*-TopEffectsWith
     prefix = fpath.split(os.sep)[-1].replace("-TopEffectsWithMultTest.txt", "")
 
     # Prepare the counters.
-    row = {"Cov": cov, "Prefix": prefix, "NrTestedGenes": 0}
+    row = {"Cov": cov, "Prefix": prefix, "NrTestedGroups": 0, "NrTestedGenes": 0}
 
     # Loop through the file.
     indices = {}
     sub_indices = {}
+    groups = set()
     warnings = {}
     with gzopen(fpath, 'r') as f:
         for j, line in enumerate(f):
@@ -127,7 +129,14 @@ for i, fpath in enumerate(glob.glob(os.path.join(args.indir, "*/*-TopEffectsWith
                     indices[colname] = index
                 continue
 
-            # Count the row.
+            # Count the group.
+            if "Group" in indices:
+                group = values[indices["Group"]]
+                if group not in groups:
+                    row["NrTestedGroups"] += 1
+                    groups.add(group)
+
+            # Count the gene.
             row["NrTestedGenes"] += 1
 
             # Process the columns of interest based on their mode.
@@ -218,7 +227,7 @@ pvalue_sort_col = "MetaP"
 if "MetaP-Random" in df:
     df["tmpP"] = df[["MetaP", "MetaP-Random"]].min(axis=1)
     pvalue_sort_col = "tmpP"
-df.sort_values(by=[pvalue_sort_col, "NrTestedGenes", "Cov", "Prefix"], ascending=[False, True, True, True])
+df.sort_values(by=[pvalue_sort_col, "NrTestedGroups", "NrTestedGenes", "Cov", "Prefix"], ascending=[False, True, True, True, True])
 if "tmpP" in df.columns:
     df.drop(["tmpP"], axis=1, inplace=True)
 
@@ -226,7 +235,7 @@ if "tmpP" in df.columns:
 colnames_order = list(colnames_order.items())
 colnames_order.sort(key=lambda x: (x[1], x[0]))
 order = [co[0] for co in colnames_order]
-df = df.loc[:, ["Cov", "Prefix", "NrTestedGenes"] + order].rename(columns=rename_columns)
+df = df.loc[:, ["Cov", "Prefix", "NrTestedGroups", "NrTestedGenes"] + order].rename(columns=rename_columns)
 
 print("\nResults:")
 print(df)

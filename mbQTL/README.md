@@ -121,28 +121,27 @@ mkdir -p $LOGDIR/log
 mkdir -p $LOGDIR/slurm_log
 
 nohup \
-snakemake \
-    --snakefile Snakefile \
-    --configfile mbQTL.yaml \
-    --rerun-incomplete \
-    --jobs 10000 \
-    --use-singularity \
-    --restart-times 0 \
-    --keep-going \
-    --latency-wait 60 \
-    --cluster \
-       "sbatch \
-       --job-name=snakemake_{rule}_{wildcards} \
-       --nodes=1 \
-       --cpus-per-task={threads} \
-       --mem=\$(({resources.mem_per_thread_gb} * {threads}))G \
-       --time={resources.time} \
-       --output=$LOGDIR/slurm_log/{rule}_{wildcards}.out \
-       --error=$LOGDIR/slurm_log/{rule}_{wildcards}.out \
-       --export=NONE \
-       --qos=regular \
-       --parsable" \
-    > $LOGDIR/log/nohup_`date +%Y-%m-%d.%H:%M:%S`.log &
+    snakemake \
+        --snakefile Snakefile \
+        --configfile mbQTL.yaml \
+        --rerun-incomplete \
+        --jobs 10000 \
+        --restart-times 0 \
+        --keep-going \
+        --latency-wait 60 \
+        --cluster \
+           "sbatch \
+           --job-name=snakemake_{rule}_{wildcards} \
+           --nodes=1 \
+           --cpus-per-task={threads} \
+           --mem=\$(({resources.mem_per_thread_gb} * {threads}))G \
+           --time={resources.time} \
+           --output=$LOGDIR/slurm_log/{rule}_{wildcards}.out \
+           --error=$LOGDIR/slurm_log/{rule}_{wildcards}.out \
+           --export=NONE \
+           --qos=regular \
+           --parsable" \
+        > $LOGDIR/log/nohup_`date +%Y-%m-%d.%H:%M:%S`.log &
 
 echo "Check status of command with:" ps -p $! -u
 ```  
@@ -190,13 +189,14 @@ Please keep in mind that:
 
 Each eQTL run is outputted in a seperate folder: e.g. no covariate or PCs (`default`), cov (`cov`), 5 Pcs (`5Pcs`), or cov + 5 Pcs (`cov5Pcs`) all get their own folder in `output` containing the default mbQTL output files. In addition, the following extra files are created:
  * if `plot_pca` is True, a `*.Pcs.png` and `*.Scree.png` figure containing visualisations of the expression matrix PCA is created. If covariates are corrected a plot after correction is created as well.
- * a `-TopEffectsWithqval.txt` file with a couple of columns added:
+ * a `-TopEffectsWithMultTest.txt` file with a couple of columns added:
    * `BonfAdjustedMetaP`: nominal p-value (`MetaP`) multiplied by the number of tests performed for that gene (`NrTestedSNPs`).
    * `BonfBHAdjustedMetaP`: bonferroni corrected p-value (`BonfAdjustedMetaP`) converted to Benjamini-Hochberg FDR values.
    * `PvalueNominalThreshold`: nominal p-value thresholds based on the permutation beta distribution (`BetaDistAlpha` and `BetaDistBeta`, only if `perm: >0`).
    * `bh_fdr`: Benjamini-Hochberg FDR values calculated over the p-values (using `BetaAdjustedMetaP` if `perm: >0` else `MetaP`).
    * `qval`: [qvalue](https://github.com/StoreyLab/qvalue) q-values calculated over the p-values (using `BetaAdjustedMetaP` if `perm: >0` else `MetaP`).
- * if `visualise` is True, two `-TopEffects-TSSDistance-*.png` figures containing visualisations of the TSS distane to the top variant per gene is created.
+ * a `-TopEffectsWithMultTest-significant.txt` file based on the `-TopEffectsWithMultTest.txt` but filtered on `qval` < `alpha`.
+ * if `visualise` is True, two `-TopEffects-TSSDistance-*.png` figures are created containing visualisations of the TSS distane to the top variant per gene for the significant eQTLs.
  * if `outputall` is `chr`, all tested variant - gene combinations are outputted per chromosome and indexed using [tabix](https://www.htslib.org/doc/tabix.html).
  * a `-results.txt` file with the number of effects, tests, and significance values (e.g. `MetaP   BetaAdjustedMetaP`, `BonfAdjustedMetaP`, `BonfBHAdjustedMetaP`, `bh_fdr`, and `qval`) below the significance threshold (`<0.05`) per QTL run (e.g. 0Pcs removed, 5Pcs removed, etc.). If a meta-analysis was performed the per dataset, the number of nominal significant effects (based on `DatasetZScores`) are also counted.
 
