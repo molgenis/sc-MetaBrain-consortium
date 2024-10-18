@@ -50,6 +50,9 @@ if config["inputs"]["snplimit"] is not None and not os.path.exists(config["input
 if config["inputs"]["snpgenelimit"] is not None and not os.path.exists(config["inputs"]["snpgenelimit"]):
     logger.error("Critical, snpgenelimit does not exist.\n\nExiting.")
     exit("InvalidSNPGeneLimit")
+if config["inputs"]["plot_eqtls"] is not None and not os.path.exists(config["inputs"]["plot_eqtls"]):
+    logger.error("Critical, plot_eqtls does not exist.\n\nExiting.")
+    exit("InvalidPloteQTLs")
 if config["qtl_settings_extra"]["mbqtl_jar"] is not None and not os.path.exists(config["qtl_settings_extra"]["mbqtl_jar"]):
     logger.error("Critical, mbQTL jar does not exist.\n\nExiting.")
     exit("InvalidmbQTLjar")
@@ -69,7 +72,7 @@ if config["qtl_settings"]["outputall"] not in [False, True, "chr"]:
     exit("InvalidOutputall")
 
 # Replace non required variables that are None with empty strings.
-for input_variable in ["cov", "expgroups", "genelimit", "snplimit", "snpgenelimit"]:
+for input_variable in ["cov", "expgroups", "genelimit", "snplimit", "snpgenelimit", "plot_eqtls"]:
     if config["inputs"][input_variable] is None:
         config["inputs"][input_variable] = ""
 
@@ -262,7 +265,7 @@ def get_basename(fpath):
 
 logger.debug("Basenames:")
 BASENAMES = {}
-for input_key in ["annotation", "vcf", "exp", "gte", "cov", "expgroups", "genelimit", "snplimit", "snpgenelimit"]:
+for input_key in ["annotation", "vcf", "exp", "gte", "cov", "expgroups", "genelimit", "snplimit", "snpgenelimit", "plot_eqtls"]:
     basename = get_basename(config["inputs"][input_key])
     logger.debug("\t{}: {}".format(input_key, basename))
     BASENAMES[input_key] = basename
@@ -354,10 +357,16 @@ def get_input(wildcards):
             logger.debug("\trequesting output of rule 'results': " + input_fpath)
             input.append(config["outputs"]["output_dir"] + input_fpath)
 
+        if config["inputs"]["plot_eqtls"] != "":
+            # Output op plot_eqtl
+            input_fpaths = expand(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-{plot_eqtls_basename}-qtlplot.finished", cov=covariates, output_prefix=config["outputs"]["output_prefix"], plot_eqtls_basename=BASENAMES["plot_eqtls"])
+            logger.debug("\trequesting output of rule 'plot_eqtl': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
+            input.extend(input_fpaths)
+
         if config["general_settings"]["visualise"]:
             # Output of visualise.
-            input_fpaths = expand(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-visualise.done",cov=covariates,output_prefix=config["outputs"]["output_prefix"])
-            logger.debug("\trequesting output of rule 'visualise': " + ", ".join([fpath.replace(config["outputs"]["output_dir"],"") for fpath in input_fpaths]))
+            input_fpaths = expand(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-visualise.done", cov=covariates, output_prefix=config["outputs"]["output_prefix"])
+            logger.debug("\trequesting output of rule 'visualise': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
             input.extend(input_fpaths)
 
     if EXPORT_ALL_EFFECTS:
@@ -1676,6 +1685,54 @@ rule visualise:
             --data {input.data} \
             --out {params.out} > {log} 2>&1
         singularity exec --bind {params.bind} {params.sif} touch {output.done}
+        """
+
+
+rule plot_eqtl:
+    input:
+        annotation = get_annotation,
+        vcf = get_vcf,
+        index = get_vcf_index,
+        exp = get_exp,
+        gte = get_qtl_gte,
+        snpgenelimit = config["inputs"]["plot_eqtls"]
+    output:
+        # figure = config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-{plot_eqtls_basename}plot-{chr}_{pos}-{gene}-{gene_symbol}_{snp}.pdf",
+        finished = config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-{plot_eqtls_basename}-qtlplot.finished"
+    resources:
+        java_mem_gb = lambda wildcards, attempt: attempt * config["run_qtl_memory"] * config["run_qtl_threads"] - config["settings_extra"]["java_memory_buffer"],
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["run_qtl_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["run_qtl_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["run_qtl_time"]]
+    threads: config["run_qtl_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        java_threads = config["run_qtl_threads"] * 2,
+        jar = "/opt/tools/MbQTL.jar" if config["qtl_settings_extra"]["mbqtl_jar"] is None else config["qtl_settings_extra"]["mbqtl_jar"],
+        replacemissinggenotypes = "--replacemissinggenotypes" if config["qtl_settings"]["replacemissinggenotypes"] else "",
+        usehardgenotypecalls = "--usehardgenotypecalls" if config["qtl_settings"]["usehardgenotypecalls"] else "",
+        norank = "--norank" if config["qtl_settings"]["norank"] else "",
+        out = config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-{plot_eqtls_basename}-"
+    log: config["outputs"]["output_dir"] + "log/plot_eqtl.{cov}.{output_prefix}.{plot_eqtls_basename}.log"
+    shell:
+        """
+        singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.java_mem_gb}g -Xms{resources.java_mem_gb}g \
+            -Djava.util.concurrent.ForkJoinPool.common.parallelism={params.java_threads} \
+            -Dmaximum.threads={params.java_threads} -Dthread.pool.size={params.java_threads} \
+            -jar {params.jar} \
+            --mode mbqtlplot \
+            --vcf {input.vcf} \
+            --exp {input.exp} \
+            --gte {input.gte} \
+            --annotation {input.annotation} \
+            --snpgenelimit {input.snpgenelimit} \
+            {params.replacemissinggenotypes} \
+            {params.usehardgenotypecalls} \
+            {params.norank} \
+            --out {params.out} > {log} 2>&1
+            
+        singularity exec --bind {params.bind} {params.sif} touch {output.finished}
         """
 
 

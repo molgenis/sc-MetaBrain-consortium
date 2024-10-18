@@ -40,6 +40,7 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * `output_dir`: the output directory.
  * `output_prefix`: the output filename prefix.
  * `cov`: covariate file. Tab-separated file containing the covariate values of each feature per sample. The first column contains the covariates. The rest of the columns are the sample names. Non-numerical covariates are automatically one-hot encoded where the most abundant category is excluded. If a `gte` file is given the dataset column will be used os covariate. Expression PCs can be automatically added as covariates by using `n_pcs`.
+ * `plot_eqtls`: SNP - gene limit file of the eQTLs to plot. Tab-seperated file with one line per SNP - gene ID. The first column contains the SNP IDs and the second column the gene IDs. No Header.
 
 **Pipeline specific settings**:
  * `preflight_checks`: perform pre-flight checks such as checking the samples overlap between the input files. No other results will be generated. Default `False`.
@@ -196,6 +197,7 @@ Each eQTL run is outputted in a seperate folder: e.g. no covariate or PCs (`defa
    * `bh_fdr`: Benjamini-Hochberg FDR values calculated over the p-values (using `BetaAdjustedMetaP` if `perm: >0` else `MetaP`).
    * `qval`: [qvalue](https://github.com/StoreyLab/qvalue) q-values calculated over the p-values (using `BetaAdjustedMetaP` if `perm: >0` else `MetaP`).
  * a `-TopEffectsWithMultTest-significant.txt` file based on the `-TopEffectsWithMultTest.txt` but filtered on `qval` < `alpha`.
+ * if `plot_eqtls` is given, a eQTL visualisation figure is created for each snp-gene combination in this file.
  * if `visualise` is True, two `-TopEffects-TSSDistance-*.png` figures are created containing visualisations of the TSS distane to the top variant per gene for the significant eQTLs.
  * if `outputall` is `chr`, all tested variant - gene combinations are outputted per chromosome and indexed using [tabix](https://www.htslib.org/doc/tabix.html).
  * a `-results.txt` file with the number of effects, tests, and significance values (e.g. `MetaP   BetaAdjustedMetaP`, `BonfAdjustedMetaP`, `BonfBHAdjustedMetaP`, `bh_fdr`, and `qval`) below the significance threshold (`<0.05`) per QTL run (e.g. 0Pcs removed, 5Pcs removed, etc.). If a meta-analysis was performed the per dataset, the number of nominal significant effects (based on `DatasetZScores`) are also counted.

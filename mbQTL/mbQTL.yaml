@@ -17,6 +17,8 @@ inputs:
   snplimit: ### SNP limit file. File with one line per SNP ID. No Header.
   snpgenelimit: ### SNP - gene limit file. Tab-seperated file with one line per SNP - gene ID. The first column contains the SNP IDs and the second column the gene IDs. No Header.
 
+  plot_eqtls: ### SNP - gene limit file of the eQTLs to plot. Tab-seperated file with one line per SNP - gene ID. The first column contains the SNP IDs and the second column the gene IDs. No Header.
+
 outputs:
   output_dir: ### the output directory.
   output_prefix: ### the output filename prefix.
@@ -138,13 +140,17 @@ multiple_test_correction_memory: 4 ### Amount of gigs that will be used for memo
 multiple_test_correction_threads: 1 ### Number of threads to use
 multiple_test_correction_time: 0 ### The time setting to use
 
-results_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
-results_threads: 1 ### Number of threads to use
-results_time: 0 ### The time setting to use
-
 visualise_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 visualise_threads: 1 ### Number of threads to use
 visualise_time: 0 ### The time setting to use
+
+plot_eqtls_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+plot_eqtls_threads: 1 ### Number of threads to use
+plot_eqtls_time: 0 ### The time setting to use
+
+results_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+results_threads: 1 ### Number of threads to use
+results_time: 0 ### The time setting to use
 
 ############################################################################################################################################
 ##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####
