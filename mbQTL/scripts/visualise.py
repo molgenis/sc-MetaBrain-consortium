@@ -11,6 +11,8 @@ import os
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--data", required=True, type=str, help="")
 parser.add_argument("--nbins", required=False, type=int, default=5, help="")
+parser.add_argument("--signif_col", required=False, type=str, default=None, help="")
+parser.add_argument("--alpha", required=False, type=float, default=0.05, help="")
 parser.add_argument("--out", required=True, type=str, help="The output file where results will be saved.")
 args = parser.parse_args()
 
@@ -46,6 +48,12 @@ def plot(data, x="x", hue=None, hline=None, vline=None, palette=None, title="", 
     else:
         data[x].plot.kde(color="#000000")
 
+    # Clip the distribution to the nearest round number.
+    min_x = data[x].min()
+    max_x = data[x].max()
+    n_numbers = max(len(str(abs(min_x))), len(str(abs(min_x))))
+    plt.xlim(round(min_x, -1 * n_numbers), round(max_x, -1 * n_numbers))
+
     if vline is not None:
         for value in vline:
             ax.axvline(value, ls='--', color="#808080", alpha=0.5, zorder=-1, linewidth=2)
@@ -79,8 +87,6 @@ def plot(data, x="x", hue=None, hline=None, vline=None, palette=None, title="", 
                 fontweight='bold')
             y_pos += y_pos_step
 
-
-
     ax.set_title(title,
                  fontsize=16,
                  color="#000000",
@@ -103,6 +109,11 @@ def plot(data, x="x", hue=None, hline=None, vline=None, palette=None, title="", 
 print("Loading data ...")
 df = pd.read_csv(args.data, sep="\t", header=0, index_col=None)
 print("\tLoaded dataframe: {} with shape: {}".format(os.path.basename(args.data), df.shape))
+
+if args.signif_col is not None and args.signif_col in df.columns:
+    df = df.loc[df[args.signif_col] < args.alpha, :]
+    print("\tFiltering on {}<{} leaves {:,} effects".format(args.signif_col, args.alpha, df.shape[0]))
+
 if df.shape[0] == 0:
     plt.savefig(args.out + '-TSSDistance-VariantType.png')
     plt.savefig(args.out + '-TSSDistance-PValBins.png')
