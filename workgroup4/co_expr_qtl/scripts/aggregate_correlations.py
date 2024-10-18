@@ -6,11 +6,6 @@ import time
 import struct
 import sys
 
-import cProfile
-import pstats
-profiler = cProfile.Profile()
-profiler.enable()
-
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--indir", required=True, type=str,  help="Input directory")
 parser.add_argument("--geneannotation", required=False, type=str, help="Gene chromosome annotation")
@@ -292,7 +287,7 @@ for file in files:
         header_info = parse_text_header(fh=fh)
 
     file_n_egenes, file_n_coegenes, file_n_correlations, _, file_features, _ = header_info
-    print(f"parsing sample {samplename} with {file_n_egenes:,} eGenes, {file_n_coegenes:,} co-eGenes, and {len(file_features):,} features.")
+    # print(f"parsing sample {samplename} with {file_n_egenes:,} eGenes, {file_n_coegenes:,} co-eGenes, and {len(file_features):,} features.")
 
     # Loop over the file.
     corrctr = 0
@@ -385,7 +380,3 @@ if args.binary_out:
     
 fho.close()
 print("Done.")
-
-profiler.disable()
-stats = pstats.Stats(profiler).sort_stats('cumtime')
-stats.print_stats(40)

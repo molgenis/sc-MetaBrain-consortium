@@ -9,11 +9,6 @@ import gzip
 import os
 import struct
 
-import cProfile
-import pstats
-profiler = cProfile.Profile()
-profiler.enable()
-
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--counts", required=True, type=str, help="File with counts")
 parser.add_argument("--weights", required=True, type=str, help="File with weights")
@@ -379,7 +374,3 @@ fh.close()
 print("\tCalculated {:,} / {:,} correlations".format(total_index, n_correlations))
 
 print("Done")
-
-profiler.disable()
-stats = pstats.Stats(profiler).sort_stats('cumtime')
-stats.print_stats(40)
