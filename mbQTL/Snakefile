@@ -60,7 +60,10 @@ if config["qtl_settings_extra"]["mbqtl_jar"] is not None and not os.path.exists(
 # Checking settings with options to be valid.
 if config["general_settings"]["force_mega"] not in ["all", "cov", "qtl", "none", None]:
     logger.error("Critical, force_mega must be 'all', 'cov', 'qtl', 'none', or empty.\n\nExiting.")
-    exit("InvalidForceMegaSetting")
+    exit("InvalidForceMega")
+if config["general_settings"]["signif_column"] not in ["MetaP", "BetaAdjustedMetaP", "BonfAdjustedMetaP", "BonfBHAdjustedMetaP", "bh_fdr", "qval"]:
+    logger.error("Critical, signif_column must be 'MetaP', 'BetaAdjustedMetaP', 'BonfAdjustedMetaP', 'BonfBHAdjustedMetaP', 'bh_fdr', or 'qval'.\n\nExiting.")
+    exit("InvalidSignifColumn")
 if config["qtl_settings"]["analysis_type"] not in ["cis", "trans", "cistrans"]:
     logger.error("Critical, analysis_type must be 'cis', 'trans', or 'cistrans'.\n\nExiting.")
     exit("InvalidAnalysisType")
@@ -279,6 +282,7 @@ wildcard_constraints:
     exp_basename = BASENAMES["exp"],
     sgl_basename = BASENAMES["snpgenelimit"],
     output_prefix = config["outputs"]["output_prefix"],
+    signif_filter = config["general_settings"]["signif_column"] + str(config["general_settings"]["alpha"]),
     chr = "[0-9]{1,2}"
 
 
@@ -347,7 +351,7 @@ def get_input(wildcards):
 
     if config["general_settings"]["map_qtls"]:
         # Output of mbQTL.
-        input_fpaths = expand(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithMultTest-significant.txt", cov=covariates, output_prefix=config["outputs"]["output_prefix"])
+        input_fpaths = expand(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithMultTest-{signif_column}{alpha}significant.txt", cov=covariates, output_prefix=config["outputs"]["output_prefix"], signif_column=config["general_settings"]["signif_column"], alpha=config["general_settings"]["alpha"])
         logger.debug("\trequesting output of rule 'run_qtl': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
         input.extend(input_fpaths)
 
@@ -365,7 +369,7 @@ def get_input(wildcards):
 
         if config["general_settings"]["visualise"]:
             # Output of visualise.
-            input_fpaths = expand(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-visualise.done", cov=covariates, output_prefix=config["outputs"]["output_prefix"])
+            input_fpaths = expand(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-{signif_column}{alpha}significant-visualise.done", cov=covariates, output_prefix=config["outputs"]["output_prefix"], signif_column=config["general_settings"]["signif_column"], alpha=config["general_settings"]["alpha"])
             logger.debug("\trequesting output of rule 'visualise': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
             input.extend(input_fpaths)
 
@@ -1615,7 +1619,6 @@ rule multiple_test_correction:
         finished = get_top_hits_finished
     output:
         top_hits = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithMultTest.txt",
-        top_hits_signif = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithMultTest-significant.txt",
         fig1 = report(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects_hist.png", category="multiple_test_correction", subcategory="{cov}", caption=config["inputs"]["repo_dir"] + "report_captions/qvalue_hist.rst"),
         fig2 = report(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects_overview.png", category="multiple_test_correction", subcategory="{cov}", caption=config["inputs"]["repo_dir"] + "report_captions/qvalue_overview.rst")
     resources:
@@ -1636,7 +1639,6 @@ rule multiple_test_correction:
         qvalue_col = "qval",
         nom_thresh_col = "PvalueNominalThreshold",
         alpha = config["general_settings"]["alpha"],
-        signif_col = "qval",
         data_out = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffects",
         plot_out = config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects",
         suffix = "WithMultTest"
@@ -1654,20 +1656,46 @@ rule multiple_test_correction:
             --qvalue_col {params.qvalue_col} \
             --nom_thresh_col {params.nom_thresh_col} \
             --alpha {params.alpha} \
-            --signif_col {params.signif_col} \
             --data_out {params.data_out} \
             --plot_out {params.plot_out} \
             --suffix {params.suffix} > {log} 2>&1
         """
 
 
+rule filter_significant:
+    input:
+        data = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithMultTest.txt"
+    output:
+        outfile = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithMultTest-{signif_filter}significant.txt"
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["filter_significant_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["filter_significant_memory"],
+        time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["filter_significant_time"]]
+    threads: config["filter_significant_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/filter_significant.py",
+        signif_col = config["general_settings"]["signif_column"],
+        alpha = config["general_settings"]["alpha"]
+    log: config["outputs"]["output_dir"] + "log/filter_significant.{cov}.{output_prefix}.{signif_filter}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --data {input.data} \
+            --signif_col {params.signif_col} \
+            --alpha {params.alpha} \
+            --outfile {output.outfile} > {log} 2>&1
+        """
+
+
 rule visualise:
     input:
-        data = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithMultTest-significant.txt"
+        data = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithMultTest-{signif_filter}significant.txt"
     output:
-        fig1 = report(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-TSSDistance-VariantType.png", category="visualise", subcategory="{cov} - TSS distance (variant type)", caption=config["inputs"]["repo_dir"] + "report_captions/tss_distance_vartype.rst"),
-        fig2 = report(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-TSSDistance-PValBins.png", category="visualise", subcategory="{cov} - TSS distance (p-value bins)",caption=config["inputs"]["repo_dir"] + "report_captions/tss_distance_pbin.rst"),
-        done = config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-visualise.done"
+        fig1 = report(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-{signif_filter}significant-TSSDistance-VariantType.png", category="visualise", subcategory="{cov} - TSS distance (variant type)", caption=config["inputs"]["repo_dir"] + "report_captions/tss_distance_vartype.rst"),
+        fig2 = report(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-{signif_filter}significant-TSSDistance-PValBins.png", category="visualise", subcategory="{cov} - TSS distance (p-value bins)",caption=config["inputs"]["repo_dir"] + "report_captions/tss_distance_pbin.rst"),
+        done = config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-{signif_filter}significant-visualise.done"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["visualise_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["visualise_memory"],
@@ -1677,8 +1705,8 @@ rule visualise:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/visualise.py",
-        out = config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects"
-    log: config["outputs"]["output_dir"] + "log/visualise.{cov}.{output_prefix}.log"
+        out = config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-{signif_filter}significant"
+    log: config["outputs"]["output_dir"] + "log/visualise.{cov}.{output_prefix}.{signif_filter}.log"
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} python {params.script} \

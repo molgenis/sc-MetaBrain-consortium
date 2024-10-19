@@ -30,8 +30,6 @@ option_list <- list(
               help=""),
   make_option(c("--alpha"), action="store", default=0.05, type='numeric',
               help=""),
-  make_option(c("--signif_col"), action="store", default=NA, type='character',
-              help=""),
   make_option(c("--data_out"), action="store", default=NA, type='character',
               help="Output main directory"),
   make_option(c("--plot_out"), action="store", default=NA, type='character',
@@ -120,15 +118,6 @@ if (!is.na(opt$beta_dist_a) & !is.na(opt$beta_dist_b) & (opt$beta_dist_a %in% co
 
 print("Saving data")
 write.table(data, paste0(opt$data_out, opt$suffix, ".txt"), quote = F, sep = "\t", row.names = FALSE)
-
-# Subset and reorder the significant results
-if (!is.na(opt$signif_col) & opt$signif_col %in% colnames(data)) {
-    signifdata = data[data[opt$signif_col] < opt$alpha, ]
-    signifdata <- signifdata[!is.na(signifdata[[opt$signif_col]]), ]
-    signifdata <- signifdata[order(signifdata[[opt$signif_col]]), ]
-
-    write.table(signifdata, paste0(opt$data_out, opt$suffix, "-significant.txt"), quote = F, sep = "\t", row.names = FALSE)
-}
 
 dir.create(dirname(opt$plot_out), recursive = TRUE, showWarnings = FALSE)
 setwd(dirname(opt$plot_out))

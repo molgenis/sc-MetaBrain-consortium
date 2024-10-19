@@ -55,6 +55,7 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * `n_genes`: how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk. Default `100`.
  * `use_snpannotation`: whether or not the `snpannotation` option should be used. Automatically set to `False` if `snplimit` or `snpgenelimit` is used since it is faster without `snpannotation` then. Default `False`.
  * `alpha`: QTL significance threshold. Default `0.05`.
+ * `signif_column`: The column used to filter significant effects (options: `MetaP`, `BetaAdjustedMetaP`, `BonfAdjustedMetaP`, `BonfBHAdjustedMetaP`, `bh_fdr`, `qval`). Default `qval`.
  * `feature_name`: the info column that in your gtf that describes the names of the genes in your expression matrix. Default `gene_name`.
  * `autosomes_only`: whether or not to only include autosomal chromosomes. Default `True`.
  * `eval_n_pcs`: how many PCs to evaluate for outlier detection; same number of Pcs is plotted. Default `3`. 

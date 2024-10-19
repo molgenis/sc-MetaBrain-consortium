@@ -36,6 +36,7 @@ general_settings:
   n_genes: 100 ### how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk. Default `100`.
   use_snpannotation: False ### whether or not the `snpannotation` option should be used. Default `False`.
   alpha: 0.05 ### QTL significance threshold. Default '0.05'.
+  signif_column: "qval" ### The column used to filter significant effects (options: `MetaP`, `BetaAdjustedMetaP`, `BonfAdjustedMetaP`, `BonfBHAdjustedMetaP`, `bh_fdr`, `qval`). Default `qval`.
 
 qtl_settings:
   analysis_type: "cis" ### which variants to test per gene (options: 'cis', 'trans', 'cistrans'). Default 'cis'.
@@ -139,6 +140,10 @@ merge_top_effects_time: 0 ### The time setting to use
 multiple_test_correction_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 multiple_test_correction_threads: 1 ### Number of threads to use
 multiple_test_correction_time: 0 ### The time setting to use
+
+filter_significant_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+filter_significant_threads: 1 ### Number of threads to use
+filter_significant_time: 0 ### The time setting to use
 
 visualise_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 visualise_threads: 1 ### Number of threads to use
