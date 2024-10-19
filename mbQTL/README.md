@@ -56,6 +56,10 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * `use_snpannotation`: whether or not the `snpannotation` option should be used. Automatically set to `False` if `snplimit` or `snpgenelimit` is used since it is faster without `snpannotation` then. Default `False`.
  * `alpha`: QTL significance threshold. Default `0.05`.
  * `signif_column`: The column used to filter significant effects (options: `MetaP`, `BetaAdjustedMetaP`, `BonfAdjustedMetaP`, `BonfBHAdjustedMetaP`, `bh_fdr`, `qval`). Default `qval`.
+
+ * `outputall`: standard mbQTL argument with additional option `chr` to output all effects per `chr` rather than in one go or per batch.
+ * `outputall_chr_sortby`: how to sort the all effects file, only applied if `outputall: chr` is used (options: `sortbyz`, `sortbysnppos`, or `sortbygenepos`). Default: `sortbygenepos`. 
+
  * `feature_name`: the info column that in your gtf that describes the names of the genes in your expression matrix. Default `gene_name`.
  * `autosomes_only`: whether or not to only include autosomal chromosomes. Default `True`.
  * `eval_n_pcs`: how many PCs to evaluate for outlier detection; same number of Pcs is plotted. Default `3`. 
@@ -76,8 +80,6 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * The `--out` mbQTL argument is created by `output_dir` + `output_prefix`
  * The `--outputall` mbQTL argument is automatically set to `True` if `snpgenelimit` is used. Moreover, if True, the effects will be outputted per batch. If `chr`, the effects will instead be outputted per chromosome with a tabix index using a separate job.
  * The `--perm` mbQTL argument is automatically set to `0` if `snpgenelimit` is used.
-
-The following arguments of mbQTL are not (yet) implemented: `--nriters`, `--sortbyz`, and `--testnonparseablechr`.
 
 ## Usage  
 
@@ -182,6 +184,7 @@ You can choose to run different combinations of modes at the same time but using
 ## Important
 
 Please keep in mind that:
+ * Non-autosomal chromosomes are currently not supported.
  * Expression PCs calculation is per dataset over the samples that overlap between the expression identifiers in `gte` and the columns in `exp`. 
  * Expression PCs are calculated without first removing covariates in `cov`.
  * Genes are grouped into eQTL chunks (if `n_genes` >0) by genetic position: genes that are close together are put in the same chunk. If `expgroups` is used then groups are always put in the same chunk and groups are sorted based on the first gene on that group. Note that chromosomes are sorted with numerical chromosomes first and then alphanumeric. 
@@ -200,7 +203,7 @@ Each eQTL run is outputted in a seperate folder: e.g. no covariate or PCs (`defa
  * a `-TopEffectsWithMultTest-significant.txt` file based on the `-TopEffectsWithMultTest.txt` but filtered on `qval` < `alpha`.
  * if `plot_eqtls` is given, a eQTL visualisation figure is created for each snp-gene combination in this file.
  * if `visualise` is True, two `-TopEffects-TSSDistance-*.png` figures are created containing visualisations of the TSS distane to the top variant per gene for the significant eQTLs.
- * if `outputall` is `chr`, all tested variant - gene combinations are outputted per chromosome and indexed using [tabix](https://www.htslib.org/doc/tabix.html).
+ * if `outputall` is `chr`, all tested variant - gene combinations are outputted per chromosome, sorted using the `outputall_chr_sortby` setting, and indexed using [tabix](https://www.htslib.org/doc/tabix.html). Note that files sorted using `sortbyz` cannot be indexed and therefore an empty `.tbi` is created instead. 
  * a `-results.txt` file with the number of effects, tests, and significance values (e.g. `MetaP   BetaAdjustedMetaP`, `BonfAdjustedMetaP`, `BonfBHAdjustedMetaP`, `bh_fdr`, and `qval`) below the significance threshold (`<0.05`) per QTL run (e.g. 0Pcs removed, 5Pcs removed, etc.). If a meta-analysis was performed the per dataset, the number of nominal significant effects (based on `DatasetZScores`) are also counted.
 
 ## Author  

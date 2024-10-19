@@ -73,6 +73,19 @@ if config["qtl_settings"]["meta_analysis_method"] not in ["empzmeta", "fisherzme
 if config["qtl_settings"]["outputall"] not in [False, True, "chr"]:
     logger.error("Critical, outputall must be True, False, or 'chr'.\n\nExiting.")
     exit("InvalidOutputall")
+if config["qtl_settings"]["outputall_chr_sortby"] not in ["sortbyz", "sortbysnppos", "sortbygenepos"]:
+    logger.error("Critical, outputall_chr_sortby must be 'sortbyz', 'sortbysnppos', or 'sortbygenepos'.\n\nExiting.")
+    exit("InvalidOutputallChrSortby")
+if not config["create_annotation_settings"]["autosomes_only"]:
+    logger.error("Critical, inclusion of non-autosomal chromosomes is currently not supported.\n\nExiting.")
+    exit("InvalidAutosomalOnly")
+
+# TODO: remove once implemented.
+if config["qtl_settings"]["outputall_chr_sortby"] == "sortbysnppos":
+    logger.error("Critical, outputall_chr_sortby option 'sortbysnppos' is not implemented yet.\n\nExiting.")
+    exit("InvalidOutputallChrSortby")
+    config["qtl_settings"]["outputall_chr_sortby"] = "sortbygenepos"
+
 
 # Replace non required variables that are None with empty strings.
 for input_variable in ["cov", "expgroups", "genelimit", "snplimit", "snpgenelimit", "plot_eqtls"]:
@@ -104,6 +117,8 @@ if config["qtl_settings"]["outputall"] == "chr":
 
 # Define the chromosomes.
 CHROMOSOMES = [str(i) for i in range(1, 23)]
+if not config["create_annotation_settings"]["autosomes_only"]:
+    CHROMOSOMES.extend(["X", "Y", "MT"])
 
 # Add trailing /.
 if not config["inputs"]["repo_dir"].endswith("/"):
@@ -283,7 +298,8 @@ wildcard_constraints:
     sgl_basename = BASENAMES["snpgenelimit"],
     output_prefix = config["outputs"]["output_prefix"],
     signif_filter = config["general_settings"]["signif_column"] + str(config["general_settings"]["alpha"]),
-    chr = "[0-9]{1,2}"
+    sortby = config["qtl_settings"]["outputall_chr_sortby"],
+    chr = "[0-9]{1,2}|X|Y|MT"
 
 
 def print_wildcards(wildcards):
@@ -375,7 +391,7 @@ def get_input(wildcards):
 
     if EXPORT_ALL_EFFECTS:
         # Output of export_all_effects.
-        input_fpaths = expand(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}.finished", cov=covariates, output_prefix=config["outputs"]["output_prefix"], chr=CHROMOSOMES)
+        input_fpaths = expand(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}.finished", cov=covariates, output_prefix=config["outputs"]["output_prefix"], chr=CHROMOSOMES, sortby=config["qtl_settings"]["outputall_chr_sortby"])
         logger.debug("\trequesting output of rule 'export_all_effects': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
         input.extend(input_fpaths)
 
@@ -516,7 +532,7 @@ def get_cov(wildcards):
         logger.debug("\treturning input 'cov': " + fpath)
         return fpath
 
-    logger.debug("\treturning []")
+    logger.debug("\treturning: []")
     return []
 
 
@@ -704,7 +720,7 @@ def get_snpannotation(wildcards):
         logger.debug("\treturning output of rule 'create_snp_annotation': " + fpath)
         return prefix + config["outputs"]["output_dir"] + fpath
 
-    logger.debug("\treturning ''")
+    logger.debug("\treturning: ''")
     return ""
 
 
@@ -720,7 +736,7 @@ def get_expgroups(wildcards):
         logger.debug("\treturning input 'expgroups': " + fpath)
         return "--expgroups " + fpath
 
-    logger.debug("\treturning ''")
+    logger.debug("\treturning: ''")
     return ""
 
 
@@ -748,7 +764,7 @@ def get_genelimit(wildcards):
         logger.debug("\treturning input 'genelimit': " + fpath)
         return prefix + fpath
 
-    logger.debug("\treturning ''")
+    logger.debug("\treturning: ''")
     return ""
 
 
@@ -765,7 +781,7 @@ def get_snplimit(wildcards):
         logger.debug("\treturning input 'snplimit': " + fpath)
         return prefix + fpath
 
-    logger.debug("\treturning ''")
+    logger.debug("\treturning: ''")
     return ""
 
 
@@ -782,7 +798,7 @@ def get_snpgenelimit(wildcards):
         logger.debug("\treturning input 'snpgenelimit': " + fpath)
         return prefix + fpath
 
-    logger.debug("\treturning ''")
+    logger.debug("\treturning: ''")
     return ""
 
 
@@ -929,6 +945,54 @@ def get_top_hits_finished(wildcards):
     fpath = get_top_hits_fpath(wildcards) + ".finished"
     logger.debug("\treturning: " + fpath)
     return config["outputs"]["output_dir"] + fpath
+
+
+def get_tabix_sequence_column(wildcards):
+    """
+    :rule: export_all_effects
+    :param wildcards: cov, output_prefix, chr, sortby
+    :return: Output the sequence column name on which to tabix index.
+    """
+    logger.debug("rule export_all_effects - get_tabix_sequence_column({})".format(print_wildcards(wildcards)))
+    if wildcards.sortby == "sortbyz":
+        sequence_column = ""
+        logger.debug("\treturning: " + sequence_column)
+        return sequence_column
+    elif wildcards.sortby == "sortbysnppos":
+        sequence_column = "SNPChr"
+        logger.debug("\treturning: " + sequence_column)
+        return sequence_column
+    elif wildcards.sortby == "sortbygenepos":
+        sequence_column = "GeneChr"
+        logger.debug("\treturning: " + sequence_column)
+        return sequence_column
+
+    logger.debug("\treturning: 'None'")
+    return None
+
+
+def get_tabix_pos_column(wildcards):
+    """
+    :rule: export_all_effects
+    :param wildcards: cov, output_prefix, chr, sortby
+    :return: Output the position column name on which to tabix index.
+    """
+    logger.debug("rule export_all_effects - get_tabix_pos_column({})".format(print_wildcards(wildcards)))
+    if wildcards.sortby == "sortbyz":
+        sequence_column = ""
+        logger.debug("\treturning: " + sequence_column)
+        return sequence_column
+    elif wildcards.sortby == "sortbysnppos":
+        sequence_column = "SNPPos"
+        logger.debug("\treturning: " + sequence_column)
+        return sequence_column
+    elif wildcards.sortby == "sortbygenepos":
+        sequence_column = "GenePos"
+        logger.debug("\treturning: " + sequence_column)
+        return sequence_column
+
+    logger.debug("\treturning: 'None'")
+    return None
 
 
 rule all:
@@ -1430,6 +1494,7 @@ rule run_qtl:
         mingenotypecount = config["qtl_settings"]["mingenotypecount"],
         splitmultiallelic = "--splitmultiallelic" if config["qtl_settings"]["splitmultiallelic"] else "",
         onlytestsnps = "--onlytestsnps" if config["qtl_settings"]["onlytestsnps"] else "",
+        testnonparseablechr = "--testnonparseablechr" if config["qtl_settings"]["testnonparseablechr"] else "",
         replacemissinggenotypes = "--replacemissinggenotypes" if config["qtl_settings"]["replacemissinggenotypes"] else "",
         usehardgenotypecalls = "--usehardgenotypecalls" if config["qtl_settings"]["usehardgenotypecalls"] else "",
         norank = "--norank" if config["qtl_settings"]["norank"] else "",
@@ -1467,6 +1532,7 @@ rule run_qtl:
             --mingenotypecount {params.mingenotypecount} \
             {params.splitmultiallelic} \
             {params.onlytestsnps} \
+            {params.testnonparseablechr} \
             {params.replacemissinggenotypes} \
             {params.usehardgenotypecalls} \
             {params.norank} \
@@ -1488,15 +1554,15 @@ rule export_all_effects:
         gte = get_qtl_gte,
         optional_files = get_export_all_effects_optional_files
     output:
-        log = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-log.txt.gz",
-        top = temp(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-TopEffects.txt"),
-        all = temp(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-AllEffects.txt.gz"),
-        snplog = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-snpqclog.txt.gz",
-        finished1 = temp(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-TopEffects.finished"),
-        all_sorted_tmp = temp(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-AllEffects-sorted.txt.gz"),
-        all_sorted = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-AllEffects-sorted.bgz.txt.gz",
-        all_sorted_index = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-AllEffects-sorted.bgz.txt.gz.tbi",
-        finished2 = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}.finished",
+        log = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}-log.txt.gz",
+        top = temp(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}-TopEffects.txt"),
+        all = temp(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}-AllEffects.txt.gz"),
+        snplog = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}-snpqclog.txt.gz",
+        finished = temp(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}-TopEffects.finished"),
+        all_sorted_tmp = temp(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}-AllEffects-sorted.txt.gz"),
+        all_sorted = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}-AllEffects-sorted.bgz.txt.gz",
+        all_sorted_index = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}-AllEffects-sorted.bgz.txt.gz.tbi",
+        finished2 = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}.finished",
     resources:
         java_mem_gb = lambda wildcards, attempt: attempt * config["export_all_effects_memory"] * config["export_all_effects_threads"] - config["settings_extra"]["java_memory_buffer"],
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["export_all_effects_memory"],
@@ -1523,11 +1589,15 @@ rule export_all_effects:
         mingenotypecount = config["qtl_settings"]["mingenotypecount"],
         splitmultiallelic = "--splitmultiallelic" if config["qtl_settings"]["splitmultiallelic"] else "",
         onlytestsnps = "--onlytestsnps" if config["qtl_settings"]["onlytestsnps"] else "",
+        testnonparseablechr = "--testnonparseablechr" if config["qtl_settings"]["testnonparseablechr"] else "",
         replacemissinggenotypes = "--replacemissinggenotypes" if config["qtl_settings"]["replacemissinggenotypes"] else "",
         usehardgenotypecalls = "--usehardgenotypecalls" if config["qtl_settings"]["usehardgenotypecalls"] else "",
         norank = "--norank" if config["qtl_settings"]["norank"] else "",
-        out = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}"
-    log: config["outputs"]["output_dir"] + "log/export_all_effects.{cov}.{output_prefix}.chr{chr}.log"
+        sortby = lambda wildcards: "--sortbyz" if wildcards.sortby == "sortbyz" else "", #TODO: update once implemented
+        tabix_sequence_column = get_tabix_sequence_column,
+        tabix_pos_column = get_tabix_pos_column,
+        out = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}"
+    log: config["outputs"]["output_dir"] + "log/export_all_effects.{cov}.{output_prefix}.chr{chr}.{sortby}.log"
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.java_mem_gb}g -Xms{resources.java_mem_gb}g \
@@ -1556,6 +1626,7 @@ rule export_all_effects:
             --mingenotypecount {params.mingenotypecount} \
             {params.splitmultiallelic} \
             {params.onlytestsnps} \
+            {params.testnonparseablechr} \
             {params.replacemissinggenotypes} \
             {params.usehardgenotypecalls} \
             {params.norank} \
@@ -1569,18 +1640,24 @@ rule export_all_effects:
             -jar {params.jar} \
             --mode sortfile \
             --input {output.all} \
+            {params.sortby} \
             --out {output.all_sorted_tmp} >> {log} 2>&1
             
         singularity exec --bind {params.bind} {params.sif} zcat {output.all_sorted_tmp} | \
             singularity exec --bind {params.bind} {params.sif} bgzip -c > {output.all_sorted}
-    
-        singularity exec --bind {params.bind} {params.sif} tabix \
-            --force \
-            --sequence 2 \
-            --begin 3 \
-            --end 3 \
-            --skip-lines 1 \
-            {output.all_sorted}
+            
+        if [[ "$(echo {wildcards.sortby})" == "sortbygenepos" || "$(echo {wildcards.sortby})" == "sortbysnppos" ]]; 
+        then
+            singularity exec --bind {params.bind} {params.sif} tabix \
+                --force \
+                --sequence $(zcat {output.all_sorted} | head -n 1 | tr '\\t' '\\n' | awk '/{params.tabix_sequence_column}$/ {{print NR}}') \
+                --begin $(zcat {output.all_sorted} | head -n 1 | tr '\\t' '\\n' | awk '/{params.tabix_pos_column}$/ {{print NR}}') \
+                --end $(zcat {output.all_sorted} | head -n 1 | tr '\\t' '\\n' | awk '/{params.tabix_pos_column}$/ {{print NR}}') \
+                --skip-lines 1 \
+                {output.all_sorted}
+        else
+            singularity exec --bind {params.bind} {params.sif} touch {output.all_sorted_index}
+        fi
         
         singularity exec --bind {params.bind} {params.sif} touch {output.finished2}
         """

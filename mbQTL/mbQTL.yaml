@@ -52,10 +52,12 @@ qtl_settings:
   mingenotypecount: 0 ### Minimal number of individuals per genotype group. Default: '0'.
   splitmultiallelic: False ### split multi allelic variants instead of skipping them. Default: 'False'.
   onlytestsnps: False ### skip INDELs and only test SNPs. Default 'False'.
+  testnonparseablechr: False ### Test variants and genes that map to non-parseable chromosomes (e.g. patch chromosomes). Default 'False'.
   replacemissinggenotypes: False ### replace missing genotypes with average genotype: use this when both genotypes and expression data have missing values and perm > 0. Default 'False'.
   usehardgenotypecalls: False ### use hard genotype calls instead of dosages derived from genotype probabilities. Default: 'False'.
   norank: False ### do not rank expression data. Default 'False'.
   outputall: False ### output all associations, not just top association per gene. (options: True, False, or 'chr'). If True, the effects will be outputted per batch. If chr, the effects will instead be outputted per chromosome with a tabix index using a separate job. Default 'False'.
+  outputall_chr_sortby: "sortbygenepos" ### how to sort the all effects file, only applied if 'outputall: chr' is used (options: 'sortbyz', 'sortbysnppos', or 'sortbygenepos'). Default: 'sortbygenepos'.
   outputallpermutations: False ### output all permuted associations, not just top association per gene. Default 'False'.
   snplog: False ### output SNP summary stats per snp/gene pair. Default 'False'.
 
