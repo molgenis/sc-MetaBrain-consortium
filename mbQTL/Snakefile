@@ -120,6 +120,10 @@ CHROMOSOMES = [str(i) for i in range(1, 23)]
 if not config["create_annotation_settings"]["autosomes_only"]:
     CHROMOSOMES.extend(["X", "Y", "MT"])
 
+# Define the sortby columns.
+SORTBY_SEQUENCE_COL = {"sortbyz": "", "sortbysnppos": "SNPChr", "sortbygenepos": "GeneChr"}
+SORTBY_POS_COL = {"sortbyz": "", "sortbysnppos": "SNPPos", "sortbygenepos": "GenePos"}
+
 # Add trailing /.
 if not config["inputs"]["repo_dir"].endswith("/"):
     config["inputs"]["repo_dir"] += "/"
@@ -947,54 +951,6 @@ def get_top_hits_finished(wildcards):
     return config["outputs"]["output_dir"] + fpath
 
 
-def get_tabix_sequence_column(wildcards):
-    """
-    :rule: export_all_effects
-    :param wildcards: cov, output_prefix, chr, sortby
-    :return: Output the sequence column name on which to tabix index.
-    """
-    logger.debug("rule export_all_effects - get_tabix_sequence_column({})".format(print_wildcards(wildcards)))
-    if wildcards.sortby == "sortbyz":
-        sequence_column = ""
-        logger.debug("\treturning: " + sequence_column)
-        return sequence_column
-    elif wildcards.sortby == "sortbysnppos":
-        sequence_column = "SNPChr"
-        logger.debug("\treturning: " + sequence_column)
-        return sequence_column
-    elif wildcards.sortby == "sortbygenepos":
-        sequence_column = "GeneChr"
-        logger.debug("\treturning: " + sequence_column)
-        return sequence_column
-
-    logger.debug("\treturning: 'None'")
-    return None
-
-
-def get_tabix_pos_column(wildcards):
-    """
-    :rule: export_all_effects
-    :param wildcards: cov, output_prefix, chr, sortby
-    :return: Output the position column name on which to tabix index.
-    """
-    logger.debug("rule export_all_effects - get_tabix_pos_column({})".format(print_wildcards(wildcards)))
-    if wildcards.sortby == "sortbyz":
-        sequence_column = ""
-        logger.debug("\treturning: " + sequence_column)
-        return sequence_column
-    elif wildcards.sortby == "sortbysnppos":
-        sequence_column = "SNPPos"
-        logger.debug("\treturning: " + sequence_column)
-        return sequence_column
-    elif wildcards.sortby == "sortbygenepos":
-        sequence_column = "GenePos"
-        logger.debug("\treturning: " + sequence_column)
-        return sequence_column
-
-    logger.debug("\treturning: 'None'")
-    return None
-
-
 rule all:
     input: get_input
 
@@ -1594,8 +1550,8 @@ rule export_all_effects:
         usehardgenotypecalls = "--usehardgenotypecalls" if config["qtl_settings"]["usehardgenotypecalls"] else "",
         norank = "--norank" if config["qtl_settings"]["norank"] else "",
         sortby = lambda wildcards: "--sortbyz" if wildcards.sortby == "sortbyz" else "", #TODO: update once implemented
-        tabix_sequence_column = get_tabix_sequence_column,
-        tabix_pos_column = get_tabix_pos_column,
+        tabix_sequence_column = lambda wildcards: SORTBY_SEQUENCE_COL[wildcards.sortby],
+        tabix_pos_column = lambda wildcards: SORTBY_POS_COL[wildcards.sortby],
         out = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}"
     log: config["outputs"]["output_dir"] + "log/export_all_effects.{cov}.{output_prefix}.chr{chr}.{sortby}.log"
     shell:
