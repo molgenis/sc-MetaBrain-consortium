@@ -83,12 +83,12 @@ if (!is.na(opt$n_tests) & (opt$n_tests %in% colnames(data))) {
     print(paste0("  significant at bonferroni p-value<", opt$alpha, ": ", sum(data[[opt$bonf_pvalue]] < opt$alpha), " genes"))
 
     print("Calculating two-step FDR")
-    data[[opt$bonf_bh_fdr_col]] <- p.adjust(data[[opt$bonf_pvalue]], method = 'hochberg', n = length(data[[opt$bonf_pvalue]]))
+    data[[opt$bonf_bh_fdr_col]] <- p.adjust(data[[opt$bonf_pvalue]], method = 'BH', n = length(data[[opt$bonf_pvalue]]))
     print(paste0("  significant at two step FDR (BH-FDR over bonferroni p-values)<", opt$alpha, ": ", sum(data[[opt$bonf_bh_fdr_col]] < opt$alpha), " genes"))
 }
 
 print("Calculating Benjamini-Hochberg FDR")
-data[[opt$bh_fdr_col]] <- p.adjust(data[[pvalue]], method = 'hochberg', n = length(data[[pvalue]]))
+data[[opt$bh_fdr_col]] <- p.adjust(data[[pvalue]], method = 'BH', n = length(data[[pvalue]]))
 print(paste0("  significant at BH-FDR<", opt$alpha, ": ", sum(data[[opt$bh_fdr_col]] < opt$alpha), " genes"))
 
 print("Calculating qvalues")
