@@ -71,21 +71,20 @@ wildcard_constraints:
     sample = "[\w-]+",
     cell_type = "[A-Za-z.]+"
 
-
 def print_wildcards(wildcards):
     out = []
     for key, value in wildcards.items():
         out.append(key + "=" + value)
     return ", ".join(out)
 
-def get_pool_samples(wildcards, cell_type):
-    logger.debug("get_pool_samples({}, cell_type=)".format(print_wildcards(wildcards)))
+def get_pool_samples(wildcards):
+    logger.debug("get_pool_samples({})".format(print_wildcards(wildcards)))
     pool_samples = {"pool": [], "sample": []}
     n_samples = 0
     for pool in POOLS:
         # Per pool, look which samples it contained for the current cell type.
         out_dir = checkpoints.filter_split_counts.get(**wildcards, pool=pool).output["data_dir"]
-        glob_fpath = os.path.join(out_dir, pool + ".{sample}." + cell_type + ".raw.counts.h5")
+        glob_fpath = os.path.join(out_dir, pool + ".{sample}." + wildcards.cell_type + ".raw.counts.h5")
         logger.debug("\tglob path: " + glob_fpath)
         samples = glob_wildcards(glob_fpath).sample
         logger.debug("\tpool = {} has samples = {}".format(pool, ", ".join(samples)))
@@ -98,31 +97,9 @@ def get_pool_samples(wildcards, cell_type):
     logger.debug("\tfound '{:,}' samples".format(n_samples))
     return pool_samples
 
-
-def get_input_all(wildcards):
-    logger.debug("get_input_all({})".format(print_wildcards(wildcards)))
-    input_files = []
-    for cell_type in config["settings"]["cell_type"]:
-        for chr in config["settings"]["chromosomes"]:
-            pool_samples = get_pool_samples(wildcards, cell_type=cell_type)
-            for pool, sample in zip(pool_samples["pool"], pool_samples["sample"]):
-                input_files.append(config["outputs"]["output_dir"] + "correlations/data/log/{cell_type}/{pool}.{sample}.chr.{chr}.corr.done".format(cell_type=cell_type, pool=pool, sample=sample,chr=chr))
-    logger.debug("\requesting '{:,}' input files".format(len(input_files)))
-    return input_files
-
-def get_samples(wildcards):
-    logger.debug("get_samples({})".format(print_wildcards(wildcards)))
-    samples = []
-    for cell_type in config["settings"]["cell_type"]:
-        pool_samples = get_pool_samples(wildcards, cell_type=cell_type)
-        for sample in pool_samples["sample"]:
-            samples.append(sample)
-    return samples
-
 rule all:
     input:
-        gene_correlations = get_input_all
-
+        aggregated_corr = expand(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz",cell_type=config["settings"]["cell_type"],chr=config["settings"]["chromosomes"])
 
 checkpoint filter_split_counts:
     input:
@@ -163,7 +140,7 @@ checkpoint filter_split_counts:
         cr_barcodes = lambda wildcards: "--cr_barcodes" if config["barcode_qc_settings"]["cellranger_barcodes"] else "",
         min_cells = config["barcode_qc_settings"]["min_cells"],
         feature_name = config["settings_extra"]["feature_name"],
-        out = config["outputs"]["output_dir"] + "expression/{pool}/"
+        out = config["outputs"]["output_dir"] + "expression/{pool}/",
     log: config["outputs"]["output_dir"] + "log/filter_split_counts.{pool}.log"
     shell:
         """
@@ -190,7 +167,7 @@ checkpoint filter_split_counts:
             {params.cap_barcodes} \
             {params.cr_barcodes} \
             --min_cells {params.min_cells} \
-            --out {params.out} > {log} 2>&1
+            --out {params.out} > {log} 2>&1 
         singularity exec --bind {params.bind} {params.sif} touch {output.stats} {output.done}
         """
 
@@ -199,7 +176,7 @@ checkpoint filter_split_counts:
 rule average_read_counts:
     input:
         fsc_done = expand(config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done",pool=POOLS,allow_missing=True),
-        weights = lambda wildcards: expand(config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.{dtype}.weights.txt.gz", pool=POOLS, sample = get_samples(wildcards),allow_missing=True)
+        weights = lambda wildcards: expand(config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.{dtype}.weights.txt.gz", zip, **get_pool_samples(wildcards), allow_missing=True)
     output:
         avg_read_depth = config["outputs"]["output_dir"] + "expression/data/{cell_type}/{dtype}.avg_read_depth.json"
     resources:
@@ -282,9 +259,9 @@ rule proportional_fit:
 rule correlate_genes:
     input:
         counts = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1ppf.counts.h5",
-        weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.raw.weights.txt.gz",
+        weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}." + config["settings"]["weight"] + ".weights.txt.gz"
     output:
-        done = config["outputs"]["output_dir"] + "correlations/data/log/{cell_type}/{pool}.{sample}.chr.{chr}.corr.done"
+        correlation = temp(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{pool}.{sample}.chr.{chr}.corr.dat")
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["correlate_genes_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["correlate_genes_memory"],
@@ -297,9 +274,11 @@ rule correlate_genes:
         gene_annotation = config["inputs"]["gene_annotation"],
         min_obs_per_gene = config["correlate_settings"]["min_obs_per_gene"],
         chunk_size = config["correlate_settings"]["chunk_size"],
-        out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/{pool}.{sample}",
-        gene_list = config["inputs"]["e_gene_list"]
-    log: config["outputs"]["output_dir"] + "log/correlate_genes.{cell_type}/{pool}.{sample}.chr.{chr}.log"
+        out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{pool}.{sample}",
+        egene_list = config["inputs"]["e_gene_list"],
+        coegene_list = config["inputs"]["co_egene_list"]
+
+    log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/{pool}.{sample}.chr.{chr}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} python {params.script} \
@@ -309,7 +288,99 @@ rule correlate_genes:
             --chr {wildcards.chr} \
             --min_obs {params.min_obs_per_gene} \
             --chunk_size {params.chunk_size} \
+            --egenelist {params.egene_list} \
+            --coegenelist {params.coegene_list} \
             --binary \
             --out {params.out} > {log} 2>&1
-        singularity exec --bind {params.bind} {params.sif} touch {output.done}
         """
+
+rule aggregate_correlation:
+  input: 
+    fsc_done = expand(config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done", pool=POOLS),
+    correlation = lambda wildcards: expand(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{pool}.{sample}.chr.{chr}.corr.dat", zip, **get_pool_samples(wildcards), allow_missing=True)
+  output: 
+    dat = temp(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.dat"),
+    rows = temp(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.rows.txt"),
+    cols = temp(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.cols.txt")
+  resources:
+    mem_per_thread_gb = lambda wildcards, attempt: attempt * config["aggregate_correlation_memory"],
+    disk_per_thread_gb = lambda wildcards, attempt: attempt * config["aggregate_correlation_memory"],
+    time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["aggregate_correlation_time"]]
+  threads: config["aggregate_correlation_threads"]
+  params:
+    bind = config["inputs"]["bind_path"],
+    sif = config["inputs"]["singularity_image"],
+    script = config["inputs"]["repo_dir"] + "scripts/aggregate_correlations.py",
+    indir = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/",
+    out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr",
+    gene_annotation = config["inputs"]["gene_annotation"],
+    egenelist = config["inputs"]["e_gene_list"]
+  log: config["outputs"]["output_dir"] + "log/aggregate_correlation.{cell_type}.chr.{chr}.log"
+  shell:
+    """
+    singularity exec --bind {params.bind} {params.sif} python {params.script} \
+      --indir {params.indir} \
+      --out {params.out} \
+      --egenelist {params.egenelist} \
+      --coegenelist {params.egenelist} \
+      --chr {wildcards.chr} \
+      --geneannotation {params.gene_annotation} \
+      --binary_in \
+      --binary_out 
+    """
+
+rule transpose_matrix:
+  input:
+    dat = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.dat",
+    rows = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.rows.txt",
+    cols =  config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.cols.txt"
+  output:
+    dat = temp(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.dat"),
+    rows = temp(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.rows.txt"),
+    cols = temp(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.cols.txt"),
+    transpose = temp(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.txt.gz")
+  resources:
+    mem_per_thread_gb = lambda wildcards, attempt: attempt * config["transpose_matrix_memory"],
+    disk_per_thread_gb = lambda wildcards, attempt: attempt * config["transpose_matrix_memory"],
+    time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["transpose_matrix_time"]]
+  threads: config["transpose_matrix_threads"]
+  params:
+    bind = config["inputs"]["bind_path"],
+    sif = config["inputs"]["singularity_image"],
+    script = config["inputs"]["repo_dir"] + "scripts/2024-06-20-BinaryMatrixTools.jar",
+    infile = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr",
+    out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose"
+  log: config["outputs"]["output_dir"] + "log/transpose_matrix.{cell_type}.chr.{chr}.log"
+  shell:
+    """
+    singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.mem_per_thread_gb}g -jar {params.script} \
+      transpose \
+      {params.infile} \
+      {params.out} \
+      50 
+
+    singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.mem_per_thread_gb}g -jar {params.script} \
+      bintotxt \
+      {params.out} \
+      {output.transpose} \
+    """
+
+rule remove_nan:
+  input: config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.txt.gz"
+  output: config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz"
+  resources:
+    mem_per_thread_gb = lambda wildcards, attempt: attempt * config["remove_nan_memory"],
+    disk_per_thread_gb = lambda wildcards, attempt: attempt * config["remove_nan_memory"],
+    time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["remove_nan_time"]]
+  threads: config["remove_nan_threads"]
+  params:
+    bind = config["inputs"]["bind_path"],
+    sif = config["inputs"]["singularity_image"],
+    script = config["inputs"]["repo_dir"] + "scripts/stripNaNs.py"
+  log: config["outputs"]["output_dir"] + "log/remove_nan.{cell_type}.chr.{chr}.log"
+  shell:
+    """
+    singularity exec --bind {params.bind} {params.sif} python {params.script} \
+      --infile {input} \
+      --outfile {output} 
+    """
