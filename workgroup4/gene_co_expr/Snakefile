@@ -141,7 +141,7 @@ checkpoint filter_split_counts:
         min_cells = config["barcode_qc_settings"]["min_cells"],
         feature_name = config["settings_extra"]["feature_name"],
         out = config["outputs"]["output_dir"] + "expression/{pool}/",
-        nonzero_counts = lambda wildcards: "--nonzero_weights" if config["inputs"]["weight"] == "nonzero" else ""
+        nonzero_counts = lambda wildcards: "--nonzero_weights" if config["settings"]["weight"] == "nonzero" else ""
     log: config["outputs"]["output_dir"] + "log/filter_split_counts.{pool}.log"
     shell:
         """
