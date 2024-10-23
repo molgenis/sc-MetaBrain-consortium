@@ -141,6 +141,7 @@ checkpoint filter_split_counts:
         min_cells = config["barcode_qc_settings"]["min_cells"],
         feature_name = config["settings_extra"]["feature_name"],
         out = config["outputs"]["output_dir"] + "expression/{pool}/",
+        nonzero_counts = lambda wildcards: "--nonzero_weights" if config["inputs"]["weight"] == "nonzero" else ""
     log: config["outputs"]["output_dir"] + "log/filter_split_counts.{pool}.log"
     shell:
         """
@@ -167,6 +168,7 @@ checkpoint filter_split_counts:
             {params.cap_barcodes} \
             {params.cr_barcodes} \
             --min_cells {params.min_cells} \
+            {params.nonzero_counts} \
             --out {params.out} > {log} 2>&1 
         singularity exec --bind {params.bind} {params.sif} touch {output.stats} {output.done}
         """
@@ -311,7 +313,7 @@ rule aggregate_correlation:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
     script = config["inputs"]["repo_dir"] + "scripts/aggregate_correlations.py",
-    indir = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/",
+    indir = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/",
     out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr",
     gene_annotation = config["inputs"]["gene_annotation"],
     egenelist = config["inputs"]["e_gene_list"]
