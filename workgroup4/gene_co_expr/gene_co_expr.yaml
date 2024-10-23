@@ -7,7 +7,6 @@ inputs:
   repo_dir:
   poolsheet:
   psam:
-  gene_list:
   gene_annotation:
   cell_annotation:
   droplet_type_annotation:
@@ -28,6 +27,7 @@ settings:
   cell_level: "L1"
   cell_type: ["EX"]
   chromosomes: [ 1 ]
+  weight: "raw" # alternitvely use "nonzero" 
 
 cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
 
@@ -57,6 +57,18 @@ proportional_fit_time: 0
 correlate_genes_memory: 4
 correlate_genes_threads: 1
 correlate_genes_time: 0
+
+aggregate_correlation_memory: 12
+aggregate_correlation_threads: 1
+aggregate_correlation_time: 1
+
+transpose_matrix_memory: 12
+transpose_matrix_threads: 1
+transpose_matrix_time: 1
+
+remove_nan_memory: 12
+remove_nan_threads: 1
+remove_nan_time: 1
 
 ############################################################################################################################################
 ##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####

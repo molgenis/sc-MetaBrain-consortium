@@ -6,9 +6,9 @@ inputs:
   singularity_image:
   gene_annotation: 
   repo_dir:
-  egenes:  
   top_effects:
   genotype:
+  co_expr_dir:
 
 settings:
   chromosomes: 
@@ -23,18 +23,6 @@ cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ##
 ##############################################################################################################
 ##### The following arguments are common parameters that may need to be changed depending on the dataset #####
 ##############################################################################################################
-
-aggregate_correlation_memory: 12
-aggregate_correlation_threads: 1
-aggregate_correlation_time: 1
-
-transpose_matrix_memory: 12
-transpose_matrix_threads: 1
-transpose_matrix_time: 1
-
-remove_nan_memory: 12
-remove_nan_threads: 1
-remove_nan_time: 1
 
 create_linkfile_memory: 12
 create_linkfile_threads: 1
@@ -55,6 +43,10 @@ create_snp_gene_pair_triplet_time: 0
 create_annotation_memory: 12
 create_annotation_threads: 1
 create_annotation_time: 0
+
+filter_genotype_memory: 12
+filter_genotype_threads: 1
+filter_genotype_time: 0
 
 create_batches_memory: 12
 create_batches_threads: 1
