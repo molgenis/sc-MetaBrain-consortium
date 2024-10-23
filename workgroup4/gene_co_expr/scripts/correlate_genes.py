@@ -136,6 +136,20 @@ def read_as_set(fpath):
         data.add(line.strip())
     return data
 
+def write_empty_file(fpath, binary=False):
+    n_egenes = 0
+    n_coegenes = 0
+    n_correlations = 0
+    n_feature_chars = 0
+    if binary:
+        fh = gzopen(fpath, "wb")
+        fh.write(struct.pack('>4i', n_egenes, n_coegenes, n_correlations, n_feature_chars))
+        fh.close()
+    else:
+        fh = gzopen(fpath, "w")
+        fh.write(f"{n_egenes}\n{n_coegenes}\n{n_correlations}\n{n_feature_chars}\n")
+        fh.close()
+
 
 #############################################
 
@@ -171,14 +185,19 @@ if args.geneannotation is not None and args.chr is not None:
         exit()
     del chr_genes
 
-    args.out = f"{args.out}.chr{args.chr}"
+    args.out = f"{args.out}.chr.{args.chr}"
 
+fpath = args.out + ".corr.txt.gz"
+if args.binary:
+    fpath = args.out + ".corr.dat"
+ 
 # Filter the input data.
 feature_mask = np.array([gene in egeneset or gene in coegeneset for gene in adata.var_names])
 adata = adata[:, feature_mask]
 print("\tExcluding {:,} features due to eGene / co-eGene / chromosome filter".format(np.size(feature_mask) - np.sum(feature_mask)))
 if np.sum(feature_mask) == 0:
-    print("Error, no data")
+    print("Error, no data, writing empty file")
+    write_empty_file(fpath, args.binary)
     exit()
 del feature_mask
 
@@ -192,7 +211,8 @@ geneset = set(adata.var_names)
 egeneset = egeneset.intersection(geneset)
 coegeneset = coegeneset.intersection(geneset)
 if np.sum(feature_mask) == 0:
-    print("Error, no data")
+    print("Error, no data, writing empty file")
+    write_empty_file(fpath, args.binary)
     exit()
 del feature_mask
 
@@ -237,12 +257,12 @@ if args.binary:
         print("Error, the feature string exceeds the max integer within 4 bytes.")
         exit()
 
-    fh = gzopen(args.out + ".corr.dat", "wb")
+    fh = gzopen(fpath, "wb")
     fh.write(struct.pack('>4i', n_egenes, n_coegenes, n_correlations, n_feature_chars))
     fh.write(struct.pack(f'>{n_feature_chars}s', features_str.encode('ascii')))
     fh.write(struct.pack(f'>{n_features}?', *is_egene))
 else:
-    fh = gzopen(args.out + ".corr.txt.gz", "w")
+    fh = gzopen(fpath, "w")
     fh.write(f"{n_egenes}\n{n_coegenes}\n{n_correlations}\n{n_feature_chars}\n")
     fh.write(f"{features_str}\n")
     fh.write(",".join([str(value) for value in is_egene]) + "\n")
