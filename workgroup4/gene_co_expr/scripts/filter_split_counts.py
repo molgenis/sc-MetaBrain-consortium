@@ -360,6 +360,8 @@ def filter_split(adata, metadata):
             # Save number of reads per cell.
             sample_id = f"{args.pool}.{sample}.{cell_type}"
             pd.DataFrame(adata[mask, :].X.sum(axis=1), index=adata.obs_names[mask], columns=[sample_id]).to_csv(os.path.join(data_out,f"{sample_id}.raw.weights.txt.gz"), sep="\t", header=True, index=True)
+            # TODO: Make this optional
+            pd.DataFrame(np.count_nonzero(adata[mask, :].X.toarray(), axis=1), index=adata.obs_names[mask], columns=[sample_id]).to_csv(os.path.join(data_out, f"{sample_id}.raw.weights.txt.gz"), sep="\t", header=True, index=True)
 
             # Save as h5.
             save_filtered_counts_h5(fpath=os.path.join(data_out, f"{sample_id}.raw.counts.h5"), adata=adata[mask, :])
