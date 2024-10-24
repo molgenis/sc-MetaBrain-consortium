@@ -38,6 +38,9 @@ if config["outputs"]["output_dir"] is None:
 if config["inputs"]["cov"] is not None and not os.path.exists(config["inputs"]["cov"]):
     logger.error("Critical, cov does not exist.\n\nExiting.")
     exit("InvalidCov")
+if config["inputs"]["expgroups"] is not None and not os.path.exists(config["inputs"]["expgroups"]):
+    logger.error("Critical, expgroups does not exist.\n\nExiting.")
+    exit("InvalidExpGroups")
 if config["inputs"]["genelimit"] is not None and not os.path.exists(config["inputs"]["genelimit"]):
     logger.error("Critical, genelimit does not exist.\n\nExiting.")
     exit("InvalidGeneLimit")
@@ -47,6 +50,9 @@ if config["inputs"]["snplimit"] is not None and not os.path.exists(config["input
 if config["inputs"]["snpgenelimit"] is not None and not os.path.exists(config["inputs"]["snpgenelimit"]):
     logger.error("Critical, snpgenelimit does not exist.\n\nExiting.")
     exit("InvalidSNPGeneLimit")
+if config["inputs"]["plot_eqtls"] is not None and not os.path.exists(config["inputs"]["plot_eqtls"]):
+    logger.error("Critical, plot_eqtls does not exist.\n\nExiting.")
+    exit("InvalidPloteQTLs")
 if config["qtl_settings_extra"]["mbqtl_jar"] is not None and not os.path.exists(config["qtl_settings_extra"]["mbqtl_jar"]):
     logger.error("Critical, mbQTL jar does not exist.\n\nExiting.")
     exit("InvalidmbQTLjar")
@@ -54,7 +60,10 @@ if config["qtl_settings_extra"]["mbqtl_jar"] is not None and not os.path.exists(
 # Checking settings with options to be valid.
 if config["general_settings"]["force_mega"] not in ["all", "cov", "qtl", "none", None]:
     logger.error("Critical, force_mega must be 'all', 'cov', 'qtl', 'none', or empty.\n\nExiting.")
-    exit("InvalidForceMegaSetting")
+    exit("InvalidForceMega")
+if config["general_settings"]["signif_column"] not in ["MetaP", "BetaAdjustedMetaP", "BonfAdjustedMetaP", "BonfBHAdjustedMetaP", "bh_fdr", "qval"]:
+    logger.error("Critical, signif_column must be 'MetaP', 'BetaAdjustedMetaP', 'BonfAdjustedMetaP', 'BonfBHAdjustedMetaP', 'bh_fdr', or 'qval'.\n\nExiting.")
+    exit("InvalidSignifColumn")
 if config["qtl_settings"]["analysis_type"] not in ["cis", "trans", "cistrans"]:
     logger.error("Critical, analysis_type must be 'cis', 'trans', or 'cistrans'.\n\nExiting.")
     exit("InvalidAnalysisType")
@@ -64,9 +73,22 @@ if config["qtl_settings"]["meta_analysis_method"] not in ["empzmeta", "fisherzme
 if config["qtl_settings"]["outputall"] not in [False, True, "chr"]:
     logger.error("Critical, outputall must be True, False, or 'chr'.\n\nExiting.")
     exit("InvalidOutputall")
+if config["qtl_settings"]["outputall_chr_sortby"] not in ["sortbyz", "sortbysnppos", "sortbygenepos"]:
+    logger.error("Critical, outputall_chr_sortby must be 'sortbyz', 'sortbysnppos', or 'sortbygenepos'.\n\nExiting.")
+    exit("InvalidOutputallChrSortby")
+if not config["create_annotation_settings"]["autosomes_only"]:
+    logger.error("Critical, inclusion of non-autosomal chromosomes is currently not supported.\n\nExiting.")
+    exit("InvalidAutosomalOnly")
+
+# TODO: remove once implemented.
+if config["qtl_settings"]["outputall_chr_sortby"] == "sortbysnppos":
+    logger.error("Critical, outputall_chr_sortby option 'sortbysnppos' is not implemented yet.\n\nExiting.")
+    exit("InvalidOutputallChrSortby")
+    config["qtl_settings"]["outputall_chr_sortby"] = "sortbygenepos"
+
 
 # Replace non required variables that are None with empty strings.
-for input_variable in ["cov", "genelimit", "snplimit", "snpgenelimit"]:
+for input_variable in ["cov", "expgroups", "genelimit", "snplimit", "snpgenelimit", "plot_eqtls"]:
     if config["inputs"][input_variable] is None:
         config["inputs"][input_variable] = ""
 
@@ -95,6 +117,12 @@ if config["qtl_settings"]["outputall"] == "chr":
 
 # Define the chromosomes.
 CHROMOSOMES = [str(i) for i in range(1, 23)]
+if not config["create_annotation_settings"]["autosomes_only"]:
+    CHROMOSOMES.extend(["X", "Y", "MT"])
+
+# Define the sortby columns.
+SORTBY_SEQUENCE_COL = {"sortbyz": "", "sortbysnppos": "SNPChr", "sortbygenepos": "GeneChr"}
+SORTBY_POS_COL = {"sortbyz": "", "sortbysnppos": "SNPPos", "sortbygenepos": "GenePos"}
 
 # Add trailing /.
 if not config["inputs"]["repo_dir"].endswith("/"):
@@ -250,6 +278,8 @@ if len(covariates) > 0:
 
 
 def get_basename(fpath):
+    if fpath == "":
+        return "None"
     basename = os.path.basename(fpath)
     for suffix in [".bgz", ".gz", ".gtf", ".txt", ".tsv", ".csv", ".vcf"]:
         basename = re.sub(re.escape(suffix) + '$', '', basename)
@@ -257,7 +287,7 @@ def get_basename(fpath):
 
 logger.debug("Basenames:")
 BASENAMES = {}
-for input_key in ["annotation", "vcf", "exp", "gte", "cov", "genelimit", "snplimit", "snpgenelimit"]:
+for input_key in ["annotation", "vcf", "exp", "gte", "cov", "expgroups", "genelimit", "snplimit", "snpgenelimit", "plot_eqtls"]:
     basename = get_basename(config["inputs"][input_key])
     logger.debug("\t{}: {}".format(input_key, basename))
     BASENAMES[input_key] = basename
@@ -271,7 +301,9 @@ wildcard_constraints:
     exp_basename = BASENAMES["exp"],
     sgl_basename = BASENAMES["snpgenelimit"],
     output_prefix = config["outputs"]["output_prefix"],
-    chr = "[0-9]{1,2}"
+    signif_filter = config["general_settings"]["signif_column"] + str(config["general_settings"]["alpha"]),
+    sortby = config["qtl_settings"]["outputall_chr_sortby"],
+    chr = "[0-9]{1,2}|X|Y|MT"
 
 
 def print_wildcards(wildcards):
@@ -339,7 +371,7 @@ def get_input(wildcards):
 
     if config["general_settings"]["map_qtls"]:
         # Output of mbQTL.
-        input_fpaths = expand(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithMultTest.txt", cov=covariates, output_prefix=config["outputs"]["output_prefix"])
+        input_fpaths = expand(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithMultTest-{signif_column}{alpha}significant.txt", cov=covariates, output_prefix=config["outputs"]["output_prefix"], signif_column=config["general_settings"]["signif_column"], alpha=config["general_settings"]["alpha"])
         logger.debug("\trequesting output of rule 'run_qtl': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
         input.extend(input_fpaths)
 
@@ -349,15 +381,21 @@ def get_input(wildcards):
             logger.debug("\trequesting output of rule 'results': " + input_fpath)
             input.append(config["outputs"]["output_dir"] + input_fpath)
 
+        if config["inputs"]["plot_eqtls"] != "":
+            # Output op plot_eqtl
+            input_fpaths = expand(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-{plot_eqtls_basename}-qtlplot.finished", cov=covariates, output_prefix=config["outputs"]["output_prefix"], plot_eqtls_basename=BASENAMES["plot_eqtls"])
+            logger.debug("\trequesting output of rule 'plot_eqtl': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
+            input.extend(input_fpaths)
+
         if config["general_settings"]["visualise"]:
             # Output of visualise.
-            input_fpaths = expand(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-visualise.done",cov=covariates,output_prefix=config["outputs"]["output_prefix"])
-            logger.debug("\trequesting output of rule 'visualise': " + ", ".join([fpath.replace(config["outputs"]["output_dir"],"") for fpath in input_fpaths]))
+            input_fpaths = expand(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-{signif_column}{alpha}significant-visualise.done", cov=covariates, output_prefix=config["outputs"]["output_prefix"], signif_column=config["general_settings"]["signif_column"], alpha=config["general_settings"]["alpha"])
+            logger.debug("\trequesting output of rule 'visualise': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
             input.extend(input_fpaths)
 
     if EXPORT_ALL_EFFECTS:
         # Output of export_all_effects.
-        input_fpaths = expand(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}.finished", cov=covariates, output_prefix=config["outputs"]["output_prefix"], chr=CHROMOSOMES)
+        input_fpaths = expand(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}.finished", cov=covariates, output_prefix=config["outputs"]["output_prefix"], chr=CHROMOSOMES, sortby=config["qtl_settings"]["outputall_chr_sortby"])
         logger.debug("\trequesting output of rule 'export_all_effects': " + ", ".join([fpath.replace(config["outputs"]["output_dir"], "") for fpath in input_fpaths]))
         input.extend(input_fpaths)
 
@@ -498,7 +536,7 @@ def get_cov(wildcards):
         logger.debug("\treturning input 'cov': " + fpath)
         return fpath
 
-    logger.debug("\treturning []")
+    logger.debug("\treturning: []")
     return []
 
 
@@ -686,7 +724,23 @@ def get_snpannotation(wildcards):
         logger.debug("\treturning output of rule 'create_snp_annotation': " + fpath)
         return prefix + config["outputs"]["output_dir"] + fpath
 
-    logger.debug("\treturning ''")
+    logger.debug("\treturning: ''")
+    return ""
+
+
+def get_expgroups(wildcards):
+    """
+    :rule: run_qtl
+    :param wildcards: cov, batch
+    :return: '--expgroups <expgroups>' if it is given, else return an empty string.
+    """
+    logger.debug("rule run_qtl - get_expgroups({})".format(print_wildcards(wildcards)))
+    if config["inputs"]["expgroups"] != "":
+        fpath = config["inputs"]["expgroups"]
+        logger.debug("\treturning input 'expgroups': " + fpath)
+        return "--expgroups " + fpath
+
+    logger.debug("\treturning: ''")
     return ""
 
 
@@ -705,7 +759,7 @@ def get_genelimit(wildcards):
         # The create_batches rule takes into account the genes from genelimit
         # if they are given.
         logger.debug("\tcalling 'get_genes' function")
-        fpath = "batches/{genes_file}_{annot_basename}_{ngenes}/{cov}/{output_prefix}/{batch}-genes.txt".format(**wildcards, genes_file=get_basename(get_genes(wildcards)), annot_basename=BASENAMES["annotation"], ngenes=config["general_settings"]["n_genes"], output_prefix=config["outputs"]["output_prefix"])
+        fpath = "batches/{genes_file}_{annot_basename}_{expgroups_basename}_{ngenes}/{cov}/{output_prefix}/{batch}-genes.txt".format(**wildcards, genes_file=get_basename(get_genes(wildcards)), annot_basename=BASENAMES["annotation"], expgroups_basename=BASENAMES["expgroups"], ngenes=config["general_settings"]["n_genes"], output_prefix=config["outputs"]["output_prefix"])
         logger.debug("\treturning output of checkpoint 'create_batches': " + fpath)
         return prefix + config["outputs"]["output_dir"] + fpath
     elif config["inputs"]["genelimit"] != "":
@@ -714,7 +768,7 @@ def get_genelimit(wildcards):
         logger.debug("\treturning input 'genelimit': " + fpath)
         return prefix + fpath
 
-    logger.debug("\treturning ''")
+    logger.debug("\treturning: ''")
     return ""
 
 
@@ -731,7 +785,7 @@ def get_snplimit(wildcards):
         logger.debug("\treturning input 'snplimit': " + fpath)
         return prefix + fpath
 
-    logger.debug("\treturning ''")
+    logger.debug("\treturning: ''")
     return ""
 
 
@@ -748,7 +802,7 @@ def get_snpgenelimit(wildcards):
         logger.debug("\treturning input 'snpgenelimit': " + fpath)
         return prefix + fpath
 
-    logger.debug("\treturning ''")
+    logger.debug("\treturning: ''")
     return ""
 
 
@@ -766,6 +820,13 @@ def get_qtl_optional_files(wildcards):
     if snpannotation != "":
         fpath = snpannotation.replace("--snpannotation ", "")
         logger.debug("\tRequesting snpannotation file: "  + fpath)
+        optional_files.append(fpath)
+
+    logger.debug("\tcalling 'get_expgroups' function")
+    expgroups = get_expgroups(wildcards)
+    if expgroups != "":
+        fpath = expgroups.replace("--expgroups ", "")
+        logger.debug("\tRequesting expgroups file: "  + fpath)
         optional_files.append(fpath)
 
     logger.debug("\tcalling 'get_genelimit' function")
@@ -833,7 +894,7 @@ def get_batches(wildcards):
     """
     logger.debug("rule merge_top_effects - get_batches({})".format(print_wildcards(wildcards)))
     logger.debug("\tcalling 'get_genes' function")
-    out_dir = checkpoints.create_batches.get(**wildcards, genes_file=get_basename(get_genes(wildcards)), annot_basename=BASENAMES["annotation"], ngenes=config["general_settings"]["n_genes"]).output[0]
+    out_dir = checkpoints.create_batches.get(**wildcards, genes_file=get_basename(get_genes(wildcards)), annot_basename=BASENAMES["annotation"], expgroups_basename=BASENAMES["expgroups"], ngenes=config["general_settings"]["n_genes"]).output[0]
     batches = glob_wildcards(os.path.join(out_dir, "{batch}-genes.txt"))
     logger.debug("\tfound batches: '" + ", ".join(batches.batch) + "'")
 
@@ -1318,7 +1379,7 @@ checkpoint create_batches:
         genes = get_genes,
         annotation = get_annotation
     output:
-        batches = directory(config["outputs"]["output_dir"] + "batches/{genes_file}_{annot_basename}_{ngenes}/{cov}/{output_prefix}/")
+        batches = directory(config["outputs"]["output_dir"] + "batches/{genes_file}_{annot_basename}_{expgroups_basename}_{ngenes}/{cov}/{output_prefix}/")
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["create_batches_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["create_batches_memory"],
@@ -1328,15 +1389,17 @@ checkpoint create_batches:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/create_batches.py",
+        expgroups = "--expgroups " + config["inputs"]["expgroups"] if config["inputs"]["expgroups"] != "" else "",
         n_genes = config["general_settings"]["n_genes"],
-        out = config["outputs"]["output_dir"] + "batches/{genes_file}_{annot_basename}_{ngenes}/{cov}/{output_prefix}/" + config["outputs"]["output_prefix"]
-    log: config["outputs"]["output_dir"] + "log/create_batches.{genes_file}.{annot_basename}.{ngenes}.{cov}.{output_prefix}.log"
+        out = config["outputs"]["output_dir"] + "batches/{genes_file}_{annot_basename}_{expgroups_basename}_{ngenes}/{cov}/{output_prefix}/" + config["outputs"]["output_prefix"]
+    log: config["outputs"]["output_dir"] + "log/create_batches.{genes_file}.{annot_basename}.{expgroups_basename}.{ngenes}.{cov}.{output_prefix}.log"
     shell:
         """
         mkdir -p {output.batches}
         singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --genes {input.genes} \
             --annotation {input.annotation} \
+            {params.expgroups} \
             --n_genes {params.n_genes} \
             --out {params.out} > {log} 2>&1
         """
@@ -1373,6 +1436,7 @@ rule run_qtl:
         meta_analysis_method = config["qtl_settings"]["meta_analysis_method"],
         seed = config["qtl_settings"]["seed"],
         snpannotation = get_snpannotation,
+        expgroups = get_expgroups,
         genelimit = get_genelimit,
         snplimit = get_snplimit,
         snpgenelimit = get_snpgenelimit,
@@ -1386,6 +1450,7 @@ rule run_qtl:
         mingenotypecount = config["qtl_settings"]["mingenotypecount"],
         splitmultiallelic = "--splitmultiallelic" if config["qtl_settings"]["splitmultiallelic"] else "",
         onlytestsnps = "--onlytestsnps" if config["qtl_settings"]["onlytestsnps"] else "",
+        testnonparseablechr = "--testnonparseablechr" if config["qtl_settings"]["testnonparseablechr"] else "",
         replacemissinggenotypes = "--replacemissinggenotypes" if config["qtl_settings"]["replacemissinggenotypes"] else "",
         usehardgenotypecalls = "--usehardgenotypecalls" if config["qtl_settings"]["usehardgenotypecalls"] else "",
         norank = "--norank" if config["qtl_settings"]["norank"] else "",
@@ -1409,6 +1474,7 @@ rule run_qtl:
             --gte {input.gte} \
             --annotation {input.annotation} \
             {params.snpannotation} \
+            {params.expgroups} \
             {params.genelimit} \
             {params.snplimit} \
             {params.snpgenelimit} \
@@ -1422,6 +1488,7 @@ rule run_qtl:
             --mingenotypecount {params.mingenotypecount} \
             {params.splitmultiallelic} \
             {params.onlytestsnps} \
+            {params.testnonparseablechr} \
             {params.replacemissinggenotypes} \
             {params.usehardgenotypecalls} \
             {params.norank} \
@@ -1443,15 +1510,15 @@ rule export_all_effects:
         gte = get_qtl_gte,
         optional_files = get_export_all_effects_optional_files
     output:
-        log = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-log.txt.gz",
-        top = temp(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-TopEffects.txt"),
-        all = temp(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-AllEffects.txt.gz"),
-        snplog = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-snpqclog.txt.gz",
-        finished1 = temp(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-TopEffects.finished"),
-        all_sorted_tmp = temp(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-AllEffects-sorted.txt.gz"),
-        all_sorted = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-AllEffects-sorted.bgz.txt.gz",
-        all_sorted_index = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-AllEffects-sorted.bgz.txt.gz.tbi",
-        finished2 = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}.finished",
+        log = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}-log.txt.gz",
+        top = temp(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}-TopEffects.txt"),
+        all = temp(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}-AllEffects.txt.gz"),
+        snplog = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}-snpqclog.txt.gz",
+        finished = temp(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}-TopEffects.finished"),
+        all_sorted_tmp = temp(config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}-AllEffects-sorted.txt.gz"),
+        all_sorted = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}-AllEffects-sorted.bgz.txt.gz",
+        all_sorted_index = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}-AllEffects-sorted.bgz.txt.gz.tbi",
+        finished2 = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}.finished",
     resources:
         java_mem_gb = lambda wildcards, attempt: attempt * config["export_all_effects_memory"] * config["export_all_effects_threads"] - config["settings_extra"]["java_memory_buffer"],
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["export_all_effects_memory"],
@@ -1478,11 +1545,15 @@ rule export_all_effects:
         mingenotypecount = config["qtl_settings"]["mingenotypecount"],
         splitmultiallelic = "--splitmultiallelic" if config["qtl_settings"]["splitmultiallelic"] else "",
         onlytestsnps = "--onlytestsnps" if config["qtl_settings"]["onlytestsnps"] else "",
+        testnonparseablechr = "--testnonparseablechr" if config["qtl_settings"]["testnonparseablechr"] else "",
         replacemissinggenotypes = "--replacemissinggenotypes" if config["qtl_settings"]["replacemissinggenotypes"] else "",
         usehardgenotypecalls = "--usehardgenotypecalls" if config["qtl_settings"]["usehardgenotypecalls"] else "",
         norank = "--norank" if config["qtl_settings"]["norank"] else "",
-        out = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}"
-    log: config["outputs"]["output_dir"] + "log/export_all_effects.{cov}.{output_prefix}.chr{chr}.log"
+        sortby = lambda wildcards: "--sortbyz" if wildcards.sortby == "sortbyz" else "", #TODO: update once implemented
+        tabix_sequence_column = lambda wildcards: SORTBY_SEQUENCE_COL[wildcards.sortby],
+        tabix_pos_column = lambda wildcards: SORTBY_POS_COL[wildcards.sortby],
+        out = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-chr{chr}-{sortby}"
+    log: config["outputs"]["output_dir"] + "log/export_all_effects.{cov}.{output_prefix}.chr{chr}.{sortby}.log"
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.java_mem_gb}g -Xms{resources.java_mem_gb}g \
@@ -1511,6 +1582,7 @@ rule export_all_effects:
             --mingenotypecount {params.mingenotypecount} \
             {params.splitmultiallelic} \
             {params.onlytestsnps} \
+            {params.testnonparseablechr} \
             {params.replacemissinggenotypes} \
             {params.usehardgenotypecalls} \
             {params.norank} \
@@ -1524,18 +1596,24 @@ rule export_all_effects:
             -jar {params.jar} \
             --mode sortfile \
             --input {output.all} \
+            {params.sortby} \
             --out {output.all_sorted_tmp} >> {log} 2>&1
             
         singularity exec --bind {params.bind} {params.sif} zcat {output.all_sorted_tmp} | \
             singularity exec --bind {params.bind} {params.sif} bgzip -c > {output.all_sorted}
-    
-        singularity exec --bind {params.bind} {params.sif} tabix \
-            --force \
-            --sequence 2 \
-            --begin 3 \
-            --end 3 \
-            --skip-lines 1 \
-            {output.all_sorted}
+            
+        if [[ "$(echo {wildcards.sortby})" == "sortbygenepos" || "$(echo {wildcards.sortby})" == "sortbysnppos" ]]; 
+        then
+            singularity exec --bind {params.bind} {params.sif} tabix \
+                --force \
+                --sequence $(zcat {output.all_sorted} | head -n 1 | tr '\\t' '\\n' | awk '/{params.tabix_sequence_column}$/ {{print NR}}') \
+                --begin $(zcat {output.all_sorted} | head -n 1 | tr '\\t' '\\n' | awk '/{params.tabix_pos_column}$/ {{print NR}}') \
+                --end $(zcat {output.all_sorted} | head -n 1 | tr '\\t' '\\n' | awk '/{params.tabix_pos_column}$/ {{print NR}}') \
+                --skip-lines 1 \
+                {output.all_sorted}
+        else
+            singularity exec --bind {params.bind} {params.sif} touch {output.all_sorted_index}
+        fi
         
         singularity exec --bind {params.bind} {params.sif} touch {output.finished2}
         """
@@ -1617,13 +1695,40 @@ rule multiple_test_correction:
         """
 
 
-rule visualise:
+rule filter_significant:
     input:
         data = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithMultTest.txt"
     output:
-        fig1 = report(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-TSSDistance-VariantType.png", category="visualise", subcategory="{cov} - TSS distance (variant type)", caption=config["inputs"]["repo_dir"] + "report_captions/tss_distance_vartype.rst"),
-        fig2 = report(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-TSSDistance-PValBins.png", category="visualise", subcategory="{cov} - TSS distance (p-value bins)",caption=config["inputs"]["repo_dir"] + "report_captions/tss_distance_pbin.rst"),
-        done = config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-visualise.done"
+        outfile = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithMultTest-{signif_filter}significant.txt"
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["filter_significant_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["filter_significant_memory"],
+        time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["filter_significant_time"]]
+    threads: config["filter_significant_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        script = config["inputs"]["repo_dir"] + "scripts/filter_significant.py",
+        signif_col = config["general_settings"]["signif_column"],
+        alpha = config["general_settings"]["alpha"]
+    log: config["outputs"]["output_dir"] + "log/filter_significant.{cov}.{output_prefix}.{signif_filter}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} python {params.script} \
+            --data {input.data} \
+            --signif_col {params.signif_col} \
+            --alpha {params.alpha} \
+            --outfile {output.outfile} > {log} 2>&1
+        """
+
+
+rule visualise:
+    input:
+        data = config["outputs"]["output_dir"] + "output/{cov}/{output_prefix}-TopEffectsWithMultTest-{signif_filter}significant.txt"
+    output:
+        fig1 = report(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-{signif_filter}significant-TSSDistance-VariantType.png", category="visualise", subcategory="{cov} - TSS distance (variant type)", caption=config["inputs"]["repo_dir"] + "report_captions/tss_distance_vartype.rst"),
+        fig2 = report(config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-{signif_filter}significant-TSSDistance-PValBins.png", category="visualise", subcategory="{cov} - TSS distance (p-value bins)",caption=config["inputs"]["repo_dir"] + "report_captions/tss_distance_pbin.rst"),
+        done = config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-{signif_filter}significant-visualise.done"
     resources:
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["visualise_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["visualise_memory"],
@@ -1633,14 +1738,62 @@ rule visualise:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/visualise.py",
-        out = config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects"
-    log: config["outputs"]["output_dir"] + "log/visualise.{cov}.{output_prefix}log"
+        out = config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-{signif_filter}significant"
+    log: config["outputs"]["output_dir"] + "log/visualise.{cov}.{output_prefix}.{signif_filter}.log"
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --data {input.data} \
             --out {params.out} > {log} 2>&1
         singularity exec --bind {params.bind} {params.sif} touch {output.done}
+        """
+
+
+rule plot_eqtl:
+    input:
+        annotation = get_annotation,
+        vcf = get_vcf,
+        index = get_vcf_index,
+        exp = get_exp,
+        gte = get_qtl_gte,
+        snpgenelimit = config["inputs"]["plot_eqtls"]
+    output:
+        # figure = config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-{plot_eqtls_basename}plot-{chr}_{pos}-{gene}-{gene_symbol}_{snp}.pdf",
+        finished = config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-{plot_eqtls_basename}-qtlplot.finished"
+    resources:
+        java_mem_gb = lambda wildcards, attempt: attempt * config["run_qtl_memory"] * config["run_qtl_threads"] - config["settings_extra"]["java_memory_buffer"],
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["run_qtl_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["run_qtl_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["run_qtl_time"]]
+    threads: config["run_qtl_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        java_threads = config["run_qtl_threads"] * 2,
+        jar = "/opt/tools/MbQTL.jar" if config["qtl_settings_extra"]["mbqtl_jar"] is None else config["qtl_settings_extra"]["mbqtl_jar"],
+        replacemissinggenotypes = "--replacemissinggenotypes" if config["qtl_settings"]["replacemissinggenotypes"] else "",
+        usehardgenotypecalls = "--usehardgenotypecalls" if config["qtl_settings"]["usehardgenotypecalls"] else "",
+        norank = "--norank" if config["qtl_settings"]["norank"] else "",
+        out = config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-{plot_eqtls_basename}-"
+    log: config["outputs"]["output_dir"] + "log/plot_eqtl.{cov}.{output_prefix}.{plot_eqtls_basename}.log"
+    shell:
+        """
+        singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.java_mem_gb}g -Xms{resources.java_mem_gb}g \
+            -Djava.util.concurrent.ForkJoinPool.common.parallelism={params.java_threads} \
+            -Dmaximum.threads={params.java_threads} -Dthread.pool.size={params.java_threads} \
+            -jar {params.jar} \
+            --mode mbqtlplot \
+            --vcf {input.vcf} \
+            --exp {input.exp} \
+            --gte {input.gte} \
+            --annotation {input.annotation} \
+            --snpgenelimit {input.snpgenelimit} \
+            {params.replacemissinggenotypes} \
+            {params.usehardgenotypecalls} \
+            {params.norank} \
+            --out {params.out} > {log} 2>&1
+            
+        singularity exec --bind {params.bind} {params.sif} touch {output.finished}
         """
 
 
