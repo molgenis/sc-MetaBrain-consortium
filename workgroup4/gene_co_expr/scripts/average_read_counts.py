@@ -51,7 +51,7 @@ del sum, n
 
 print("Calculating average read counts ...")
 if total_n == 0:
-    raise ValueError("Devision by 0.")
+    raise ValueError("Division by 0.")
 avg_read_count = total_sum / total_n
 
 print("Saving file ...")

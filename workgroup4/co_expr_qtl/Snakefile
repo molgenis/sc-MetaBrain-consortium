@@ -29,115 +29,25 @@ def get_sample_ids(cell_type):
   dir = config["outputs"]["output_dir"] + "correlations/data/" + cell_type + "/"
   files = glob.glob(os.path.join(dir, '*.corr.done'))
   sample_ids = set()
+  # Create sample_id file
+  fout = open(config["outputs"]["output_dir"] + "coeQTL/reffiles/" + cell_type + "/sample_id.txt","wt")
   for file_path in files:
     file = file_path.split("/")[-1]
     pool, sample = file.split(".")[0:2]
     id = f"{pool}.{sample}"
     sample_ids.add(id)
+    fout.write(f"{id}\n")
+    ## Make this a snakemake rule?
+  fout.close()
   return list(sample_ids)
-
-
-## TODO: Add rule that processes gtf genotype file
 
 rule all:
   input: 
-    #merged_coeqtls = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}--TopEffects.txt", cell_type=config["settings"]["cell_type"],allow_missing=True)
-    aggregated_corr = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz",cell_type=config["settings"]["cell_type"], chr=config["settings"]["chromosomes"])
-
-rule aggregate_correlation:
-  input: 
-    correlation = lambda wildcards: expand(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/{sample}.chr{chr}.corr.dat",sample=get_sample_ids(wildcards.cell_type),allow_missing=True),
-    eqtls = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}-eqtls.txt",
-  output: 
-    dat = temp(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.dat"),
-    rows = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.rows.txt",
-    cols = temp(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.cols.txt")
-  resources:
-    mem_per_thread_gb = lambda wildcards, attempt: attempt * config["aggregate_correlation_memory"],
-    disk_per_thread_gb = lambda wildcards, attempt: attempt * config["aggregate_correlation_memory"],
-    time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["aggregate_correlation_time"]]
-  threads: config["aggregate_correlation_threads"]
-  params:
-    bind = config["inputs"]["bind_path"],
-    sif = config["inputs"]["singularity_image"],
-    script = config["inputs"]["repo_dir"] + "scripts/aggregate_correlations.py",
-    indir = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/",
-    out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr",
-    gene_annotation = config["inputs"]["gene_annotation"],
-    egenelist = config["inputs"]["egenes"]
-  log: config["outputs"]["output_dir"] + "log/aggregate_correlation.{cell_type}.chr.{chr}.log"
-  shell:
-    """
-    singularity exec --bind {params.bind} {params.sif} python {params.script} \
-      --indir {params.indir} \
-      --out {params.out} \
-      --egenelist {params.egenelist} \
-      --coegenelist {params.egenelist} \
-      --chr {wildcards.chr} \
-      --geneannotation {params.gene_annotation} \
-      --binary_in \
-      --binary_out 
-    """
-
-rule transpose_matrix:
-  input:
-    dat = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.dat",
-    rows = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.rows.txt",
-    cols =  config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.cols.txt"
-  output:
-    dat = temp(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.dat"),
-    rows = temp(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.rows.txt"),
-    cols = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.cols.txt",
-    transpose = temp(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.txt.gz")
-  resources:
-    mem_per_thread_gb = lambda wildcards, attempt: attempt * config["transpose_matrix_memory"],
-    disk_per_thread_gb = lambda wildcards, attempt: attempt * config["transpose_matrix_memory"],
-    time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["transpose_matrix_time"]]
-  threads: config["transpose_matrix_threads"]
-  params:
-    bind = config["inputs"]["bind_path"],
-    sif = config["inputs"]["singularity_image"],
-    script = config["inputs"]["repo_dir"] + "scripts/2024-06-20-BinaryMatrixTools.jar",
-    infile = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr",
-    out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose"
-  log: config["outputs"]["output_dir"] + "log/transpose_matrix.{cell_type}.chr.{chr}.log"
-  shell:
-    """
-    singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.mem_per_thread_gb}g -jar {params.script} \
-      transpose \
-      {params.infile} \
-      {params.out} \
-      50 
-
-    singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.mem_per_thread_gb}g -jar {params.script} \
-      bintotxt \
-      {params.out} \
-      {output.transpose} \
-    """
-
-rule remove_nan:
-  input: config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.txt.gz"
-  output: config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz"
-  resources:
-    mem_per_thread_gb = lambda wildcards, attempt: attempt * config["remove_nan_memory"],
-    disk_per_thread_gb = lambda wildcards, attempt: attempt * config["remove_nan_memory"],
-    time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["remove_nan_time"]]
-  threads: config["remove_nan_threads"]
-  params:
-    bind = config["inputs"]["bind_path"],
-    sif = config["inputs"]["singularity_image"],
-    script = config["inputs"]["repo_dir"] + "scripts/stripNaNs.py"
-  log: config["outputs"]["output_dir"] + "log/remove_nan.{cell_type}.chr.{chr}.log"
-  shell:
-    """
-    singularity exec --bind {params.bind} {params.sif} python {params.script} \
-      --infile {input} \
-      --outfile {output} 
-    """
+    merged_coeqtls = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}--TopEffects.txt", cell_type=config["settings"]["cell_type"],allow_missing=True)
 
 rule create_linkfile:
-  input: config["outputs"]["output_dir"] + "coeQTL/reffiles/sample_id.txt"
-  output: config["outputs"]["output_dir"] + "coeQTL/reffiles/linkfile.txt"
+  input: config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/sample_id.txt"
+  output: config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/linkfile.txt"
   resources:
     mem_per_thread_gb = lambda wildcards, attempt: attempt * config["create_linkfile_memory"],
     disk_per_thread_gb = lambda wildcards, attempt: attempt * config["create_linkfile_memory"],
@@ -147,15 +57,15 @@ rule create_linkfile:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
     script =  config["inputs"]["repo_dir"] + "scripts/create_linkfile.py"
-  log: config["outputs"]["output_dir"] + "log/create_linkefile.log"
+  log: config["outputs"]["output_dir"] + "log/{cell_type}/create_linkefile.{cell_type}.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} python {params.script}/create_linkfile.py
     """
 
 rule get_significant_eqtls:
-  input: config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}.defaultQC.BryoisNorm.NoRank.MAF5.discovery-TopEffectsWithMultTest.txt"
-  output: config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-significant_eqtls.txt"
+  input: config["inputs"]["top_effects"],
+  output: config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}-significant_eqtls.txt"
   resources:
     mem_per_thread_gb = lambda wildcards, attempt: attempt * config["get_significant_eqtls_threads"],
     disk_per_thread_gb = lambda wildcards, attempt: attempt * config["get_significant_eqtls_threads"],
@@ -165,15 +75,15 @@ rule get_significant_eqtls:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
     script =  config["inputs"]["repo_dir"] + "scripts/determine_significant_eqtl_snp_gene_pairs.py"
-  log: config["outputs"]["output_dir"] + "log/get_significant_eqtls.{cell_type}.log"
+  log: config["outputs"]["output_dir"] + "log/{cell_type}/get_significant_eqtls.{cell_type}.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} python {params.script} {input} {output}
     """
 
 rule get_gene_pairs:
-  input: config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz"
-  output: config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/genepairs.txt"
+  input: config["inputs"]["co_expr_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz"
+  output: config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepairs.txt"
   resources:
     mem_per_thread_gb = lambda wildcards, attempt: attempt * config["get_gene_pairs_memory"],
     disk_per_thread_gb = lambda wildcards, attempt: attempt * config["get_gene_pairs_memory"],
@@ -183,7 +93,7 @@ rule get_gene_pairs:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
     script =  config["inputs"]["repo_dir"] + "scripts/determine_significant_eqtl_snp_gene_pairs.py"
-  log: config["outputs"]["output_dir"] + "log/get_gene_pairs.{cell_type}.chr.{chr}.log"
+  log: config["outputs"]["output_dir"] + "log/{cell_type}/get_gene_pairs.{cell_type}.chr.{chr}.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} python {params.script} {input} {output}
@@ -191,11 +101,11 @@ rule get_gene_pairs:
 
 rule create_snp_gene_pair_triplet:
   input: 
-    significant_eqtls = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-significant_eqtls.txt",
-    gene_pairs = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/genepairs.txt"
+    significant_eqtls = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}-significant_eqtls.txt",
+    gene_pairs = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepairs.txt"
   output: 
-    triplet = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/snp_genepair_triplets_to_test.txt",
-    triplet_group = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/snp_genepair_triplets_to_test_groups.txt"
+    triplet = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test.txt",
+    triplet_group = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test_groups.txt"
   resources:
     mem_per_thread_gb = lambda wildcards, attempt: attempt * config["create_snp_gene_pair_triplet_memory"],
     disk_per_thread_gb = lambda wildcards, attempt: attempt * config["create_snp_gene_pair_triplet_memory"],
@@ -205,7 +115,7 @@ rule create_snp_gene_pair_triplet:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
     script =  config["inputs"]["repo_dir"] + "scripts/create_snp_genepair_triplet_list.py"
-  log: config["outputs"]["output_dir"] + "log/create_snp_gene_pair_triplet.{cell_type}.chr.{chr}.log"
+  log: config["outputs"]["output_dir"] + "log/{cell_type}/create_snp_gene_pair_triplet.{cell_type}.chr.{chr}.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} {params.script}/create_snp_genepair_triplet_list.py \
@@ -218,10 +128,10 @@ rule create_snp_gene_pair_triplet:
 
 rule create_annotation:
   input: 
-    gene_pairs = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/genepairs.txt",
+    gene_pairs = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepairs.txt",
     gene_annotation = config["inputs"]["gene_annotation"]
   output: 
-    annotation = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/annotation.txt.gz"
+    annotation = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/annotation.txt.gz"
   resources:
     mem_per_thread_gb = lambda wildcards, attempt: attempt * config["create_annotation_memory"],
     disk_per_thread_gb = lambda wildcards, attempt: attempt * config["create_annotation_memory"],
@@ -231,7 +141,7 @@ rule create_annotation:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
     script =  config["inputs"]["repo_dir"] + "scripts/createAnnotation.py"
-  log: config["outputs"]["output_dir"] + "log/create_annotation.{cell_type}.chr.{chr}.log"
+  log: config["outputs"]["output_dir"] + "log/{cell_type}/create_annotation.{cell_type}.chr.{chr}.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} python {params.script} \
@@ -240,15 +150,44 @@ rule create_annotation:
       {output.annotation}
     """
 
+rule filter_genotype:
+  input:
+    top_effects = config["inputs"]["top_effects"]
+    genotype = config["inputs"]["genotype"]
+  output:
+    filtered_genotype = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}.eqtlsnps.bgz.vcf.gz"
+  resources:
+    mem_per_thread_gb = lambda wildcards, attempt: attempt * config["filter_genotype_memory"],
+    disk_per_thread_gb = lambda wildcards, attempt: attempt * config["filter_genotype_memory"],
+    time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["filter_genotype_time"]] 
+  threads: config["filter_genotype_threads"]
+  params:
+    bind = config["inputs"]["bind_path"],
+    sif = config["inputs"]["singularity_image"],
+    script =  config["inputs"]["repo_dir"] + "scripts/filter_genotype.py",
+    out = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}."
+  log: config["outputs"]["output_dir"] + "log/{cell_type}/filter_genotype.{cell_type}.log"
+  shell:
+  """
+  singularity exec --bind {params.bind} {params.sif} python {params.script} \
+    --top_effects {input.top_effects} \
+    --genotype {input.genotype} \
+    --output {params.out}eqtlsnps.vcf.gz \
+  ml HTSlib/1.19.1-GCCcore-11.3.0 \
+  zcat {params.out}eqtlsnps.vcf.gz | bgzip -c > {output.filtered_genotype} \
+  tabix -p vcf {output.filtered_genotype}
+  """
+
 rule create_batches:
   input:
-    correlation = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz",
+    correlation = config["inputs"]["co_expr_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz",
     linkfile = config["outputs"]["output_dir"] + "coeQTL/reffiles/linkfile.txt",
+    ## Change genotype to output from filter_genotype
     genotype = config["inputs"]["genotype"],
-    gene_pairs = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/genepairs.txt",
-    annotation = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/annotation.txt.gz",
-    triplet = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/snp_genepair_triplets_to_test.txt",
-    triplet_group = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/snp_genepair_triplets_to_test_groups.txt"
+    gene_pairs = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepairs.txt",
+    annotation = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/annotation.txt.gz",
+    triplet = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test.txt",
+    triplet_group = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test_groups.txt"
   output: 
     batches = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/batches/chr{chr}-batch-{n_batch}.txt",n_batch=batches,allow_missing=True)
   resources:
@@ -289,7 +228,7 @@ rule run_co_eqtl:
     disk_per_thread_gb = lambda wildcards, attempt: attempt * config["run_co_eqtl_memory"],
     time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["run_co_eqtl_time"]]
   threads: config["run_co_eqtl_threads"]
-  log: config["outputs"]["output_dir"] + "log/create_annotation.{cell_type}.chr.{chr}.batch.{n_batch}.log"
+  log: config["outputs"]["output_dir"] + "log/{cell_type}/create_annotation.{cell_type}.chr.{chr}.batch.{n_batch}.log"
   params:
     script = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/jobs/chr{chr}-batch-{n_batch}.sh"
   shell:
@@ -313,7 +252,7 @@ rule merge_co_eqtls:
     sif = config["inputs"]["singularity_image"],
     script = config["inputs"]["repo_dir"] + "scripts/mergeBatchesOverAllChr.py",
     indir=lambda wildcards: config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/output/"
-  log: config["outputs"]["output_dir"] + "log/{cell_type}.merge_co_eqtls.log"
+  log: config["outputs"]["output_dir"] + "log/{cell_type}/{cell_type}.merge_co_eqtls.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} python {params.script} {params.indir} {output.merged_coeqtls}

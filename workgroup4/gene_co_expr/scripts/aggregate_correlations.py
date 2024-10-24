@@ -6,11 +6,6 @@ import time
 import struct
 import sys
 
-import cProfile
-import pstats
-profiler = cProfile.Profile()
-profiler.enable()
-
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--indir", required=True, type=str,  help="Input directory")
 parser.add_argument("--geneannotation", required=False, type=str, help="Gene chromosome annotation")
@@ -86,6 +81,11 @@ def read_as_set(fpath):
 def parse_binary_header(fh):
     n_egenes, n_coegenes, n_correlations, n_feature_chars = struct.unpack(">4i", fh.read(16))
 
+    if n_egenes == 0:
+        features = []
+        is_egene = []
+        return n_egenes, n_coegenes, n_correlations, n_feature_chars, features, is_egene
+
     feature_str = struct.unpack(f'>{n_feature_chars}s', fh.read(n_feature_chars))[0].decode('ascii')
     features = feature_str.split(",")
     del feature_str
@@ -101,6 +101,11 @@ def parse_text_header(fh):
     n_coegenes = int(fh.readline().rstrip("\n"))
     n_correlations = int(fh.readline().rstrip("\n"))
     n_feature_chars = int(fh.readline().rstrip("\n"))
+
+    if n_egenes == 0:
+        features = []
+        is_egene = []
+        return n_egenes, n_coegenes, n_correlations, n_feature_chars, features, is_egene
 
     feature_str = fh.readline().rstrip("\n")
     features = feature_str.split(",")
@@ -292,7 +297,13 @@ for file in files:
         header_info = parse_text_header(fh=fh)
 
     file_n_egenes, file_n_coegenes, file_n_correlations, _, file_features, _ = header_info
-    print(f"parsing sample {samplename} with {file_n_egenes:,} eGenes, {file_n_coegenes:,} co-eGenes, and {len(file_features):,} features.")
+
+    if file_n_egenes == 0:
+        print(f"\tSkipping sample {samplename} because 0 egenes were found")
+        fh.close()
+        continue
+
+    # print(f"parsing sample {samplename} with {file_n_egenes:,} eGenes, {file_n_coegenes:,} co-eGenes, and {len(file_features):,} features.")
 
     # Loop over the file.
     corrctr = 0
@@ -385,7 +396,3 @@ if args.binary_out:
     
 fho.close()
 print("Done.")
-
-profiler.disable()
-stats = pstats.Stats(profiler).sort_stats('cumtime')
-stats.print_stats(40)
