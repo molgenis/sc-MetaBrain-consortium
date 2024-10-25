@@ -1,7 +1,24 @@
 import gzip
 import pandas as pd
+import argparse
+import sys
+import os
 
-fh = open("./reffiles/sample_id.txt","rt")
+parser = argparse.ArgumentParser(description="")
+parser.add_argument("--sample_ids", required=True, type=str,  help="")
+parser.add_argument("--wg0_file_directories", required=True, type=str,  help="")
+parser.add_argument("--out", required=True, type=str,  help="")
+
+args = parser.parse_args()
+
+print("Options in effect:")
+for arg in vars(args):
+    print("  --{} {}".format(arg, getattr(args, arg)))
+print("")
+
+os.makedirs(args.out, exist_ok=True) 
+
+fh = open(args.sample_ids,"rt")
 elems = []
 for line in fh:
     elems.append(line.strip())
@@ -9,7 +26,7 @@ fh.close()
 
 print(f"{len(elems)} sample ids")
 
-fho = open('./reffiles/linkfile.txt','w')
+fho = open(f"{args.out}linkfile.txt",'w')
 # header = fh.readline()
 seen = set()
 
