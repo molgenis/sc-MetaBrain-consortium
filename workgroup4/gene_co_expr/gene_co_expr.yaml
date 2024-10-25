@@ -27,7 +27,7 @@ settings:
   cell_level: "L1"
   cell_type: ["EX"]
   chromosomes: [ 1 ]
-  weight: "raw" # alternitvely use "nonzero" 
+  weight: "sumcounts" # alternitvely use "nonzero" 
 
 cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
 
