@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import argparse
 import gzip
 import os
@@ -142,7 +144,7 @@ sys.stdout.flush()
 filename_suffix = ".corr." + ("dat" if args.binary_in else "txt.gz")
 
 if args.chr is not None:
-    filename_suffix = ".chr" + args.chr + ".corr." + ("dat" if args.binary_in else "txt.gz")
+    filename_suffix = ".chr." + args.chr + ".corr." + ("dat" if args.binary_in else "txt.gz")
 
 print(f"Looking for correlation files ending with *{filename_suffix} in {args.indir}")
 files = glob.glob(args.indir + f"/*{filename_suffix}*")
