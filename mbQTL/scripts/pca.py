@@ -241,7 +241,7 @@ print("  Kept {:,} / {:,} features".format(np.sum(features_mask), np.size(featur
 
 print("\nCalculating Principal Components...")
 pca = prcomp(x=m, center=args.center, scale=args.scale)
-pca_indices = ["PC{}_exp".format(i) for i in range(1, len(samples) + 1)]
+pca_indices = ["PC{}_exp".format(i) for i in range(1, min(len(samples), len(features)) + 1)]
 projection_df = pd.DataFrame(pca["x"], index=samples, columns=pca_indices).astype(float).T
 rotation_df = pd.DataFrame(pca["rotation"], columns=pca_indices)
 expl_var_df = pd.DataFrame({"expl var %": ((pca["sdev"] ** 2) / np.sum(pca["sdev"] ** 2)) * 100}, index=pca_indices)
