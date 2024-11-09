@@ -1,0 +1,50 @@
+##############################################################################################################
+##### The following arguments need to be changed by the user to indicating file locations on your system #####
+##############################################################################################################
+inputs:
+  bind_path: 
+  singularity_image: 
+  repo_dir: 
+  input_dir:
+  gene_annotation:
+  # Cell specific input
+  e_gene_list: # optional
+    EX:
+    MIC:
+    OLI:
+  co_egene_list: # optional
+    EX:
+    MIC:
+    OLI:
+  sample_sheet: # optional
+    EX:
+    MIC:
+    OLI:
+
+outputs:
+  output_dir:
+
+settings:
+  dataset: ["Fujita2022"]
+  cell_type: ["EX","MIC","OLI"]
+  chromosomes: ["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22"]
+  feature_name: "HGNC"
+  binary_in: True
+  binary_out: True
+
+cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
+
+##############################################################################################################
+##### The following arguments are common parameters that may need to be changed depending on the dataset #####
+##############################################################################################################
+aggregate_correlation_memory: 12
+aggregate_correlation_threads: 1
+aggregate_correlation_time: 1
+
+transpose_matrix_memory: 32
+transpose_matrix_threads: 1
+transpose_matrix_time: 1
+
+remove_nan_memory: 12
+remove_nan_threads: 1
+remove_nan_time: 1

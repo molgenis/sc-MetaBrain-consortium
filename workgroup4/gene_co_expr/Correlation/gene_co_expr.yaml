@@ -2,22 +2,33 @@
 ##### The following arguments need to be changed by the user to indicating file locations on your system #####
 ##############################################################################################################
 inputs:
-  bind_path:
-  singularity_image:
-  repo_dir:
-  poolsheet:
-  psam:
+  bind_path: 
+  singularity_image: 
+  repo_dir: 
   gene_annotation:
-  cell_annotation:
-  droplet_type_annotation:
-  cell_type_annotation:
   rb_genes:
   mt_genes:
   gtf:
-  e_gene_list:
-  co_egene_list:
-  # optional
-  cell_type_pairing:
+  cell_type_pairing:  # optional
+
+  # Dataset specific inputs
+  poolsheet:
+  psam:
+  cell_annotation:
+  droplet_type_annotation:
+  cell_type_annotation:
+
+  # Cell specific input
+
+  e_gene_list: # optional
+    EX:
+    MIC:
+    OLI:
+
+  co_egene_list: # optional
+    EX:
+    MIC:
+    OLI:
 
 outputs:
   output_dir:
@@ -25,8 +36,8 @@ outputs:
 settings:
   ancestry: "EUR"
   cell_level: "L1"
-  cell_type: ["EX"]
-  chromosomes: [ 1 ]
+  cell_type: ["EX","MIC","OLI"]
+  chromosomes: ["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22"]
   weight: "sumcounts" # alternitvely use "nonzero" 
 
 cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
@@ -58,17 +69,9 @@ correlate_genes_memory: 4
 correlate_genes_threads: 1
 correlate_genes_time: 0
 
-aggregate_correlation_memory: 12
-aggregate_correlation_threads: 1
-aggregate_correlation_time: 1
-
-transpose_matrix_memory: 12
-transpose_matrix_threads: 1
-transpose_matrix_time: 1
-
-remove_nan_memory: 12
-remove_nan_threads: 1
-remove_nan_time: 1
+ç_memory: 4
+correlation_check_threads: 1
+correlation_check_time: 0
 
 ############################################################################################################################################
 ##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####
@@ -80,9 +83,9 @@ barcode_qc_settings:
   percent_rb: 100 # max value
   percent_mt: 5 # max value
   malat1: 0 # min value
-  cap_barcodes: 10000 # max value
   cellranger_barcodes: False
   min_cells: 5
+  cap_barcodes: 
 
 create_annotation_settings:
   feature_name: "gene_name" ### the info column that in your gtf that describes the names of the genes in your expression matrix. Default `gene_name`.

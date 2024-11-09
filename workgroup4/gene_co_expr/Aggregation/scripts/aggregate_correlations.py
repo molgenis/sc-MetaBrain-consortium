@@ -9,7 +9,8 @@ import struct
 import sys
 
 parser = argparse.ArgumentParser(description="")
-parser.add_argument("--indir", required=True, type=str,  help="Input directory")
+parser.add_argument("--indir", required=True, type=str, help="Input directory")
+parser.add_argument("--sample_sheet", required=False, default=None, type=str, help="File containing selected samples")
 parser.add_argument("--geneannotation", required=False, type=str, help="Gene chromosome annotation")
 parser.add_argument("--feature_name", required=False, type=str, default="HGNC", choices=["HGNC", "ENSG", "HGNC_ENSG"], help="")
 parser.add_argument("--chr", required=False, type=str, help="Limit correlation calculation to gene pairs where the first gene is on specified chromosome")
@@ -35,7 +36,6 @@ if args.chr is not None and args.geneannotation is None:
     exit()
     
 N_BYTES_DOUBLE = 8
-
 
 def gzopen(file, mode="r"):
     if file.endswith(".gz"):
@@ -146,8 +146,28 @@ filename_suffix = ".corr." + ("dat" if args.binary_in else "txt.gz")
 if args.chr is not None:
     filename_suffix = ".chr." + args.chr + ".corr." + ("dat" if args.binary_in else "txt.gz")
 
-print(f"Looking for correlation files ending with *{filename_suffix} in {args.indir}")
-files = glob.glob(args.indir + f"/*{filename_suffix}*")
+if args.sample_sheet is not None:
+    print(f"Looking for samples in the provided sample sheet ending with *{filename_suffix} in {args.indir}")
+    fin = gzopen(args.sample_sheet,mode="r")
+    expected_header = ["Pool","Sample","Dataset","L1"]
+    header = fin.readline().strip().split("\t")
+    if header != expected_header:
+        print(f"Error, header does not match the expected format: {expected_header}")
+        exit()
+    files = []
+    n = 0
+    for line in fin:
+        pool = line.strip().split("\t")[0]
+        sample = line.strip().split("\t")[1]
+        dataset = line.strip().split("\t")[2]
+        cell_type = line.strip().split("\t")[3]
+        file = f"{args.indir}{dataset}/correlations/data/{cell_type}/chr{args.chr}/{pool}.{sample}{filename_suffix}"
+        files.append(file)
+    fin.close()
+else:
+    print(f"Looking for correlation files for specified samples ending with *{filename_suffix} in {args.indir}")
+    files = glob.glob(args.indir + f"/*{filename_suffix}*")
+
 n_files = len(files)
 if n_files == 0:
     print("No matching files found.")
@@ -248,6 +268,7 @@ sys.stdout.flush()
 # position dict here since the eGene and co-eGene lists are sorted
 # and therefore we can calculate the position of the output value
 # on the fly later.
+
 print("Making gene pair index")
 for egene in egenes:
     for coegene in coegenes:
