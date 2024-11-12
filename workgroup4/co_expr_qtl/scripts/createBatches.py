@@ -86,7 +86,7 @@ def checkDir(path):
 abspath = os.path.abspath(out)
 checkDir(abspath+"/batches/")
 checkDir(abspath+"/output/")
-checkDir(abspath+"/jobs/")
+# checkDir(abspath+"/jobs/")
 checkDir(abspath+"/logs/")
 
 # read the ids from the expression file
@@ -216,7 +216,7 @@ for chr in chrs:
 		logprefix = abspath+"/logs/"+batchname
 		chrgenotype = genotype.replace("CHR", str(chr))
 		jobname = batchnameprefix +"-"+batchname
-		writeJob(expfile, gte, chrgenotype, template, batchfile, jobfile, outprefix, logprefix, chr, annotation, snpgenepairs,groupsfile, jobname)
+		# writeJob(expfile, gte, chrgenotype, template, batchfile, jobfile, outprefix, logprefix, chr, annotation, snpgenepairs,groupsfile, jobname)
 		bgout = open(batchfile, 'w')
 
 		grpctr = 0
@@ -252,7 +252,7 @@ for chr in chrs:
 					logprefix = abspath+"/logs/"+batchname
 					chrgenotype = genotype.replace("CHR", str(chr))	
 					jobname = batchnameprefix +"-"+batchname
-					writeJob(expfile, gte, chrgenotype, template, batchfile, jobfile, outprefix, logprefix, chr, annotation, snpgenepairs, groupsfile, jobname)
+					# writeJob(expfile, gte, chrgenotype, template, batchfile, jobfile, outprefix, logprefix, chr, annotation, snpgenepairs, groupsfile, jobname)
 					bgout = open(batchfile, 'w')
 					bgctr = 0
 			print("Writing group: {}".format(grpctr), end='\r')
@@ -278,7 +278,7 @@ for chr in chrs:
 		logprefix = abspath+"/logs/"+batchname
 		chrgenotype = genotype.replace("CHR", str(chr))
 		jobname = batchnameprefix +"-"+batchname
-		writeJob(expfile, gte, chrgenotype, template, batchfile, jobfile, outprefix, logprefix, chr, annotation, snpgenepairs, groupsfile, jobname)
+		# writeJob(expfile, gte, chrgenotype, template, batchfile, jobfile, outprefix, logprefix, chr, annotation, snpgenepairs, groupsfile, jobname)
 		bgout = open(batchfile, 'w')
 		while gctr < len(chrgenes):
 			gene = chrgenes[gctr]
@@ -298,7 +298,7 @@ for chr in chrs:
 				logprefix = abspath+"/logs/"+batchname
 				chrgenotype = genotype.replace("CHR", str(chr))
 				jobname = batchnameprefix +"-"+batchname
-				writeJob(expfile, gte, chrgenotype, template, batchfile, jobfile, outprefix, logprefix, chr, annotation, snpgenepairs, groupsfile, jobname)
+				# writeJob(expfile, gte, chrgenotype, template, batchfile, jobfile, outprefix, logprefix, chr, annotation, snpgenepairs, groupsfile, jobname)
 				bgout = open(batchfile, 'w')
 				bgctr = 0
 			gctr += 1
