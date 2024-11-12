@@ -5,11 +5,12 @@ if len(sys.argv) < 3:
 	print("Usage: indir output.txt")
 	sys.close()
 
-dir = sys.argv[1]
+files = sys.argv[1]
 out = sys.argv[2]
 
-files = glob.glob(f"{dir}/chr*/output/chr*-batch-*-TopEffects.txt")
-files.sort()
+# print(f"Looking for files ending with /chr*/output/chr*-batch-*-TopEffects.txt in {dir}")
+# files = glob.glob(f"{dir}/chr*/output/chr*-batch-*-TopEffects.txt")
+# files.sort()
 print(f"{len(files)} files detected")
 
 fho = open(out,'w')
@@ -39,3 +40,4 @@ for file in files:
 fho.flush()
 fho.close()
 print(f"{wctr} lines written?")
+print("Done.")

@@ -1,7 +1,6 @@
 import gzip
 import sys
 
-
 def fopen(file,mode):
 	if file.endswith(".gz"):
 		if mode == 'r':
@@ -82,3 +81,4 @@ print(f'{lctr} lines read, {wctr} lines written.',end='\n')
 fho.close()
 fh.close()
 print()
+print("Done.")

@@ -17,3 +17,4 @@ for line in fh:
      fho.write(snp+"\t"+gen+"\t"+chr+"\n")
 fho.close()
 fh.close()
+print("Done.")

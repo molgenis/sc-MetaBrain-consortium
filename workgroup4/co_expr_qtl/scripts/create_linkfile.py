@@ -7,7 +7,7 @@ import os
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--sample_ids", required=True, type=str,  help="")
 parser.add_argument("--wg0_file_directories", required=True, type=str,  help="")
-parser.add_argument("--out", required=True, type=str,  help="")
+parser.add_argument("--output", required=True, type=str,  help="")
 
 args = parser.parse_args()
 
@@ -16,7 +16,6 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
-os.makedirs(args.out, exist_ok=True) 
 
 fh = open(args.sample_ids,"rt")
 elems = []
@@ -26,11 +25,11 @@ fh.close()
 
 print(f"{len(elems)} sample ids")
 
-fho = open(f"{args.out}linkfile.txt",'w')
+fho = open(args.output,'w')
 # header = fh.readline()
 seen = set()
 
-df = pd.read_csv("/groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2024-08-29-CombineDatasets/2024-09-02-BryoisEtAl/CombineFiles/wg0_file_directories.tsv",sep="\t")
+df = pd.read_csv(args.wg0_file_directories,sep="\t")
 pool_dataset = df.groupby('Pool')['Dataset'].apply(list).to_dict()
 
 print(f"{len(pool_dataset)} pool-dataset links")
@@ -46,3 +45,4 @@ for elem in elems:
 fho.close()
 
 print(f"{wctr} unique samples written")
+print("Done.")
