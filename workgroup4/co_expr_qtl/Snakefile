@@ -358,6 +358,37 @@ rule merge_coeqtls:
     singularity exec --bind {params.bind} {params.sif} python {params.script} {input.merged_batches} {output.coeqtls} > {log} 2>&1
     """
 
+rule multiple testing correction:
+  input:
+    coeqtls = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffects.txt"
+  output:
+    qval = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffectswithQval.txt",
+    hist = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/plots/{cell_type}-TopEffects_hist.png",
+    overview = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/plots/{cell_type}-TopEffects_overview.png",
+  params:
+    script = config["inputs"]["repo_dir"] + "scripts/multiple_testing_correction.R",
+    out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffects",
+    plot_out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/plots/{cell_type}-TopEffects"
+  shell:
+    """
+    singularity exec --bind {params.bind} {params.sif} Rscript {params.scriot} \
+    --input {input.coeqtls} \
+    --nom_pvalue MetaP \
+    --n_tests NrTestedSNPs \
+    --beta_adj_pvalue BetaAdjustedMetaP \
+    --beta_dist_a BetaDistAlpha \
+    --beta_dist_b BetaDistBeta \
+    --bonf_pvalue_col BonfAdjustedMetaP \
+    --bonf_bh_fdr_col BonfBHAdjustedMetaP \
+    --bh_fdr_col bh_fdr \
+    --qvalue_col qval \
+    --nom_thresh_col PvalueNominalThreshold \
+    --alpha 0.05 \
+    --data_out {params.out} \
+    --plot_out {params.plot_out} \
+    --suffix 'withQval'
+    """
+
 # rule get_genepairs_to_dump:
 
 # rule coeqtl_dump:
