@@ -2731,9 +2731,9 @@ class mbQTL(Dataset):
             # "OA": [(None, None, None)],
             "beta": self.get_beta_column(),
             "beta_se": [("MetaSE", None, None)],
-            "n_tests": [("NrTestedSNPs", None, None)],
+            "n_tests": self.get_n_tests_column(),
             "nominal_pvalue": [("MetaP", None, None)],
-            "permuted_pvalue": [("BetaAdjustedMetaP", None, None)],
+            "permuted_pvalue": self.get_permuted_pvalue_column(),
             # "bonferroni_pvalue": [(None, None, None)],
             "zscore": [("MetaPZ", None, None)],
             "FDR": self.get_fdr_column(),
@@ -2750,6 +2750,24 @@ class mbQTL(Dataset):
             return [("MetaBeta", None, None)]
         elif "MetaR" in self.effects_header:
             return [("MetaR", None, None)]
+        else:
+            return [(None, None, None)]
+
+    def get_n_tests_column(self):
+        if self.effects_header is None:
+            return [(None, None, None)]
+
+        if "NrTestedSNPs" in self.effects_header:
+            return [("NrTestedSNPs", None, None)]
+        else:
+            return [(None, None, None)]
+
+    def get_permuted_pvalue_column(self):
+        if self.effects_header is None:
+            return [(None, None, None)]
+
+        if "BetaAdjustedMetaP" in self.effects_header:
+            return [("BetaAdjustedMetaP", None, None)]
         else:
             return [(None, None, None)]
 
