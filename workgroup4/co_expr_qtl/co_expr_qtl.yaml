@@ -9,7 +9,9 @@ inputs:
   top_effects:
   genotype:
   co_expr_dir:
-
+  sample_list:
+  wg0_file_directories:
+  
 settings:
   chromosomes: 
   cell_type: 
@@ -59,3 +61,12 @@ run_co_eqtl_time: 1
 merge_co_eqtls_memory: 12
 merge_co_eqtls_threads: 1
 merge_co_eqtls_time: 0
+
+############################################################################################################################################
+##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####
+############################################################################################################################################
+
+mbqtl_settings:
+  permutations: 10
+  minobservations: 15
+  mingenotypecount: 2

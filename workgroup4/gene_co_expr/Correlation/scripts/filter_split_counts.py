@@ -35,6 +35,7 @@ parser.add_argument("--malat1", required=False, type=int, default=0, help="")
 parser.add_argument("--cap_barcodes", required=False, type=int, default=None, help="")
 parser.add_argument("--cr_barcodes", action="store_true", default=False, help="")
 parser.add_argument("--min_cells", required=False, type=int, default=5, help="")
+parser.add_argument("--nonzero_weights", action="store_true", default=False, help="Output the nonzero counts")
 parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
 
@@ -307,6 +308,7 @@ def filter_split(adata, metadata):
     ncells = adata.X.shape[0]
 
     stats_data = []
+    ## Insert sample list here?
     samples = metadata[args.sample_aggregate].unique()
     n_samples = 0
     for sample in samples:
@@ -359,9 +361,11 @@ def filter_split(adata, metadata):
 
             # Save number of reads per cell.
             sample_id = f"{args.pool}.{sample}.{cell_type}"
-            pd.DataFrame(adata[mask, :].X.sum(axis=1), index=adata.obs_names[mask], columns=[sample_id]).to_csv(os.path.join(data_out,f"{sample_id}.raw.weights.txt.gz"), sep="\t", header=True, index=True)
-            # TODO: Make this optional
-            pd.DataFrame(np.count_nonzero(adata[mask, :].X.toarray(), axis=1), index=adata.obs_names[mask], columns=[sample_id]).to_csv(os.path.join(data_out, f"{sample_id}.raw.weights.txt.gz"), sep="\t", header=True, index=True)
+            pd.DataFrame(adata[mask, :].X.sum(axis=1), index=adata.obs_names[mask], columns=[sample_id]).to_csv(os.path.join(data_out,f"{sample_id}.sumcounts.weights.txt.gz"), sep="\t", header=True, index=True)
+            
+            if args.nonzero_weights:
+                print("Saving nonzero counts")
+                pd.DataFrame(np.count_nonzero(adata[mask, :].X.toarray(), axis=1), index=adata.obs_names[mask], columns=[sample_id]).to_csv(os.path.join(data_out, f"{sample_id}.nonzero.weights.txt.gz"), sep="\t", header=True, index=True)
 
             # Save as h5.
             save_filtered_counts_h5(fpath=os.path.join(data_out, f"{sample_id}.raw.counts.h5"), adata=adata[mask, :])
