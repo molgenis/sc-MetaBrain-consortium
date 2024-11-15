@@ -4,18 +4,18 @@
 inputs:
   bind_path:
   singularity_image:
+  mbqtl_singularity_image:
   gene_annotation: 
   repo_dir:
-  top_effects:
   genotype:
   co_expr_dir:
-  sample_list:
   wg0_file_directories:
+  # cell_type dependent
+  top_effects:
   
 settings:
   chromosomes: 
   cell_type: 
-  batches: 
 
 outputs:
   output_dir: 
@@ -25,6 +25,10 @@ cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ##
 ##############################################################################################################
 ##### The following arguments are common parameters that may need to be changed depending on the dataset #####
 ##############################################################################################################
+
+get_sample_ids_memory: 12
+get_sample_ids_threads: 1
+get_sample_ids_time: 0
 
 create_linkfile_memory: 12
 create_linkfile_threads: 1
@@ -55,12 +59,32 @@ create_batches_threads: 1
 create_batches_time: 0
 
 run_co_eqtl_memory: 12
-run_co_eqtl_threads: 1
+run_co_eqtl_threads: 2
 run_co_eqtl_time: 1
+
+merge_batches_memory: 12
+merge_batches_threads: 1
+merge_batches_time: 0
 
 merge_co_eqtls_memory: 12
 merge_co_eqtls_threads: 1
 merge_co_eqtls_time: 0
+
+multiple_testing_correction_memory: 12
+multiple_testing_correction_threads: 1
+multiple_testing_correction_time: 0
+
+get_significant_effects_memory: 12
+get_significant_effects_threads: 1
+get_significant_effects_time: 0
+
+run_coeqtl_dump_memory: 12
+run_coeqtl_dump_threads: 2
+run_coeqtl_dump_time: 0
+
+merge_all_triplets_memory: 12
+merge_all_triplets_threads: 1
+merge_all_triplets_time: 0
 
 ############################################################################################################################################
 ##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####

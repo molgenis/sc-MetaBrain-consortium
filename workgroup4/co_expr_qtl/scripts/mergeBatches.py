@@ -1,12 +1,19 @@
 import glob
-import sys
+import argparse
 
-if len(sys.argv) < 3:
-	print("Usage: indir output.txt")
-	sys.close()
+parser = argparse.ArgumentParser(description="")
+parser.add_argument("--input", required=True, nargs="*", type=str,  help="")
+parser.add_argument("--output", required=True, type=str,  help="")
 
-files = sys.argv[1]
-out = sys.argv[2]
+args = parser.parse_args()
+
+print("Options in effect:")
+for arg in vars(args):
+    print("  --{} {}".format(arg, getattr(args, arg)))
+print("")
+
+files = args.input
+out = args.output
 
 # print(f"Looking for files ending with /chr*/output/chr*-batch-*-TopEffects.txt in {dir}")
 # files = glob.glob(f"{dir}/chr*/output/chr*-batch-*-TopEffects.txt")
@@ -14,7 +21,7 @@ out = sys.argv[2]
 print(f"{len(files)} files detected")
 
 fho = open(out,'w')
-print("open outputfule")
+print("open outputfile")
 ctr = 0
 wctr = 0
 for file in files:
