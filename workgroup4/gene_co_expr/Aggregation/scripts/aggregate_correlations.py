@@ -302,6 +302,12 @@ if args.binary_out:
     fho_rows = open(args.out + ".rows.txt", 'wt')
 
 for file in files:
+    # Clear buffers.
+    if args.binary_out:
+        clear(byteout, binary=True)
+    else:
+        clear(outln, binary=False)
+
     # Check if the input file is in binary format.
     isbinary = file.endswith(".dat")
 

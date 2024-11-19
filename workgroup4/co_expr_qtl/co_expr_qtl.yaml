@@ -12,6 +12,9 @@ inputs:
   wg0_file_directories:
   # cell_type dependent
   top_effects:
+    EX:
+    MIC:
+    OLI:
   
 settings:
   chromosomes: 

@@ -27,7 +27,7 @@ def print_wildcards(wildcards):
         out.append(key + "=" + value)
     return ", ".join(out)
 
-def get_batch_number(wildcards):
+def ç(wildcards):
   logger.debug("get_pool_samples({})".format(print_wildcards(wildcards)))
   chromosomes = config["settings"]["chromosomes"]
   chr_batch = {}
@@ -86,7 +86,8 @@ rule create_linkfile:
     """
 
 rule get_significant_eqtls:
-  input: config["inputs"]["top_effects"],
+  input:
+    top_effects = lambda wildcards: config["inputs"]["top_effects"][wildcards.cell_type]
   output: config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}-significant_eqtls.txt"
   resources:
     mem_per_thread_gb = lambda wildcards, attempt: attempt * config["get_significant_eqtls_threads"],
@@ -100,7 +101,7 @@ rule get_significant_eqtls:
   log: config["outputs"]["output_dir"] + "log/{cell_type}/get_significant_eqtls.{cell_type}.log"
   shell:
     """
-    singularity exec --bind {params.bind} {params.sif} python {params.script} {input} {output} > {log} 2>&1
+    singularity exec --bind {params.bind} {params.sif} python {params.script} {input.top_effects} {output} > {log} 2>&1
     """
 
 rule get_gene_pairs:
@@ -175,7 +176,7 @@ rule create_annotation:
 
 rule filter_genotype:
   input:
-    top_effects = config["inputs"]["top_effects"],
+    top_effects = lambda wildcards: config["inputs"]["top_effects"][wildcards.cell_type],
     genotype = config["inputs"]["genotype"]
   output:
     filtered_genotype = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}.eqtlsnps.bgz.vcf.gz"
