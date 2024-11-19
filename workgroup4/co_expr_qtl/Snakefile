@@ -27,16 +27,28 @@ def print_wildcards(wildcards):
         out.append(key + "=" + value)
     return ", ".join(out)
 
-def ç(wildcards):
+# def get_batch_number(wildcards):
+#   logger.debug("get_pool_samples({})".format(print_wildcards(wildcards)))
+#   chromosomes = config["settings"]["chromosomes"]
+#   chr_batch = {}
+#   for chr in chromosomes:
+#     out_dir = checkpoints.create_batches.get(cell_type = wildcards.cell_type, chr = chr).output["data_dir"]
+#     pattern = config["outputs"]["output_dir"] + f"chr{chr}-batch-*.txt"
+#     matching_files = glob.glob(pattern)
+#     chr_batch[chr] = len(matching_files)
+#   return chr_batch
+
+def get_batch_number(wildcards):
   logger.debug("get_pool_samples({})".format(print_wildcards(wildcards)))
-  chromosomes = config["settings"]["chromosomes"]
-  chr_batch = {}
-  for chr in chromosomes:
-    out_dir = checkpoints.create_batches.get(cell_type = wildcards.cell_type, chr = chr).output["data_dir"]
-    pattern = config["outputs"]["output_dir"] + f"chr{chr}-batch-*.txt"
-    matching_files = glob.glob(pattern)
-    chr_batch[chr] = len(matching_files)
-  return chr_batch
+  out_dir = checkpoints.create_batches.get(**wildcards)
+  batches = glob_wildcards(os.path.join(out_dir, f"chr{wildcards.chr}" + "-batch-{n_batch}.txt")
+  logger.debug("\tfound batches: '" + ", ".join(batches.n_batch) + "'")
+
+  if len(batches.n_batch) == 0:
+    logger.error("Critical, no batches found.")
+    exit()
+  
+  return batches.n_batch
 
 rule all:
   input: 
