@@ -3,7 +3,7 @@ import argparse
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--significant_egenes", required=True, nargs="*", type=str,  help="")
-parser.add_argument("--input", required=True, nargs="*", type=str,  help="")
+parser.add_argument("--input", required=True, type=str,  help="")
 parser.add_argument("--output", required=True, type=str,  help="")
 
 args = parser.parse_args()
@@ -13,7 +13,7 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
-fin = open(args.significant_egenes,open="rt")
+fin = open(args.significant_egenes,"rt")
 fin.readline()
 egene_pval = {}
 for line in fin:
@@ -38,8 +38,8 @@ for file in files:
 		fho.write(fh.readline())
 		for line in fh:
 			egene = line.strip().split("\t")[0]
-			pval = line.strip().split("\t")[13]
-			threshold = egene_pval[egene]
+			pval = float(line.strip().split("\t")[13])
+			threshold = float(egene_pval[egene])
 			if pval < threshold:
 				fho.write(fh.readline())
 				lctr += 1
@@ -47,8 +47,8 @@ for file in files:
 		fh.readline()
 		for line in fh:
 			egene = line.strip().split("\t")[0]
-			pval = line.strip().split("\t")[13]
-			threshold = egene_pval[egene]
+			pval = float(line.strip().split("\t")[13])
+			threshold = float(egene_pval[egene])
 			if pval < threshold:
 				fho.write(fh.readline())
 				lctr += 1
