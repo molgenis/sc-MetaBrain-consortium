@@ -41,7 +41,7 @@ def print_wildcards(wildcards):
 def get_batch_number(wildcards):
   logger.debug("get_pool_samples({})".format(print_wildcards(wildcards)))
   out_dir = checkpoints.create_batches.get(**wildcards)
-  batches = glob_wildcards(os.path.join(out_dir, f"chr{wildcards.chr}" + "-batch-{n_batch}.txt")
+  batches = glob_wildcards(os.path.join(out_dir, f"chr{wildcards.chr}" + "-batch-{n_batch}.txt"))
   logger.debug("\tfound batches: '" + ", ".join(batches.n_batch) + "'")
 
   if len(batches.n_batch) == 0:
