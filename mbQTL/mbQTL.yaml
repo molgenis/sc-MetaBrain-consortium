@@ -12,9 +12,12 @@ inputs:
   gte: ### genotype to expression coupling file. This is a tab-separated file with three columns; genotype ID, expression ID, dataset (name). There is no header.
 
   cov: ### covariate file. Tab-separated file containing the covariate values of each feature per sample. The first column contains the covariates. The rest of the columns are the sample names.
+  expgroups: ### File defining groups of phenotypes. File with one line per gene ID - group. No Header.
   genelimit: ### Gene limit file. File with one line per gene ID. No Header.
   snplimit: ### SNP limit file. File with one line per SNP ID. No Header.
   snpgenelimit: ### SNP - gene limit file. Tab-seperated file with one line per SNP - gene ID. The first column contains the SNP IDs and the second column the gene IDs. No Header.
+
+  plot_eqtls: ### SNP - gene limit file of the eQTLs to plot. Tab-seperated file with one line per SNP - gene ID. The first column contains the SNP IDs and the second column the gene IDs. No Header.
 
 outputs:
   output_dir: ### the output directory.
@@ -33,6 +36,7 @@ general_settings:
   n_genes: 100 ### how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk. Default `100`.
   use_snpannotation: False ### whether or not the `snpannotation` option should be used. Default `False`.
   alpha: 0.05 ### QTL significance threshold. Default '0.05'.
+  signif_column: "qval" ### The column used to filter significant effects (options: `MetaP`, `BetaAdjustedMetaP`, `BonfAdjustedMetaP`, `BonfBHAdjustedMetaP`, `bh_fdr`, `qval`). Default `qval`.
 
 qtl_settings:
   analysis_type: "cis" ### which variants to test per gene (options: 'cis', 'trans', 'cistrans'). Default 'cis'.
@@ -48,10 +52,12 @@ qtl_settings:
   mingenotypecount: 0 ### Minimal number of individuals per genotype group. Default: '0'.
   splitmultiallelic: False ### split multi allelic variants instead of skipping them. Default: 'False'.
   onlytestsnps: False ### skip INDELs and only test SNPs. Default 'False'.
+  testnonparseablechr: False ### Test variants and genes that map to non-parseable chromosomes (e.g. patch chromosomes). Default 'False'.
   replacemissinggenotypes: False ### replace missing genotypes with average genotype: use this when both genotypes and expression data have missing values and perm > 0. Default 'False'.
   usehardgenotypecalls: False ### use hard genotype calls instead of dosages derived from genotype probabilities. Default: 'False'.
   norank: False ### do not rank expression data. Default 'False'.
   outputall: False ### output all associations, not just top association per gene. (options: True, False, or 'chr'). If True, the effects will be outputted per batch. If chr, the effects will instead be outputted per chromosome with a tabix index using a separate job. Default 'False'.
+  outputall_chr_sortby: "sortbygenepos" ### how to sort the all effects file, only applied if 'outputall: chr' is used (options: 'sortbyz', 'sortbysnppos', or 'sortbygenepos'). Default: 'sortbygenepos'.
   outputallpermutations: False ### output all permuted associations, not just top association per gene. Default 'False'.
   snplog: False ### output SNP summary stats per snp/gene pair. Default 'False'.
 
@@ -137,13 +143,21 @@ multiple_test_correction_memory: 4 ### Amount of gigs that will be used for memo
 multiple_test_correction_threads: 1 ### Number of threads to use
 multiple_test_correction_time: 0 ### The time setting to use
 
-results_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
-results_threads: 1 ### Number of threads to use
-results_time: 0 ### The time setting to use
+filter_significant_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+filter_significant_threads: 1 ### Number of threads to use
+filter_significant_time: 0 ### The time setting to use
 
 visualise_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 visualise_threads: 1 ### Number of threads to use
 visualise_time: 0 ### The time setting to use
+
+plot_eqtls_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+plot_eqtls_threads: 1 ### Number of threads to use
+plot_eqtls_time: 0 ### The time setting to use
+
+results_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+results_threads: 1 ### Number of threads to use
+results_time: 0 ### The time setting to use
 
 ############################################################################################################################################
 ##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####

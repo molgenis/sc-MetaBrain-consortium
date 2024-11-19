@@ -83,17 +83,25 @@ if (!is.na(opt$n_tests) & (opt$n_tests %in% colnames(data))) {
     print(paste0("  significant at bonferroni p-value<", opt$alpha, ": ", sum(data[[opt$bonf_pvalue]] < opt$alpha), " genes"))
 
     print("Calculating two-step FDR")
-    data[[opt$bonf_bh_fdr_col]] <- p.adjust(data[[opt$bonf_pvalue]], method = 'hochberg', n = length(data[[opt$bonf_pvalue]]))
-    print(paste0("  significant at two step FDR<", opt$alpha, ": ", sum(data[[opt$bonf_bh_fdr_col]] < opt$alpha), " genes"))
+    data[[opt$bonf_bh_fdr_col]] <- p.adjust(data[[opt$bonf_pvalue]], method = 'BH', n = length(data[[opt$bonf_pvalue]]))
+    print(paste0("  significant at two step FDR (BH-FDR over bonferroni p-values)<", opt$alpha, ": ", sum(data[[opt$bonf_bh_fdr_col]] < opt$alpha), " genes"))
 }
 
 print("Calculating Benjamini-Hochberg FDR")
-data[[opt$bh_fdr_col]] <- p.adjust(data[[pvalue]], method = 'hochberg', n = length(data[[pvalue]]))
+data[[opt$bh_fdr_col]] <- p.adjust(data[[pvalue]], method = 'BH', n = length(data[[pvalue]]))
 print(paste0("  significant at BH-FDR<", opt$alpha, ": ", sum(data[[opt$bh_fdr_col]] < opt$alpha), " genes"))
 
 print("Calculating qvalues")
-qobj <- qvalue(p = data[[pvalue]])
-data[[opt$qvalue_col]] <- qobj$qvalues
+qobj <- NULL
+data[[opt$qvalue_col]] <- NA
+tryCatch({
+    qobj <- qvalue(p = data[[pvalue]])
+    data[[opt$qvalue_col]] <- qobj$qvalues
+},
+    error = function(e) {
+        print(message(e))
+    }
+)
 print(paste0("  significant at qvalue<", opt$alpha, ": ", sum(data[[opt$qvalue_col]] < opt$alpha), " genes"))
 
 # got this from: https://github.com/francois-a/fastqtl/blob/master/R/calculateSignificanceFastQTL.R
@@ -115,11 +123,22 @@ dir.create(dirname(opt$plot_out), recursive = TRUE, showWarnings = FALSE)
 setwd(dirname(opt$plot_out))
 
 print("Creating figures")
-png(paste0(opt$plot_out, "_overview.png"))
-plot1 <- plot(qobj)
-dev.off()
+if(is.null(qobj)) {
+    print("  Warning, could not create figures since qvalues returned an error")
+    png(filename=paste0(opt$plot_out, "_overview.png"))
+    plot(NULL, xlab="", ylab="", xaxt="n", yaxt="n", xlim=c(0, 10), ylim=c(0, 10))
+    dev.off()
 
-plot2 <- hist(qobj)
-ggsave(plot2, filename = paste0(opt$plot_out, "_hist.png"), width = 29.7, height = 21 ,units = c("cm"))
+    png(filename=paste0(opt$plot_out, "_hist.png"), width=29.7, height=21, res=72, units=c("cm"))
+    plot(NULL, xlab="", ylab="", xaxt="n", yaxt="n", xlim=c(0, 10), ylim=c(0, 10))
+    dev.off()
+} else {
+    png(paste0(opt$plot_out, "_overview.png"))
+    plot1 <- plot(qobj)
+    dev.off()
+
+    plot2 <- hist(qobj)
+    ggsave(plot2, filename = paste0(opt$plot_out, "_hist.png"), width=29.7, height=21, units=c("cm"))
+}
 
 print("Done")
