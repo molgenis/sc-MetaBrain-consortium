@@ -2,26 +2,40 @@
 ##### The following arguments need to be changed by the user to indicating file locations on your system #####
 ##############################################################################################################
 inputs:
-  bind_path:
-  singularity_image:
+  bind_path: ### directories that the singularity should have access to (comma seperated).
+  singularity_image: ### path to the singularity image containing the required software.
   mbqtl_singularity_image:
-  gene_annotation: 
-  repo_dir:
-  genotype:
+  mbqtl_jar:
+  repo_dir: ### path to the base directory where the scripts are stored (i.e. parent of `scripts`).
+
+  gene_annotation:
+  genotype: ### bgzipped genotype VCF file.
   co_expr_dir:
   wg0_file_directories:
+
   # cell_type dependent
   top_effects:
     EX:
     MIC:
     OLI:
-  
-settings:
-  chromosomes: 
-  cell_type: 
 
 outputs:
-  output_dir: 
+  output_dir: ### the output directory.
+
+settings:
+  chromosomes: null ### Default is chr1 - chr22
+  cell_type: null ### Default is all cell types present in top_effects
+  alpha: 0.05 ### QTL significance threshold. Default '0.05'.
+  signif_column: "qval" ### The column used to filter significant effects (options: `MetaP`, `BetaAdjustedMetaP`, `BonfAdjustedMetaP`, `BonfBHAdjustedMetaP`, `bh_fdr`, `qval`). Default `qval`.
+
+mbqtl_settings:
+  perm: 10 ### number of permutations. Default: '1000'.
+  maf: 0.05 ### minor allele frequency threshold. Default '0.01'.
+  cr: 0.95 ### call-rate threshold. Default '0.95'.
+  hwep: 0.0001 ### hardy-Weinberg p-value threshold. Default '0.0001'.
+  minobservations: 15 ### require at least this many observations per dataset (i.e. non-NaN genotypes/phenotypes). Default '10'.
+  nrdatasets: 2 ### minimum number of datasets required in meta-analysis. Default '2'.
+  mingenotypecount: 2 ### Minimal number of individuals per genotype group. Default: '0'.
 
 cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
 
@@ -29,71 +43,69 @@ cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ##
 ##### The following arguments are common parameters that may need to be changed depending on the dataset #####
 ##############################################################################################################
 
-get_sample_ids_memory: 12
-get_sample_ids_threads: 1
-get_sample_ids_time: 0
+get_sample_ids_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
+get_sample_ids_threads: 1 ### Number of threads to use
+get_sample_ids_time: 0 ### The time setting to use
 
-create_linkfile_memory: 12
-create_linkfile_threads: 1
-create_linkfile_time: 0
+create_linkfile_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
+create_linkfile_threads: 1 ### Number of threads to use
+create_linkfile_time: 0 ### The time setting to use
 
-get_significant_eqtls_memory: 12
-get_significant_eqtls_threads: 1
-get_significant_eqtls_time: 0
+get_significant_eqtls_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
+get_significant_eqtls_threads: 1 ### Number of threads to use
+get_significant_eqtls_time: 0 ### The time setting to use
 
-get_gene_pairs_memory: 12
-get_gene_pairs_threads: 1
-get_gene_pairs_time: 0
+get_gene_pairs_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
+get_gene_pairs_threads: 1 ### Number of threads to use
+get_gene_pairs_time: 0 ### The time setting to use
 
-create_snp_gene_pair_triplet_memory: 12
-create_snp_gene_pair_triplet_threads: 1
-create_snp_gene_pair_triplet_time: 0
+create_snp_gene_pair_triplet_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
+create_snp_gene_pair_triplet_threads: 1 ### Number of threads to use
+create_snp_gene_pair_triplet_time: 0 ### The time setting to use
 
-create_annotation_memory: 12
-create_annotation_threads: 1
-create_annotation_time: 0
+create_annotation_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
+create_annotation_threads: 1 ### Number of threads to use
+create_annotation_time: 0 ### The time setting to use
 
-filter_genotype_memory: 12
-filter_genotype_threads: 1
-filter_genotype_time: 0
+filter_genotype_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+filter_genotype_threads: 1 ### Number of threads to use
+filter_genotype_time: 0 ### The time setting to use
 
-create_batches_memory: 12
-create_batches_threads: 1
-create_batches_time: 0
+create_batches_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
+create_batches_threads: 1 ### Number of threads to use
+create_batches_time: 0 ### The time setting to use
 
-run_co_eqtl_memory: 12
-run_co_eqtl_threads: 2
-run_co_eqtl_time: 1
+run_co_eqtl_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+run_co_eqtl_threads: 2 ### Number of threads to use
+run_co_eqtl_time: 1 ### The time setting to use
 
-merge_batches_memory: 12
-merge_batches_threads: 1
-merge_batches_time: 0
+merge_batches_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
+merge_batches_threads: 1 ### Number of threads to use
+merge_batches_time: 0 ### The time setting to use
 
-merge_co_eqtls_memory: 12
-merge_co_eqtls_threads: 1
-merge_co_eqtls_time: 0
+merge_co_eqtls_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
+merge_co_eqtls_threads: 1 ### Number of threads to use
+merge_co_eqtls_time: 0 ### The time setting to use
 
-multiple_testing_correction_memory: 12
-multiple_testing_correction_threads: 1
-multiple_testing_correction_time: 0
+multiple_testing_correction_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+multiple_testing_correction_threads: 1 ### Number of threads to use
+multiple_testing_correction_time: 0 ### The time setting to use
 
-get_significant_effects_memory: 12
-get_significant_effects_threads: 1
-get_significant_effects_time: 0
+get_significant_effects_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
+get_significant_effects_threads: 1 ### Number of threads to use
+get_significant_effects_time: 0 ### The time setting to use
 
-run_coeqtl_dump_memory: 12
-run_coeqtl_dump_threads: 2
-run_coeqtl_dump_time: 0
+run_coeqtl_dump_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+run_coeqtl_dump_threads: 2 ### Number of threads to use
+run_coeqtl_dump_time: 0 ### The time setting to use
 
-merge_all_triplets_memory: 12
-merge_all_triplets_threads: 1
-merge_all_triplets_time: 0
+merge_all_triplets_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
+merge_all_triplets_threads: 1 ### Number of threads to use
+merge_all_triplets_time: 0 ### The time setting to use
 
 ############################################################################################################################################
 ##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####
 ############################################################################################################################################
-
-mbqtl_settings:
-  permutations: 10
-  minobservations: 15
-  mingenotypecount: 2
+settings_extra:
+  java_memory_buffer: 1 ### increase job memory to this amount when running java applications to ensure '-Xmx' and '-Xms' do not overflow the max memory.
+  debug: False ### set logger to level DEBUG printing additional information.

@@ -1,7 +1,9 @@
 #!/usr/bin/env python
-import pandas as pd
 import os
-import glob
+
+# Set logger level.
+if config["settings_extra"]["debug"]:
+    logger.set_level("DEBUG")
 
 # Check required input arguments.
 if config["inputs"]["singularity_image"] is None or not os.path.exists(config["inputs"]["singularity_image"]):
@@ -18,8 +20,14 @@ if config["outputs"]["output_dir"] is None:
 if not config["outputs"]["output_dir"].endswith("/"):
     config["outputs"]["output_dir"] += "/"
 
-# Create the output directory.
-os.makedirs(config["outputs"]["output_dir"], exist_ok=True)
+# Define the chromosomes.
+if config["settings"]["chromosomes"] is None:
+  config["settings"]["chromosomes"] = [str(i) for i in range(1, 23)]
+
+# Define the cell types.
+if config["settings"]["cell_type"] is None:
+  config["settings"]["cell_type"] = list(config["inputs"]["top_effects"].keys())
+
 
 def print_wildcards(wildcards):
     out = []
@@ -27,20 +35,9 @@ def print_wildcards(wildcards):
         out.append(key + "=" + value)
     return ", ".join(out)
 
-# def get_batch_number(wildcards):
-#   logger.debug("get_pool_samples({})".format(print_wildcards(wildcards)))
-#   chromosomes = config["settings"]["chromosomes"]
-#   chr_batch = {}
-#   for chr in chromosomes:
-#     out_dir = checkpoints.create_batches.get(cell_type = wildcards.cell_type, chr = chr).output["data_dir"]
-#     pattern = config["outputs"]["output_dir"] + f"chr{chr}-batch-*.txt"
-#     matching_files = glob.glob(pattern)
-#     chr_batch[chr] = len(matching_files)
-#   return chr_batch
-
 def get_batch_number(wildcards):
   logger.debug("get_pool_samples({})".format(print_wildcards(wildcards)))
-  out_dir = checkpoints.create_batches.get(**wildcards)
+  out_dir = checkpoints.create_batches.get(**wildcards).output[0]
   batches = glob_wildcards(os.path.join(out_dir, f"chr{wildcards.chr}" + "-batch-{n_batch}.txt"))
   logger.debug("\tfound batches: '" + ", ".join(batches.n_batch) + "'")
 
@@ -66,7 +63,7 @@ rule get_sample_ids:
   params:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
-    script =  config["inputs"]["repo_dir"] + "scripts/get_sample_ids.py"
+    script = config["inputs"]["repo_dir"] + "scripts/get_sample_ids.py"
   log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/get_sample_ids.{cell_type}.log"
   shell:
     """
@@ -86,14 +83,14 @@ rule create_linkfile:
   params:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
-    script =  config["inputs"]["repo_dir"] + "scripts/create_linkfile.py",
+    script = config["inputs"]["repo_dir"] + "scripts/create_linkfile.py",
     wg0_file_directories = config["inputs"]["wg0_file_directories"]
   log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/create_linkefile.{cell_type}.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} python {params.script} \
       --sample_ids {input} \
-      --wg0_file_directories {params.wg0_file_directories}\
+      --wg0_file_directories {params.wg0_file_directories} \
       --output {output} > {log} 2>&1
     """
 
@@ -102,14 +99,14 @@ rule get_significant_eqtls:
     top_effects = lambda wildcards: config["inputs"]["top_effects"][wildcards.cell_type]
   output: config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}-significant_eqtls.txt"
   resources:
-    mem_per_thread_gb = lambda wildcards, attempt: attempt * config["get_significant_eqtls_threads"],
-    disk_per_thread_gb = lambda wildcards, attempt: attempt * config["get_significant_eqtls_threads"],
+    mem_per_thread_gb = lambda wildcards, attempt: attempt * config["get_significant_eqtls_memory"],
+    disk_per_thread_gb = lambda wildcards, attempt: attempt * config["get_significant_eqtls_memory"],
     time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["get_significant_eqtls_time"]]
   threads: config["get_significant_eqtls_threads"]
   params:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
-    script =  config["inputs"]["repo_dir"] + "scripts/determine_significant_eqtl_snp_gene_pairs.py"
+    script = config["inputs"]["repo_dir"] + "scripts/determine_significant_eqtl_snp_gene_pairs.py"
   log: config["outputs"]["output_dir"] + "log/{cell_type}/get_significant_eqtls.{cell_type}.log"
   shell:
     """
@@ -127,7 +124,7 @@ rule get_gene_pairs:
   params:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
-    script =  config["inputs"]["repo_dir"] + "scripts/get_gene_pairs.py",
+    script = config["inputs"]["repo_dir"] + "scripts/get_gene_pairs.py",
     out = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/"
   log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/get_gene_pairs.{cell_type}.chr.{chr}.log"
   shell:
@@ -217,7 +214,7 @@ checkpoint create_batches:
   input:
     correlation = config["inputs"]["co_expr_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz",
     linkfile = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/linkfile.txt",
-    genotype = config["inputs"]["genotype"],
+    filtered_genotype = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}.eqtlsnps.bgz.vcf.gz",
     gene_pairs = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepairs.txt",
     annotation = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/annotation.txt.gz",
     triplet = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test.txt",
@@ -226,19 +223,18 @@ checkpoint create_batches:
     data_dir = directory(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/batches/"),
     done = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/batches/chr{chr}-batches.done"
     # batches = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/batches/chr{chr}-batch-{n}.txt
-  params:
-    bind = config["inputs"]["bind_path"],
-    sif = config["inputs"]["singularity_image"],
-    script =  config["inputs"]["repo_dir"] + "scripts/createBatches.py",
-    batch_prefix = "{cell_type}-chr{chr}",
-    n_genes = 5000,
-    job_template = config["inputs"]["repo_dir"] + "scripts/job_template.sh",
-    out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/",
   resources:
     mem_per_thread_gb = lambda wildcards, attempt: attempt * config["create_batches_memory"],
     disk_per_thread_gb = lambda wildcards, attempt: attempt * config["create_batches_memory"],
     time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["create_batches_time"]]
   threads: config["create_batches_threads"]
+  params:
+    bind = config["inputs"]["bind_path"],
+    sif = config["inputs"]["singularity_image"],
+    script =  config["inputs"]["repo_dir"] + "scripts/createBatches.py",
+    n_genes = 5000,
+    job_template = config["inputs"]["repo_dir"] + "scripts/job_template.sh",
+    out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/",
   log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/create_batches.{cell_type}.log"
   shell:
     """
@@ -246,7 +242,7 @@ checkpoint create_batches:
     {wildcards.cell_type}-chr{wildcards.chr} \
     {input.correlation} \
     {input.linkfile} \
-    {input.genotype} \
+    {input.filtered_genotype} \
     {input.gene_pairs} \
     {input.annotation} \
     {input.triplet} \
@@ -268,50 +264,57 @@ rule run_co_eqtl:
     triplet = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test.txt",
     triplet_group = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test_groups.txt"
   output:
+    log = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/output/chr{chr}-batch-{n_batch}-log.txt.gz",
     finished = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/output/chr{chr}-batch-{n_batch}-TopEffects.finished",
     coeqtls = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/output/chr{chr}-batch-{n_batch}-TopEffects.txt"
   resources:
+    java_mem_gb = lambda wildcards, attempt: attempt * config["run_co_eqtl_memory"] * config["run_co_eqtl_threads"] - config["settings_extra"]["java_memory_buffer"],
     mem_per_thread_gb = lambda wildcards, attempt: attempt * config["run_co_eqtl_memory"],
     disk_per_thread_gb = lambda wildcards, attempt: attempt * config["run_co_eqtl_memory"],
     time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["run_co_eqtl_time"]]
   threads: config["run_co_eqtl_threads"]
-  log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/run_co_eqtl.{cell_type}.chr.{chr}.batch.{n_batch}.log"
   params:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
-    memory = "3g",
-    threads = 2,
-    permutations = config["mbqtl_settings"]["permutations"],
+    java_threads = config["run_co_eqtl_threads"] * 2,
+    jar = config["inputs"]["mbqtl_jar"],
+    permutations = config["mbqtl_settings"]["perm"],
+    maf = config["mbqtl_settings"]["maf"],
+    cr = config["mbqtl_settings"]["cr"],
+    hwep = config["mbqtl_settings"]["hwep"],
     minobservations = config["mbqtl_settings"]["minobservations"],
     mingenotypecount = config["mbqtl_settings"]["mingenotypecount"],
-    jar = config["inputs"]["repo_dir"] + "scripts/MbQTL-1.5.1-SNAPSHOT-jar-with-dependencies.jar",
     out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/output/chr{chr}-batch-{n_batch}"
+  log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/run_co_eqtl.{cell_type}.chr.{chr}.batch.{n_batch}.log"
   shell:
     """
-    singularity exec --bind {params.bind} {params.sif} java -Xmx1500m \
-      -Djava.util.concurrent.ForkJoinPool.common.parallelism={params.threads} \
-      -Dmaximum.threads={params.threads} \
-      -Dthread.pool.size={params.threads} \
+    singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.java_mem_gb}g -Xms{resources.java_mem_gb}g \
+      -Djava.util.concurrent.ForkJoinPool.common.parallelism={params.java_threads} \
+      -Dmaximum.threads={params.java_threads} -Dthread.pool.size={params.java_threads} \
       -jar {params.jar} \
-      -m mbqtl \
-      -a {input.annotation} \
-      -e {input.correlation} \
-      -g {input.linkfile} \
-      -v {input.filtered_genotype} \
+      --mode mbqtl \
+      --annotation {input.annotation} \
+      --exp {input.correlation} \
+      --gte {input.linkfile} \
+      --vcf {input.filtered_genotype} \
       --chr {wildcards.chr} \
       --perm {params.permutations} \
+      --maf {params.maf} \
+      --cr {params.cr} \
+      --hwep {params.hwep} \
       --minobservations {params.minobservations} \
-      -gl {input.batch} \
-      -o {params.out} \
+      --genelimit {input.batch} \
+      --out {params.out} \
       --expgroups {input.triplet_group} \
       --mingenotypecount {params.mingenotypecount} \
       --fisherzmeta \
-      -sgl {input.triplet} > {log} 2>&1
+      --snpgenelimit {input.triplet} > {log} 2>&1
     """
 
 rule merge_batches:
-  input: 
-    coeqtls = lambda wildcards: expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/output/chr{chr}-batch-{n_batch}-TopEffects.txt",n_batch = get_batch_number(wildcards),  allow_missing=True)
+  input:
+    done = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/batches/chr{chr}-batches.done",
+    coeqtls = lambda wildcards: expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/output/chr{chr}-batch-{n_batch}-TopEffects.txt", n_batch=get_batch_number(wildcards), allow_missing=True)
   output:
     merged_batches = temp(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}-chr{chr}-TopEffects.txt")
   resources:
@@ -323,7 +326,7 @@ rule merge_batches:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
     script = config["inputs"]["repo_dir"] + "scripts/mergeBatches.py",
-  log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/{cell_type}.chr{chr}.merge_batches.log"
+  log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/merge_batches.{cell_type}.chr{chr}.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} python {params.script} \
@@ -331,16 +334,9 @@ rule merge_batches:
       --output {output.merged_batches} > {log} 2>&1
     """
 
-rule merge_coeqtls:
-  input: 
-    sample_ids = expand(config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/sample_id.txt", chr = config["settings"]["chromosomes"], allow_missing = True),
-    linkfile = expand(config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/linkfile.txt",chr = config["settings"]["chromosomes"], allow_missing = True),
-    gene_pairs = expand(config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepairs.txt",chr = config["settings"]["chromosomes"], allow_missing = True),
-    triplet = expand(config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test.txt",chr = config["settings"]["chromosomes"], allow_missing = True),
-    triplet_group = expand(config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test_groups.txt",chr = config["settings"]["chromosomes"], allow_missing = True),
-    annotation = expand(config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/annotation.txt.gz",chr = config["settings"]["chromosomes"], allow_missing = True),
-    batches = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/batches/chr{chr}-batches.done",chr = config["settings"]["chromosomes"], allow_missing = True),
-    merged_batches = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}-chr{chr}-TopEffects.txt", chr = config["settings"]["chromosomes"], allow_missing = True)
+rule merge_co_eqtls:
+  input:
+    merged_batches = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/{cell_type}-chr{chr}-TopEffects.txt", chr=config["settings"]["chromosomes"], allow_missing=True)
   output:
     coeqtls = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffects.txt"
   resources:
@@ -352,7 +348,7 @@ rule merge_coeqtls:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
     script = config["inputs"]["repo_dir"] + "scripts/mergeBatches.py",
-  log: config["outputs"]["output_dir"] + "log/{cell_type}/{cell_type}.merge_co_eqtls.log"
+  log: config["outputs"]["output_dir"] + "log/{cell_type}/merge_co_eqtls.{cell_type}.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} python {params.script} \
@@ -378,32 +374,32 @@ rule multiple_testing_correction:
     script = config["inputs"]["repo_dir"] + "scripts/multiple_testing_correction.R",
     out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffects",
     plot_out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/plots/{cell_type}-TopEffects"
-  log: config["outputs"]["output_dir"] + "log/{cell_type}/{cell_type}.multiple_testing_correction.log"
+  log: config["outputs"]["output_dir"] + "log/{cell_type}/multiple_testing_correction.{cell_type}.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} Rscript {params.script} \
-    --input {input.coeqtls} \
-    --nom_pvalue MetaP \
-    --n_tests NrTestedSNPs \
-    --beta_adj_pvalue BetaAdjustedMetaP \
-    --beta_dist_a BetaDistAlpha \
-    --beta_dist_b BetaDistBeta \
-    --bonf_pvalue_col BonfAdjustedMetaP \
-    --bonf_bh_fdr_col BonfBHAdjustedMetaP \
-    --bh_fdr_col bh_fdr \
-    --qvalue_col qval \
-    --nom_thresh_col PvalueNominalThreshold \
-    --alpha 0.05 \
-    --data_out {params.out} \
-    --plot_out {params.plot_out} \
-    --suffix 'withQval'
+      --input {input.coeqtls} \
+      --nom_pvalue MetaP \
+      --n_tests NrTestedSNPs \
+      --beta_adj_pvalue BetaAdjustedMetaP \
+      --beta_dist_a BetaDistAlpha \
+      --beta_dist_b BetaDistBeta \
+      --bonf_pvalue_col BonfAdjustedMetaP \
+      --bonf_bh_fdr_col BonfBHAdjustedMetaP \
+      --bh_fdr_col bh_fdr \
+      --qvalue_col qval \
+      --nom_thresh_col PvalueNominalThreshold \
+      --alpha 0.05 \
+      --data_out {params.out} \
+      --plot_out {params.plot_out} \
+      --suffix 'withQval' > {log} 2>&1
     """
 
 rule get_significant_effects:
   input:
     coeqtl = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffectswithQval.txt",
-    # batches = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/batches/chr{chr}-batches.done",chr = config["settings"]["chromosomes"], allow_missing = True),
-    triplet = expand(config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test.txt",chr = config["settings"]["chromosomes"], allow_missing = True)
+    # batches = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/batches/chr{chr}-batches.done", chr=config["settings"]["chromosomes"], allow_missing=True),
+    triplet = expand(config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test.txt", chr=config["settings"]["chromosomes"], allow_missing=True)
   output:
     significant_effects = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/EX-TopEffectswithQval-significant.txt",
     genepairs = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/genepairs_to_dump.txt",
@@ -419,17 +415,17 @@ rule get_significant_effects:
     script = config["inputs"]["repo_dir"] + "scripts/get_significant_effects.py",
     out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/",
     batches = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/"
-  log: config["outputs"]["output_dir"] + "log/{cell_type}/{cell_type}.get_significant_effects.log"
+  log: config["outputs"]["output_dir"] + "log/{cell_type}/get_significant_effects.{cell_type}.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} python {params.script} \
       --input {input.coeqtl} \
       --out {params.out} \
       --batches {params.batches} \
-      --snp_genepair_triplets {input.triplet}
+      --snp_genepair_triplets {input.triplet} > {log} 2>&1
     """
 
-rule run_coeqtl_all_triplets:
+rule run_coeqtl_dump:
   input:
     annotation = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/annotation.txt.gz",
     correlation = config["inputs"]["co_expr_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz",
@@ -439,53 +435,59 @@ rule run_coeqtl_all_triplets:
     triplet_group = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test_groups.txt",
     triplet = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/snp_genepairs_to_dump.txt"
   output:
+    log = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-log.txt.gz",
     finished = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-TopEffects.finished",
     coeqtls = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-TopEffects.txt"
   resources:
+    java_mem_gb = lambda wildcards, attempt: attempt * config["run_coeqtl_dump_memory"] * config["run_coeqtl_dump_threads"] - config["settings_extra"]["java_memory_buffer"],
     mem_per_thread_gb = lambda wildcards, attempt: attempt * config["run_coeqtl_dump_memory"],
     disk_per_thread_gb = lambda wildcards, attempt: attempt * config["run_coeqtl_dump_memory"],
     time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["run_coeqtl_dump_time"]]
   threads: config["run_coeqtl_dump_threads"]
-  log: 
   params:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
-    threads = 2,
-    jar = config["inputs"]["repo_dir"] + "scripts/MbQTL-1.5.1-SNAPSHOT-jar-with-dependencies.jar",
+    java_threads = config["run_coeqtl_dump_threads"] * 2,
+    jar = config["inputs"]["mbqtl_jar"],
     permutations = 0,
+    maf = config["mbqtl_settings"]["maf"],
+    cr = config["mbqtl_settings"]["cr"],
+    hwep = config["mbqtl_settings"]["hwep"],
     minobservations = config["mbqtl_settings"]["minobservations"],
     mingenotypecount = config["mbqtl_settings"]["mingenotypecount"],
     out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump"
-  log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/{cell_type}.chr{chr}.run_coeqtl_dump.log"
+  log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/run_coeqtl_dump.{cell_type}.chr{chr}.log"
   shell:
     """
     mkdir -p $(dirname {params.out})
-    singularity exec --bind {params.bind} {params.sif} java -Xmx4g \
-      -Djava.util.concurrent.ForkJoinPool.common.parallelism={params.threads} \
-      -Dmaximum.threads={params.threads} \
-      -Dthread.pool.size={params.threads} \
+    singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.java_mem_gb}g -Xms{resources.java_mem_gb}g \
+      -Djava.util.concurrent.ForkJoinPool.common.parallelism={params.java_threads} \
+      -Dmaximum.threads={params.java_threads} -Dthread.pool.size={params.java_threads} \
       -jar {params.jar} \
-      -m mbqtl \
-      -a {input.annotation} \
-      -e {input.correlation} \
-      -g {input.linkfile} \
-      -v {input.filtered_genotype} \
+      --mode mbqtl \
+      --annotation {input.annotation} \
+      --exp {input.correlation} \
+      --gte {input.linkfile} \
+      --vcf {input.filtered_genotype} \
       --chr {wildcards.chr} \
       --perm {params.permutations} \
+      --maf {params.maf} \
+      --cr {params.cr} \
+      --hwep {params.hwep} \
       --minobservations {params.minobservations} \
-      -gl {input.gene_pairs} \
-      -o {params.out} \
+      --genelimit {input.gene_pairs} \
+      --out {params.out} \
       --expgroups {input.triplet_group} \
       --mingenotypecount {params.mingenotypecount} \
       --fisherzmeta \
       --outputall \
-      -sgl {input.triplet}
+      --snpgenelimit {input.triplet} > {log} 2>&1
     """
 
-rule merge_triplets:
+rule merge_all_triplets:
   input: 
     top_effects = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffectswithQval.txt",
-    coeqtls = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-TopEffects.txt",chr = config["settings"]["chromosomes"], allow_missing=True)
+    coeqtls = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-TopEffects.txt", chr=config["settings"]["chromosomes"], allow_missing=True)
   output: 
     merged = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffects-allsignificantTriplets.txt"
   resources:
@@ -497,7 +499,7 @@ rule merge_triplets:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
     script = config["inputs"]["repo_dir"] + "scripts/filter_significant_triplets.py",
-  log: config["outputs"]["output_dir"] + "log/{cell_type}/{cell_type}.merge_all_triplets.log"
+  log: config["outputs"]["output_dir"] + "log/{cell_type}/merge_all_triplets.{cell_type}.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} python {params.script} \
