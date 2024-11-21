@@ -138,14 +138,14 @@ rule create_annotation:
   params:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
-    script =  config["inputs"]["repo_dir"] + "scripts/createAnnotation.py"
+    script =  config["inputs"]["repo_dir"] + "scripts/create_annotation.py"
   log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/create_annotation.{cell_type}.chr.{chr}.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} python {params.script} \
-      {input.gene_pairs} \
-      {input.gene_annotation} \
-      {output.annotation} > {log} 2>&1
+      --gene_pairs {input.gene_pairs} \
+      --gene_annotation {input.gene_annotation} \
+      --output {output.annotation} > {log} 2>&1
     """
 
 rule filter_genotype:
