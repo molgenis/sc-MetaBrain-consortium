@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# Author: A. Kooijmans, H.J. Westra, and M. Vochteloo
+
 import argparse
 import os
 import sys

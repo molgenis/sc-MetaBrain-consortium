@@ -163,7 +163,7 @@ rule filter_genotype:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
     script =  config["inputs"]["repo_dir"] + "scripts/filter_genotype.py ",
-    out = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}."
+    out = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/{cell_type}."
   log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/filter_genotype.{cell_type}.log"
   shell:
     """
