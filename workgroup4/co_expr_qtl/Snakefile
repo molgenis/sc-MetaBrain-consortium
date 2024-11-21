@@ -68,29 +68,12 @@ rule all:
     merged_coeqtls = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffects-allsignificantTriplets.txt", cell_type=config["settings"]["cell_type"])
     # merged_coeqtls = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffects.txt", cell_type=config["settings"]["cell_type"])
 
-rule get_sample_ids:
-  input: config["inputs"]["co_expr_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz"
-  output: config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/sample_id.txt"
-  resources:
-    mem_per_thread_gb = lambda wildcards, attempt: attempt * config["get_sample_ids_memory"],
-    disk_per_thread_gb = lambda wildcards, attempt: attempt * config["get_sample_ids_memory"],
-    time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["get_sample_ids_time"]]
-  threads: config["get_sample_ids_threads"]
-  params:
-    bind = config["inputs"]["bind_path"],
-    sif = config["inputs"]["singularity_image"],
-    script = config["inputs"]["repo_dir"] + "scripts/get_sample_ids.py"
-  log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/get_sample_ids.{cell_type}.log"
-  shell:
-    """
-    singularity exec --bind {params.bind} {params.sif} python {params.script} \
-      --input {input} \
-      --output {output} > {log} 2>&1
-    """
-
 rule create_linkfile:
-  input: config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/sample_id.txt"
-  output: config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/linkfile.txt"
+  input: 
+    corr = config["inputs"]["co_expr_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz",
+    wg0 = config["inputs"]["wg0_file_directories"]
+  output: 
+    linkfile = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/linkfile.txt"
   resources:
     mem_per_thread_gb = lambda wildcards, attempt: attempt * config["create_linkfile_memory"],
     disk_per_thread_gb = lambda wildcards, attempt: attempt * config["create_linkfile_memory"],
@@ -100,14 +83,13 @@ rule create_linkfile:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
     script = config["inputs"]["repo_dir"] + "scripts/create_linkfile.py",
-    wg0_file_directories = config["inputs"]["wg0_file_directories"]
   log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/create_linkefile.{cell_type}.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} python {params.script} \
-      --sample_ids {input} \
-      --wg0_file_directories {params.wg0_file_directories} \
-      --output {output} > {log} 2>&1
+      --corr {input.corr} \
+      --wg0 {input.wg0} \
+      --output {output.linkfile} > {log} 2>&1
     """
 
 rule get_significant_eqtls:
