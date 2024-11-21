@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Author: M. Vochteloo
+# Author: M. Vochteloo and A. Kooijmans
 
 import argparse
 import gzip
@@ -55,7 +55,6 @@ if total_n == 0:
 avg_read_count = total_sum / total_n
 
 print("Saving file ...")
-
 with gzopen(args.outfile, 'w') as f:
     json.dump({"avg_read_count": avg_read_count}, f, indent=4)
 f.close()
