@@ -196,7 +196,7 @@ checkpoint create_batches:
   params:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
-    script =  config["inputs"]["repo_dir"] + "scripts/createBatches.py",
+    script =  config["inputs"]["repo_dir"] + "scripts/create_batches.py",
     n_genes = config["settings"]["n_genes"],
     out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/",
   log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/create_batches.{cell_type}.log"
@@ -284,7 +284,7 @@ rule merge_batches:
   params:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
-    script = config["inputs"]["repo_dir"] + "scripts/mergeBatches.py",
+    script = config["inputs"]["repo_dir"] + "scripts/merge_batches.py",
   log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/merge_batches.{cell_type}.chr{chr}.log"
   shell:
     """
@@ -306,7 +306,7 @@ rule merge_co_eqtls:
   params:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
-    script = config["inputs"]["repo_dir"] + "scripts/mergeBatches.py",
+    script = config["inputs"]["repo_dir"] + "scripts/merge_batches.py",
   log: config["outputs"]["output_dir"] + "log/{cell_type}/merge_co_eqtls.{cell_type}.log"
   shell:
     """
