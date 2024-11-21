@@ -15,10 +15,26 @@ if config["inputs"]["repo_dir"] is None or not os.path.exists(config["inputs"]["
 if config["outputs"]["output_dir"] is None:
     logger.error("Critical, the output_dir cannot be empty.\n\nExiting.")
     exit("MissingOutputDir")
+if config["inputs"]["gene_annotation"] is None or not os.path.exists(config["inputs"]["repo_dir"]):
+    logger.error("Critical, gene_annotation does not exist.\n\nExiting.")
+    exit("MissingGeneAnnotation")
+if config["inputs"]["genotype"] is None or not os.path.exists(config["inputs"]["repo_dir"]):
+    logger.error("Critical, genotype does not exist.\n\nExiting.")
+    exit("MissingGenotype")
+if config["inputs"]["co_expr_dir"] is None or not os.path.exists(config["inputs"]["repo_dir"]):
+    logger.error("Critical, co_expr_dir does not exist.\n\nExiting.")
+    exit("MissingCoExprDir")
+if config["inputs"]["wg0_file_directories"] is None or not os.path.exists(config["inputs"]["repo_dir"]):
+    logger.error("Critical, wg0_file_directories does not exist.\n\nExiting.")
+    exit("MissingWg0FileDirectories")
 
 # Add trailing /.
 if not config["outputs"]["output_dir"].endswith("/"):
     config["outputs"]["output_dir"] += "/"
+if not config["inputs"]["repo_dir"].endswith("/"):
+    config["inputs"]["repo_dir"] += "/"
+if not config["inputs"]["co_expr_dir"].endswith("/"):
+    config["inputs"]["co_expr_dir"] += "/"
 
 # Define the chromosomes.
 if config["settings"]["chromosomes"] is None:
