@@ -395,9 +395,10 @@ rule run_coeqtl_dump:
     triplet_group = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepair_egene_groups.txt",
     triplet = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/snp_genepairs_to_dump.txt"
   output:
-    log = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-log.txt.gz",
-    finished = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-TopEffects.finished",
-    coeqtls = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-TopEffects.txt"
+    # log = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-log.txt.gz",
+    # finished = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-TopEffects.finished",
+    # coeqtls = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-TopEffects.txt"
+    done = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-TopEffects.done"
   resources:
     java_mem_gb = lambda wildcards, attempt: attempt * config["run_coeqtl_dump_memory"] * config["run_coeqtl_dump_threads"] - config["settings_extra"]["java_memory_buffer"],
     mem_per_thread_gb = lambda wildcards, attempt: attempt * config["run_coeqtl_dump_memory"],
@@ -442,12 +443,14 @@ rule run_coeqtl_dump:
       --fisherzmeta \
       --outputall \
       --snpgenelimit {input.triplet} > {log} 2>&1
+    singularity exec --bind {params.bind} {params.sif} touch {output.done}
     """
 
 rule merge_all_triplets:
   input: 
     top_effects = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffectswithQval.txt",
-    coeqtls = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-TopEffects.txt", chr=config["settings"]["chromosomes"], allow_missing=True)
+    done = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-TopEffects.done", chr=config["settings"]["chromosomes"], allow_missing=True)
+    # coeqtls = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-TopEffects.txt", chr=config["settings"]["chromosomes"], allow_missing=True)
   output: 
     merged = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffects-allsignificantTriplets.txt"
   resources:
@@ -459,11 +462,16 @@ rule merge_all_triplets:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
     script = config["inputs"]["repo_dir"] + "scripts/filter_significant_triplets.py",
+    signif_column = config["settings"]["signif_column_dump"],
+    egene_column = config["settings"]["egene_column"],
+    indir = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/"
   log: config["outputs"]["output_dir"] + "log/{cell_type}/merge_all_triplets.{cell_type}.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} python {params.script} \
       --significant_egenes {input.top_effects} \
-      --input {input.coeqtls} \
+      --signif_column {params.signif_column} \
+      --egene_column {params.egene_column} \
+      --indir {params.indir} \
       --output {output.merged} > {log} 2>&1
     """

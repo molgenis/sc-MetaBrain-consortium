@@ -26,7 +26,10 @@ settings:
   chromosomes: null ### Default is chr1 - chr22
   cell_type: null ### Default is all cell types present in top_effects
   alpha: 0.05 ### QTL significance threshold. Default '0.05'.
+  egene_column: "Group" ### The column containing the eGene 
   signif_column: "qval" ### The column used to filter significant effects (options: `MetaP`, `BetaAdjustedMetaP`, `BonfAdjustedMetaP`, `BonfBHAdjustedMetaP`, `bh_fdr`, `qval`). Default `qval`.
+  signif_column_dump: "PvalueNominalThreshold" ### The column used to filter significant effects in the co-eQTL dump (options: `MetaP`, `BetaAdjustedMetaP`, `BonfAdjustedMetaP`, `BonfBHAdjustedMetaP`, `bh_fdr`, `qval`, 'PvalueNominalThreshold'). Default `PvalueNominalThreshold`.
+
   n_genes: 1000 ### Number of genes to limit batches to
 
 mbqtl_settings:
