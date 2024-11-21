@@ -150,10 +150,10 @@ rule create_annotation:
 
 rule filter_genotype:
   input:
-    top_effects = lambda wildcards: config["inputs"]["top_effects"][wildcards.cell_type],
+    triplet = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test.txt",
     genotype = config["inputs"]["genotype"]
   output:
-    filtered_genotype = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}.eqtlsnps.bgz.vcf.gz"
+    filtered_genotype = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/{cell_type}.eqtlsnps.bgz.vcf.gz"
   resources:
     mem_per_thread_gb = lambda wildcards, attempt: attempt * config["filter_genotype_memory"],
     disk_per_thread_gb = lambda wildcards, attempt: attempt * config["filter_genotype_memory"],
@@ -162,24 +162,27 @@ rule filter_genotype:
   params:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
-    script_dir =  config["inputs"]["repo_dir"] + "scripts/",
+    script =  config["inputs"]["repo_dir"] + "scripts/filter_genotype.py ",
     out = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}."
-  log: config["outputs"]["output_dir"] + "log/{cell_type}/filter_genotype.{cell_type}.log"
+  log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/filter_genotype.{cell_type}.log"
   shell:
     """
-    singularity exec --bind {params.bind} {params.sif} python {params.script_dir}filter_genotype.py \
-      --top_effects {input.top_effects} \
+    singularity exec --bind {params.bind} {params.sif} python {params.script} \
+      --snp_genepair {input.triplet} \
       --genotype {input.genotype} \
       --output {params.out}eqtlsnps.vcf.gz > {log} 2>&1
 
-    bash {params.script_dir}compress_vcf.sh {params.out}eqtlsnps.vcf.gz {output.filtered_genotype}
+    ml HTSlib/1.19.1-GCCcore-11.3.0 
+    zcat {params.out}eqtlsnps.vcf.gz | bgzip -c > {output.filtered_genotype}
+    tabix -p vcf {output.filtered_genotype}
+    rm {params.out}eqtlsnps.vcf.gz
     """
 
 checkpoint create_batches:
   input:
     correlation = config["inputs"]["co_expr_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz",
     linkfile = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/linkfile.txt",
-    filtered_genotype = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}.eqtlsnps.bgz.vcf.gz",
+    filtered_genotype = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/{cell_type}.eqtlsnps.bgz.vcf.gz",
     gene_pairs = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepairs.txt",
     annotation = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/annotation.txt.gz",
     triplet = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test.txt",
@@ -223,7 +226,7 @@ rule run_co_eqtl:
     batch = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/batches/chr{chr}-batch-{n_batch}.txt",
     correlation = config["inputs"]["co_expr_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz",
     linkfile = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/linkfile.txt",
-    filtered_genotype = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}.eqtlsnps.bgz.vcf.gz",
+    filtered_genotype = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/{cell_type}.eqtlsnps.bgz.vcf.gz",
     gene_pairs = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepairs.txt",
     annotation = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/annotation.txt.gz",
     triplet = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test.txt",
@@ -395,7 +398,7 @@ rule run_coeqtl_dump:
     annotation = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/annotation.txt.gz",
     correlation = config["inputs"]["co_expr_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz",
     linkfile = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/linkfile.txt",
-    filtered_genotype = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}.eqtlsnps.bgz.vcf.gz",
+    filtered_genotype = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/{cell_type}.eqtlsnps.bgz.vcf.gz",
     gene_pairs = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/genepairs_to_dump.txt",
     triplet_group = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepair_egene_groups.txt",
     triplet = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/snp_genepairs_to_dump.txt"
