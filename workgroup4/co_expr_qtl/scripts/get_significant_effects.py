@@ -9,6 +9,8 @@ parser = argparse.ArgumentParser(description="")
 parser.add_argument("--input", required=True, type=str,  help="")
 parser.add_argument("--out", required=True, type=str,  help="")
 parser.add_argument("--batches", required=True, type=str,  help="")
+parser.add_argument("--signif_column", default = "qval", type=str,  help="")
+parser.add_argument("--alpha", default = "qval", type=str,  help="")
 parser.add_argument("--snp_genepair_triplets", required=True, nargs="*", type=str,  help="")
 
 args = parser.parse_args()
@@ -25,15 +27,14 @@ def gzopen(file, mode="r"):
         return open(file, mode)
 
 # Read in coeqtl results
-print("Filtering significant effects")
+print(f"Filtering significant effects using a threshold of {args.signif_column} < {args.alpha}")
 df = pd.read_csv(args.input,sep="\t")
-df = df[df["qval"]<0.05]
-df = df.sort_values(by='qval', ascending=True)
-df.to_csv(f"{args.out}EX-TopEffectswithQval-significant.txt",index=False,sep="\t")
-
+df = df[df[args.signif_column] < args.alpha]
+df = df.sort_values(by = args.signif_column, ascending=True)
+df.to_csv(f"{args.out}EX-TopEffects-significant.txt",index=False,sep="\t")
 
 print("Getting significant groups")
-fin = gzopen(f"{args.out}EX-TopEffectswithQval-significant.txt",'r')
+fin = gzopen(f"{args.out}EX-TopEffects-significant.txt",'r')
 fin.readline()
 significant = set()
 for line in fin:

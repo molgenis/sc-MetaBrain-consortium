@@ -319,7 +319,7 @@ rule multiple_testing_correction:
   input:
     coeqtls = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffects.txt"
   output:
-    qval = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffectswithQval.txt",
+    effects = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffect-multiple_testing_correction.txt",
     hist = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/plots/{cell_type}-TopEffects_hist.png",
     overview = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/plots/{cell_type}-TopEffects_overview.png"
   resources:
@@ -334,6 +334,7 @@ rule multiple_testing_correction:
     alpha = config["mbqtl_settings"]["alpha"],
     out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffects",
     plot_out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/plots/{cell_type}-TopEffects"
+    prefix = "-multiple_testing_correction"
   log: config["outputs"]["output_dir"] + "log/{cell_type}/multiple_testing_correction.{cell_type}.log"
   shell:
     """
@@ -352,16 +353,16 @@ rule multiple_testing_correction:
       --alpha {params.alpha} \
       --data_out {params.out} \
       --plot_out {params.plot_out} \
-      --suffix 'withQval' > {log} 2>&1
+      --suffix {params.prefix} > {log} 2>&1
     """
 
 rule get_significant_effects:
   input:
-    coeqtl = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffectswithQval.txt",
+    coeqtl = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffect-multiple_testing_correction.txt",
     # batches = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/batches/chr{chr}-batches.done", chr=config["settings"]["chromosomes"], allow_missing=True),
     triplet = expand(config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test.txt", chr=config["settings"]["chromosomes"], allow_missing=True)
   output:
-    significant_effects = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/EX-TopEffectswithQval-significant.txt",
+    significant_effects = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/EX-TopEffects-significant.txt",
     genepairs = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/genepairs_to_dump.txt",
     snp_genepairs = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/snp_genepairs_to_dump.txt"
   resources:
@@ -373,6 +374,7 @@ rule get_significant_effects:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
     script = config["inputs"]["repo_dir"] + "scripts/get_significant_effects.py",
+    signif_column = config["settings"]["signif_column"],
     out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/",
     batches = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/"
   log: config["outputs"]["output_dir"] + "log/{cell_type}/get_significant_effects.{cell_type}.log"
@@ -381,6 +383,7 @@ rule get_significant_effects:
     singularity exec --bind {params.bind} {params.sif} python {params.script} \
       --input {input.coeqtl} \
       --out {params.out} \
+      --signif_column {params.signif_column}
       --batches {params.batches} \
       --snp_genepair_triplets {input.triplet} > {log} 2>&1
     """
@@ -448,7 +451,7 @@ rule run_coeqtl_dump:
 
 rule merge_all_triplets:
   input: 
-    top_effects = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffectswithQval.txt",
+    top_effects = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffects-significant.txt",
     done = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-TopEffects.done", chr=config["settings"]["chromosomes"], allow_missing=True)
     # coeqtls = expand(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-TopEffects.txt", chr=config["settings"]["chromosomes"], allow_missing=True)
   output: 
