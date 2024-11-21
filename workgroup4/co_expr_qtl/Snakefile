@@ -92,51 +92,14 @@ rule create_linkfile:
       --output {output.linkfile} > {log} 2>&1
     """
 
-rule get_significant_eqtls:
-  input:
-    top_effects = lambda wildcards: config["inputs"]["top_effects"][wildcards.cell_type]
-  output: config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}-significant_eqtls.txt"
-  resources:
-    mem_per_thread_gb = lambda wildcards, attempt: attempt * config["get_significant_eqtls_memory"],
-    disk_per_thread_gb = lambda wildcards, attempt: attempt * config["get_significant_eqtls_memory"],
-    time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["get_significant_eqtls_time"]]
-  threads: config["get_significant_eqtls_threads"]
-  params:
-    bind = config["inputs"]["bind_path"],
-    sif = config["inputs"]["singularity_image"],
-    script = config["inputs"]["repo_dir"] + "scripts/determine_significant_eqtl_snp_gene_pairs.py"
-  log: config["outputs"]["output_dir"] + "log/{cell_type}/get_significant_eqtls.{cell_type}.log"
-  shell:
-    """
-    singularity exec --bind {params.bind} {params.sif} python {params.script} {input.top_effects} {output} > {log} 2>&1
-    """
-
-rule get_gene_pairs:
-  input: config["inputs"]["co_expr_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz"
-  output: config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepairs.txt"
-  resources:
-    mem_per_thread_gb = lambda wildcards, attempt: attempt * config["get_gene_pairs_memory"],
-    disk_per_thread_gb = lambda wildcards, attempt: attempt * config["get_gene_pairs_memory"],
-    time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["get_gene_pairs_time"]]
-  threads: config["get_gene_pairs_threads"]
-  params:
-    bind = config["inputs"]["bind_path"],
-    sif = config["inputs"]["singularity_image"],
-    script = config["inputs"]["repo_dir"] + "scripts/get_gene_pairs.py",
-    out = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/"
-  log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/get_gene_pairs.{cell_type}.chr.{chr}.log"
-  shell:
-    """
-    singularity exec --bind {params.bind} {params.sif} {params.script} --input {input} --out {params.out} > {log} 2>&1
-    """
-
 rule create_snp_gene_pair_triplet:
   input: 
-    significant_eqtls = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}-significant_eqtls.txt",
-    gene_pairs = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepairs.txt"
+    top_effects = lambda wildcards: config["inputs"]["top_effects"][wildcards.cell_type],
+    corr = config["inputs"]["co_expr_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz"
   output: 
+    gene_pair = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepairs.txt",
     triplet = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test.txt",
-    triplet_group = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test_groups.txt"
+    group = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepair_egene_groups.txt"
   resources:
     mem_per_thread_gb = lambda wildcards, attempt: attempt * config["create_snp_gene_pair_triplet_memory"],
     disk_per_thread_gb = lambda wildcards, attempt: attempt * config["create_snp_gene_pair_triplet_memory"],
@@ -145,16 +108,20 @@ rule create_snp_gene_pair_triplet:
   params:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
-    script =  config["inputs"]["repo_dir"] + "scripts/create_snp_genepair_triplet_list.py"
+    script =  config["inputs"]["repo_dir"] + "scripts/get_snp_genepair_triplets.py",
+    signif_column = config["settings"]["signif_column"],
+    alpha = config["settings"]["alpha"],
+    out = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/"
   log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/create_snp_gene_pair_triplet.{cell_type}.chr.{chr}.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} python {params.script} \
-      {input.significant_eqtls} \
-      {wildcards.chr} \
-      {input.gene_pairs} \
-      {output.triplet} \
-      {output.triplet_group} > {log} 2>&1
+      --chr {wildcards.chr} \
+      --top_effects {input.top_effects} \
+      --corr {input.corr} \
+      --signif_column {params.signif_column} \
+      --alpha {params.alpha} \
+      --out {params.out} > {log} 2>&1
     """
 
 rule create_annotation:
@@ -216,7 +183,7 @@ checkpoint create_batches:
     gene_pairs = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepairs.txt",
     annotation = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/annotation.txt.gz",
     triplet = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test.txt",
-    triplet_group = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test_groups.txt"
+    triplet_group = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepair_egene_groups.txt"
   output:
     data_dir = directory(config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/batches/"),
     done = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/batches/chr{chr}-batches.done"
@@ -260,7 +227,7 @@ rule run_co_eqtl:
     gene_pairs = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepairs.txt",
     annotation = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/annotation.txt.gz",
     triplet = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test.txt",
-    triplet_group = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test_groups.txt"
+    triplet_group = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepair_egene_groups.txt"
   output:
     log = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/output/chr{chr}-batch-{n_batch}-log.txt.gz",
     finished = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/output/chr{chr}-batch-{n_batch}-TopEffects.finished",
@@ -430,7 +397,7 @@ rule run_coeqtl_dump:
     linkfile = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/linkfile.txt",
     filtered_genotype = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/{cell_type}.eqtlsnps.bgz.vcf.gz",
     gene_pairs = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/genepairs_to_dump.txt",
-    triplet_group = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/snp_genepair_triplets_to_test_groups.txt",
+    triplet_group = config["outputs"]["output_dir"] + "coeQTL/reffiles/{cell_type}/chr{chr}/genepair_egene_groups.txt",
     triplet = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/snp_genepairs_to_dump.txt"
   output:
     log = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/dump/chr{chr}-dump-log.txt.gz",

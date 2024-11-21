@@ -43,21 +43,9 @@ cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ##
 ##### The following arguments are common parameters that may need to be changed depending on the dataset #####
 ##############################################################################################################
 
-get_sample_ids_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
-get_sample_ids_threads: 1 ### Number of threads to use
-get_sample_ids_time: 0 ### The time setting to use
-
 create_linkfile_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
 create_linkfile_threads: 1 ### Number of threads to use
 create_linkfile_time: 0 ### The time setting to use
-
-get_significant_eqtls_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
-get_significant_eqtls_threads: 1 ### Number of threads to use
-get_significant_eqtls_time: 0 ### The time setting to use
-
-get_gene_pairs_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
-get_gene_pairs_threads: 1 ### Number of threads to use
-get_gene_pairs_time: 0 ### The time setting to use
 
 create_snp_gene_pair_triplet_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
 create_snp_gene_pair_triplet_threads: 1 ### Number of threads to use
