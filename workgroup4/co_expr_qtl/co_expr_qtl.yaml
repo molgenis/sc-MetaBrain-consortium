@@ -30,6 +30,7 @@ settings:
   n_genes: 1000 ### Number of genes to limit batches to
 
 mbqtl_settings:
+  alpha: 0.05 # Co-eQT significance threshold
   perm: 10 ### number of permutations. Default: '1000'.
   maf: 0.05 ### minor allele frequency threshold. Default '0.01'.
   cr: 0.95 ### call-rate threshold. Default '0.95'.
