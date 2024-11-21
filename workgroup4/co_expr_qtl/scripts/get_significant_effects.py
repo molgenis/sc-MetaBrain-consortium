@@ -15,62 +15,65 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
+def gzopen(file, mode="r"):
+    if file.endswith(".gz"):
+        return gzip.open(file, mode + 't')
+    else:
+        return open(file, mode)
+
 # Read in coeqtl results
 print("Filtering significant effects")
 df = pd.read_csv(args.input,sep="\t")
-
-print("Extracting significant genes")
 df = df[df["qval"]<0.05]
 df = df.sort_values(by='qval', ascending=True)
 df.to_csv(f"{args.out}EX-TopEffectswithQval-significant.txt",index=False,sep="\t")
 
 
-fh = open(f"{args.out}EX-TopEffectswithQval-significant.txt",'r')
-fh.readline()
-
+print("Getting significant groups")
+fin = gzopen(f"{args.out}EX-TopEffectswithQval-significant.txt",'r')
+fin.readline()
 significant = set()
-
-for line in fh:
+for line in fin:
 	elems = line.strip().split("\t")
 	grp = elems[0]
 	significant.add(grp)
+fin.close()
+print(f"{len(significant)} significant groups found")
 
-fh.close()
-
-print(f"Number of significant eGenes: {len(significant)}")
-
+print("\nExtracting gene pairs from previously created batches")
 batches = glob.glob(f"{args.batches}chr*/batches/*.txt")
-print()
-fho = open(f"{args.out}genepairs_to_dump.txt",'w')
-bctr = 0
+print(f"{len(batches)} batches found")
 
+fout = gzopen(f"{args.out}genepairs_to_dump.txt",'w')
+counter = 0
 pairs = set()
-
 for batch in batches:
-	bctr += 1
-	fh = open(batch,'r')
-	for line in fh:
+	counter += 1
+	fin = gzopen(batch,'r')
+	for line in fin:
 		elems = line.split("_")
 		g1 = elems[0]
 		if g1 in significant:
-			fho.write(line)
+			fout.write(line)
 			pairs.add(line.strip())
-	if bctr % 100 == 0:
-		print(f"{bctr}/{len(batches)} files processed ", end='\r')
-	fh.close()
+	if counter % 100 == 0:
+		print(f"{counter}/{len(batches)} files processed ", end='\r')
+	fin.close()
+fout.close()
+print(f"{counter}/{len(batches)} files processed - "+batch, end='\n')
 
-print(f"{bctr}/{len(batches)} files processed - "+batch, end='\n')
-fho.close()
-
-sglfiles = args.snp_genepair_triplets
-fho = open(f"{args.out}snp_genepairs_to_dump.txt",'w')
-for sglfile in sglfiles:
-	print(f"{sglfile} linkfile!")
-	fh = open(sglfile,'r')
-	for line in fh:
+print("\nWriting gene pair SNP triplets")
+snp_genepair = args.snp_genepair_triplets
+print(f"{len(snp_genepair)} files found")
+fout = gzopen(f"{args.out}snp_genepairs_to_dump.txt",'w')
+for file in snp_genepair:
+	fin = gzopen(file,'r')
+	for line in fin:
 		elems = line.strip().split("\t")
 		id = elems[1]
 		if id in pairs:
-			fho.write(line)
-	fh.close()
-fho.close()
+			fout.write(line)
+	fin.close()
+fout.close()
+
+print("\nDone.\n")

@@ -331,7 +331,7 @@ rule multiple_testing_correction:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["mbqtl_singularity_image"],
     script = config["inputs"]["repo_dir"] + "scripts/multiple_testing_correction.R",
-    alpha = config["mbqtl_settings"]["alpha"]
+    alpha = config["mbqtl_settings"]["alpha"],
     out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/{cell_type}-TopEffects",
     plot_out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/plots/{cell_type}-TopEffects"
   log: config["outputs"]["output_dir"] + "log/{cell_type}/multiple_testing_correction.{cell_type}.log"
