@@ -1,6 +1,9 @@
 #!/usr/bin/env python
-import pandas as pd
 import os
+
+# Set logger level.
+if config["settings_extra"]["debug"]:
+    logger.set_level("DEBUG")
 
 # Check required input arguments.
 if config["inputs"]["singularity_image"] is None or not os.path.exists(config["inputs"]["singularity_image"]):
@@ -27,15 +30,25 @@ if not config["inputs"]["repo_dir"].endswith("/"):
 if not config["outputs"]["output_dir"].endswith("/"):
     config["outputs"]["output_dir"] += "/"
 
+# Define the chromosomes.
+if config["settings"]["chromosomes"] is None:
+  config["settings"]["chromosomes"] = [str(i) for i in range(1, 23)]
+
+# Preprocess dataset.
+if not isinstance(config["settings"]["dataset"], list):
+    config["settings"]["dataset"] = [config["settings"]["dataset"]]
+
 # Create the output directory.
 os.makedirs(config["outputs"]["output_dir"], exist_ok=True)
 
+
 rule all:
-    input: expand(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz",cell_type = config["settings"]["cell_type"],chr = config["settings"]["chromosomes"])
+    input: expand(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz", cell_type=config["settings"]["cell_type"], chr=config["settings"]["chromosomes"])
+
 
 rule aggregate_correlation:
     input:
-        corr_done = expand(config["inputs"]["input_dir"] + "{dataset}/correlations/log/{cell_type}/{cell_type}.chr.{chr}.corr.done",dataset=config["settings"]["dataset"],allow_missing=True)
+        corr_done = expand(config["inputs"]["input_dir"] + "{dataset}/correlations/log/{cell_type}/{cell_type}.chr.{chr}.corr.done", dataset=config["settings"]["dataset"], allow_missing=True)
     output:
         dat = temp(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.dat"),
         rows = temp(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.rows.txt"),
@@ -49,30 +62,32 @@ rule aggregate_correlation:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
         script = config["inputs"]["repo_dir"] + "scripts/aggregate_correlations.py",
-        out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr",
         indir = config["inputs"]["input_dir"],
+        sample_sheet = lambda wildcards: "--sample_sheet " + config["inputs"]["sample_sheet"][wildcards.cell_type] if wildcards.cell_type in config["inputs"]["sample_sheet"] else "",
+        cell_level = config["settings"]["cell_level"],
         gene_annotation = config["inputs"]["gene_annotation"],
-        coegenelist = lambda wildcards: config["inputs"]["e_gene_list"][wildcards.cell_type],
-        egenelist = lambda wildcards: config["inputs"]["co_egene_list"][wildcards.cell_type],
-        sample_sheet = lambda wildcards: config["inputs"]["sample_sheet"][wildcards.cell_type],
-        feature_name = config["settings"]["feature_name"],
+        egene_list = lambda wildcards: "--egenelist " + config["inputs"]["e_gene_list"][wildcards.cell_type] if wildcards.cell_type in config["inputs"]["e_gene_list"] else "",
+        coegene_list = lambda wildcards: "--coegenelist " + config["inputs"]["co_egene_list"][wildcards.cell_type] if wildcards.cell_type in config["inputs"]["co_egene_list"] else "",
+        feature_name = config["settings_extra"]["feature_name"],
         binary_in = "--binary_in" if config["settings"]["binary_in"] else "",
-        binary_out = "--binary_out" if config["settings"]["binary_out"] else ""
+        out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr"
     log: config["outputs"]["output_dir"] + "log/aggregate_correlation.{cell_type}.chr.{chr}.log"
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --indir {params.indir} \
-            --sample_sheet {params.sample_sheet} \
+            {params.sample_sheet} \
+            --cell_level {params.cell_level} \
             --geneannotation {params.gene_annotation} \
             --feature_name {params.feature_name} \
             --chr {wildcards.chr} \
-            --egenelist {params.egenelist} \
-            --coegenelist {params.coegenelist} \
+            {params.egene_list} \
+            {params.coegene_list} \
             {params.binary_in} \
-            {params.binary_out}  \
+            --binary_out \
             --out {params.out} > {log} 2>&1
     """
+
 
 rule transpose_matrix:
     input:
@@ -85,30 +100,32 @@ rule transpose_matrix:
         cols = temp(config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.cols.txt"),
         transpose = temp(config["outputs"]["output_dir"]  + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.txt.gz")
     resources:
+        java_mem_gb = lambda wildcards, attempt: attempt * config["transpose_matrix_memory"] * config["transpose_matrix_threads"] - config["settings_extra"]["java_memory_buffer"],
         mem_per_thread_gb = lambda wildcards, attempt: attempt * config["transpose_matrix_memory"],
         disk_per_thread_gb = lambda wildcards, attempt: attempt * config["transpose_matrix_memory"],
-        time = lambda wildcards,attempt: config["cluster_time"][(attempt - 1) + config["transpose_matrix_time"]]
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["transpose_matrix_time"]]
     threads: config["transpose_matrix_threads"]
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/2024-06-20-BinaryMatrixTools.jar",
+        jar = config["inputs"]["bmt_jar"], # TODO: move this to image
         infile = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr",
         out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose"
     log: config["outputs"]["output_dir"] + "log/transpose_matrix.{cell_type}.chr.{chr}.log",
     shell:
         """
-        singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.mem_per_thread_gb}g -jar {params.script} \
+        singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.java_mem_gb}g -Xms{resources.java_mem_gb}g -jar {params.jar} \
             transpose \
             {params.infile} \
             {params.out} \
             50 > {log} 2>&1
 
-        singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.mem_per_thread_gb}g -jar {params.script} \
+        singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.java_mem_gb}g -Xms{resources.java_mem_gb}g -jar {params.jar} \
             bintotxt \
             {params.out} \
             {output.transpose} > {log} 2>&1
         """
+
 
 rule remove_nan:
     input: config["outputs"]["output_dir"]  + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.txt.gz"
@@ -121,11 +138,13 @@ rule remove_nan:
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/stripNaNs.py"
+        script = config["inputs"]["repo_dir"] + "scripts/stripNaNs.py",
+        minobs = config["settings"]["minobs"]
     log: config["outputs"]["output_dir"] + "log/remove_nan.{cell_type}.chr.{chr}.log"
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --infile {input} \
-            --outfile {output} > {log} 2>&1
+            --outfile {output} \
+            --minobs {params.minobs} > {log} 2>&1
         """

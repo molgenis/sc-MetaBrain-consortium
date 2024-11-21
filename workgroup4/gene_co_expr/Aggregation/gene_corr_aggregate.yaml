@@ -2,49 +2,53 @@
 ##### The following arguments need to be changed by the user to indicating file locations on your system #####
 ##############################################################################################################
 inputs:
-  bind_path: 
-  singularity_image: 
-  repo_dir: 
-  input_dir:
-  gene_annotation:
-  # Cell specific input
-  e_gene_list: # optional
-    EX:
-    MIC:
-    OLI:
-  co_egene_list: # optional
-    EX:
-    MIC:
-    OLI:
-  sample_sheet: # optional
-    EX:
-    MIC:
-    OLI:
+  bind_path: /path/to/bind/to/mount ### List of paths to bind to Singularity. You can specify multiple directories by adding a "," between them. Eg. ${DIRECTORY1},${DIRECTORY2}
+  singularity_image: /path/to/singularity/image.sif ### The complete path to the singularity image that has all the pipeline softwares
+  repo_dir: /path/to/repo/dir/ ### Path to the github repository directory
+  input_dir: /path/to/gene/co/expr/dir/ ### Path to gene_co_expr output directory.
+  gene_annotation: /path/to/gene/annotation.txt ### Path to gene annotation file, used to select genes on a chromosome.
+  bmt_jar: /path/to/gene/BinaryMatrixTools.jar ### Path to BinaryMatrixTools jar file.
+
+  # Optional cell specific input
+  sample_sheet:
+    EX: /path/to/celltype/sample_sheet.tsv ### tab separated file with four columns: 'Pool', 'Sample', 'Dataset' and 'cell_level' as defined below.
+  e_gene_list:
+    EX: /path/to/celltype/egene/file.tsv ### list of genes to correlate as eGenes.
+  co_egene_list:
+    EX: /path/to/celltype/co_egene/file.tsv ### list of genes to correlate as co_eGenes.
 
 outputs:
-  output_dir:
+  output_dir: /path/to/parent/out/dir ### The path to the parent dir where you would like all outputs/results saved. This path must exist before running
 
 settings:
-  dataset: ["Fujita2022"]
-  cell_type: ["EX","MIC","OLI"]
-  chromosomes: ["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22"]
-  feature_name: "HGNC"
-  binary_in: True
-  binary_out: True
+  dataset: ### Which dataset(s) to process. Can be list on single string.
+  cell_level: "L1" ### The cell annotation on which to aggregate. Default: 'L1'.
+  cell_type: ["AST", "END", "EX", "IN", "MIC", "OLI", "OPC", "PER"] ### The cell types to process.
+  chromosomes: null ### The chromosomes to process. Default: null (= chromosome 1 to 22).
+  binary_in: True ### Whether to look for .dat input files or .txt.gz input files.
+  minobs: 15 ### The minimum number of non-missing observations per gene pair.
 
 cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
 
 ##############################################################################################################
 ##### The following arguments are common parameters that may need to be changed depending on the dataset #####
 ##############################################################################################################
-aggregate_correlation_memory: 12
-aggregate_correlation_threads: 1
-aggregate_correlation_time: 1
+aggregate_correlation_memory: 12 ### Amount of gigs that will be used for memory and disk space per thread
+aggregate_correlation_threads: 1 ### Number of threads to use
+aggregate_correlation_time: 1 ### The time setting to use
 
-transpose_matrix_memory: 32
-transpose_matrix_threads: 1
-transpose_matrix_time: 1
+transpose_matrix_memory: 32 ### Amount of gigs that will be used for memory and disk space per thread
+transpose_matrix_threads: 1 ### Number of threads to use
+transpose_matrix_time: 1 ### The time setting to use
 
-remove_nan_memory: 12
-remove_nan_threads: 1
-remove_nan_time: 1
+remove_nan_memory: 12 ### Amount of gigs that will be used for memory and disk space per thread
+remove_nan_threads: 1 ### Number of threads to use
+remove_nan_time: 1 ### The time setting to use
+
+############################################################################################################################################
+##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####
+############################################################################################################################################
+settings_extra:
+  feature_name: "HGNC" ### The label to use for genes. Options are: "HGNC", "ENSG", or "HGNC_ENSG". Default: 'HGNC'.
+  java_memory_buffer: 1 ### increase job memory to this amount when running java applications to ensure '-Xmx' and '-Xms' do not overflow the max memory.
+  debug: False ### set logger to level DEBUG printing additional information. Default: False.

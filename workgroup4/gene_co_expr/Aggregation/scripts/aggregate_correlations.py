@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Author: M. Vochteloo, H.J. Westra, and A. Kooijmans
 
 import argparse
 import gzip
@@ -11,6 +12,7 @@ import sys
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--indir", required=True, type=str, help="Input directory")
 parser.add_argument("--sample_sheet", required=False, default=None, type=str, help="File containing selected samples")
+parser.add_argument("--cell_level", type=str, required=False, default=None, help="")
 parser.add_argument("--geneannotation", required=False, type=str, help="Gene chromosome annotation")
 parser.add_argument("--feature_name", required=False, type=str, default="HGNC", choices=["HGNC", "ENSG", "HGNC_ENSG"], help="")
 parser.add_argument("--chr", required=False, type=str, help="Limit correlation calculation to gene pairs where the first gene is on specified chromosome")
@@ -31,8 +33,11 @@ print("")
 
 if args.geneannotation is not None and args.chr is None:
     print("Warning, --geneannotation is ignored if --chr is not given.")
+if args.sample_sheet is not None and args.cell_level is None:
+    print("Error, --cell_level must be given if --sample_sheet is given.")
+    exit()
 if args.chr is not None and args.geneannotation is None:
-    print("Error, --geneannotation must be given in if --chr is given.")
+    print("Error, --geneannotation must be given if --chr is given.")
     exit()
     
 N_BYTES_DOUBLE = 8
@@ -74,7 +79,7 @@ def load_annotation(annotation, chr=None):
     return annot_genes
 
 def read_as_set(fpath):
-    fh = gzopen(fpath,'r')
+    fh = gzopen(fpath, 'r')
     data = set()
     for line in fh:
         data.add(line.strip())
@@ -117,6 +122,7 @@ def parse_text_header(fh):
 
     return n_egenes, n_coegenes, n_correlations, n_feature_chars, features, is_egene
 
+
 def clear(list, binary):
     if binary:
         nanfloatbytes = struct.pack('>d',float('nan'))
@@ -128,6 +134,7 @@ def clear(list, binary):
         for i in range(len(list)):
             list[i] = nan
 
+
 def to_time_str(nanoseconds):
     seconds = nanoseconds / 1e9
     minutes = (seconds - (seconds % 60)) / 60
@@ -135,6 +142,7 @@ def to_time_str(nanoseconds):
     remainingmins = minutes % 60
     remainingseconds = seconds % 60
     return f"{hours:.0f}h, {remainingmins:.0f}m, {remainingseconds:.0f}s"
+
 
 ####################################################################################
 
@@ -148,19 +156,15 @@ if args.chr is not None:
 
 if args.sample_sheet is not None:
     print(f"Looking for samples in the provided sample sheet ending with *{filename_suffix} in {args.indir}")
-    fin = gzopen(args.sample_sheet,mode="r")
-    expected_header = ["Pool","Sample","Dataset","L1"]
-    header = fin.readline().strip().split("\t")
+    fin = gzopen(args.sample_sheet, mode="r")
+    expected_header = ["Pool", "Sample", "Dataset", args.cell_level]
+    header = fin.readline().rstrip("\n").split("\t")
     if header != expected_header:
         print(f"Error, header does not match the expected format: {expected_header}")
         exit()
     files = []
-    n = 0
     for line in fin:
-        pool = line.strip().split("\t")[0]
-        sample = line.strip().split("\t")[1]
-        dataset = line.strip().split("\t")[2]
-        cell_type = line.strip().split("\t")[3]
+        pool, sample, dataset, cell_type = line.rstrip("\n").split("\t")
         file = f"{args.indir}{dataset}/correlations/data/{cell_type}/chr{args.chr}/{pool}.{sample}{filename_suffix}"
         files.append(file)
     fin.close()
