@@ -11,6 +11,7 @@ parser = argparse.ArgumentParser(description="")
 parser.add_argument("--ref", type=str, required=True, help="")
 parser.add_argument("--ref_ind_coupling", type=str, required=True, help="")
 parser.add_argument("--alt", type=str, required=True, help="")
+parser.add_argument("--center", type=str, required=False, default=None, choices=["Broad", "NYGC"], help="")
 parser.add_argument("--outdir", type=str, required=True, help="")
 parser.add_argument("--extensions", nargs="+", type=str, choices=["png", "pdf", "eps"], default=["png"], help="The figure file extension.. Default: 'png'.")
 args = parser.parse_args()
@@ -34,11 +35,11 @@ import matplotlib.pyplot as plt
 
 
 def create_confusion_matrix(df, x, y):
-    row_counts = list(zip(*np.unique(df[y], return_counts=True)))
+    row_counts = list(zip(*np.unique(df[y].astype(str), return_counts=True)))
     row_counts.sort(key=lambda x: x[0])
     row_labels = ["{} [n={:,.0f}]".format(label, size) for label, size in row_counts]
 
-    col_counts = list(zip(*np.unique(df[x], return_counts=True)))
+    col_counts = list(zip(*np.unique(df[x].astype(str), return_counts=True)))
     col_counts.sort(key=lambda x: x[0])
     col_labels = ["{} [n={:,.0f}]".format(label, size) for label, size in col_counts]
 
@@ -112,20 +113,41 @@ def plot_heatmap(df, annot_df, xlabel="", ylabel="", title="", outfile="plot"):
 
 ###############################################################
 
-print("Loading data ...")
+print("Loading reference data ...")
 ref_df = pd.read_csv(args.ref, sep=",", header=0, index_col=None)
+ref_df["PartialscrnaSeqID"] = ref_df["barcode"].str.split("_", n=1, expand=True)[0]
+print(ref_df)
+
 ref_coupling_df = pd.read_csv(args.ref_ind_coupling, sep="\t", header=0, index_col=None)
-ref_df = ref_df.merge(ref_coupling_df, on="individualID", how="left")
+if args.center is not None:
+    ref_coupling_df["Centre"] = ref_coupling_df["id"].str.split("_", n=1, expand=True)[1]
+    ref_coupling_df = ref_coupling_df.loc[ref_coupling_df["Centre"] == args.center, :]
+duplicates = set(ref_coupling_df.loc[ref_coupling_df["scrnaSeqID"].duplicated(), "scrnaSeqID"].values)
+print("\tExcluding {} duplicates".format(len(duplicates)))
+ref_coupling_df = ref_coupling_df.loc[~ref_coupling_df["scrnaSeqID"].isin(duplicates), :]
+print(ref_coupling_df)
+
+if sum(ref_coupling_df[["PartialscrnaSeqID", "individualID"]].duplicated()) > 0:
+    print("Error, reference coupling has duplicates.")
+    exit()
+
+ref_df = ref_df.merge(ref_coupling_df, on=["PartialscrnaSeqID", "individualID"], how="left")
 del ref_coupling_df
 print(ref_df)
 
+if len(ref_df["barcode"].unique()) != ref_df.shape[0]:
+    print("Error, reference contains duplicate barcodes")
+    exit()
+
+print("Loading alternative data ...")
+if args.center is not None:
+    print("\tLimiting to pools from '{}' ...".format(args.center))
 alt_df_list = []
 i = 0
 for fpath in glob.glob(args.alt.replace("POOL", "*")):
     before, after = args.alt.split("POOL")
     pool, centre = fpath.replace(before, "").replace(after, "").split("_")
-    print(pool + "_" + centre)
-    if centre == "Broad":
+    if args.center is not None and centre != args.center:
         continue
     alt_df = pd.read_csv(fpath, sep="\t", header=0, index_col=None)
     alt_df["Pool"] = pool + "_" + centre
@@ -140,28 +162,44 @@ for fpath in glob.glob(args.alt.replace("POOL", "*")):
 alt_df = pd.concat(alt_df_list, axis=0)
 print(alt_df)
 
+for method in ["Demuxlet", "Souporcell", "AnyDoublet"]:
+    counts = alt_df[method + "_Individual_Assignment"].value_counts()
+    total = alt_df.shape[0]
+    doublet = counts["doublet"] if "doublet" in counts else 0
+    unassigned = counts["unassigned"] if "unassigned" in counts else 0
+    assigned = total - doublet - unassigned
+    print("{}\tassigned: {:,} [{:.2f}%]\tdoublet: {:,} [{:.2f}%]\tunassigned: {:,} [{:.2f}%]".format(method, assigned, (100 / total) * assigned, doublet, (100 / total) * doublet, unassigned, (100 / total) * unassigned))
+exit()
+
+if len(alt_df["barcode"].unique()) != alt_df.shape[0]:
+    print("Error, alternative contains duplicate barcodes")
+    exit()
+
+# print("Creating alternative confusion matrix ...")
 # confusion_df, annotation_df, tpr = create_confusion_matrix(df=alt_df, x="Demuxlet_Individual_Assignment", y="Souporcell_Individual_Assignment")
 # print(confusion_df)
 # print(tpr)
-
+#
 # plot_heatmap(
 #     df=confusion_df,
 #     annot_df=annotation_df,
 #     xlabel="Demuxlet",
 #     ylabel="Souporcell",
 #     title="TPR: {:.3f}".format(tpr),
-#     outfile="scMetaBrain_demuxlet_vs_souporcell_demultiplex_confusion_matrix"
+#     outfile="scMetaBrain_demuxlet_vs_souporcell_demultiplex_confusion_matrix" + ("_" + args.center if args.center is not None else "")
 # )
 
-df = ref_df[["barcode", "individualID", "wholeGenomeSeqID"]].merge(alt_df, on="barcode", how="inner")
+print("Merging data ...")
+df = ref_df.merge(alt_df, on="barcode", how="inner")
 print(df)
 
 for method in ["Demuxlet", "Souporcell", "AnyDoublet"]:
-    print(method)
+    print("Comparing with method '{}' ...".format(method))
+
     df["Match"] = df["wholeGenomeSeqID"] == df[method + "_Individual_Assignment"]
     counts = df["Match"].value_counts()
     assigned = df.loc[(df[method + "_Individual_Assignment"] != "doublet") & (df[method + "_Individual_Assignment"] != "unassigned"), :].shape[0]
-    print("Match: {:,}/{:,} [{:.2f}%]\tMatch (excl. unassign.): {:,}/{:,} [{:.2f}%]".format(counts[True], counts.sum(), (100 / counts.sum()) * counts[True], counts[True], assigned, (100 / assigned) * counts[True]))
+    print("\tMatch: {:,}/{:,} [{:.2f}%]\tMatch (excl. unassign.): {:,}/{:,} [{:.2f}%]".format(counts[True], counts.sum(), (100 / counts.sum()) * counts[True], counts[True], assigned, (100 / assigned) * counts[True]))
 
     # print(df.loc[~df["Match"], "wholeGenomeSeqID"].value_counts())
     stats_per_pool = []
@@ -179,19 +217,18 @@ for method in ["Demuxlet", "Souporcell", "AnyDoublet"]:
         stats_per_pool.append([pool, pool_counts[True], pool_counts.sum(), (100 / pool_counts.sum()) * pool_counts[True], pool_counts[True], pool_assigned, (100 / pool_assigned) * pool_counts[True]])
     stats_per_pool.sort(key=lambda x: -x[6])
     for stats in stats_per_pool:
-        print("Pool: {}\tMatch: {:,}/{:,} [{:.2f}%]\tMatch (excl. unassign.): {:,}/{:,} [{:.2f}%]".format(*stats))
-    continue
+        print("\tPool: {}\tMatch: {:,}/{:,} [{:.2f}%]\tMatch (excl. unassign.): {:,}/{:,} [{:.2f}%]".format(*stats))
 
-    print(df[["wholeGenomeSeqID", method + "_Individual_Assignment"]])
-    confusion_df, annotation_df, tpr = create_confusion_matrix(df=df, x="wholeGenomeSeqID", y=method + "_Individual_Assignment")
-    print(confusion_df)
-    print(tpr)
-
-    plot_heatmap(
-        df=confusion_df,
-        annot_df=annotation_df,
-        xlabel="Fujita",
-        ylabel="scMetaBrain",
-        title="TPR: {:.3f}".format(tpr),
-        outfile="Fujita_vs_scMetaBrain_{}_demultiplex_confusion_matrix".format(method.lower())
-    )
+    # print("\tCreating confusion matrix ...".format(method))
+    # confusion_df, annotation_df, tpr = create_confusion_matrix(df=df, x="wholeGenomeSeqID", y=method + "_Individual_Assignment")
+    # print(confusion_df)
+    # print(tpr)
+    #
+    # plot_heatmap(
+    #     df=confusion_df,
+    #     annot_df=annotation_df,
+    #     xlabel="Fujita",
+    #     ylabel="scMetaBrain",
+    #     title="TPR: {:.3f}".format(tpr),
+    #     outfile="Fujita_vs_scMetaBrain_{}_demultiplex_confusion_matrix{}".format(method.lower(), "_" + args.center if args.center is not None else "")
+    # )

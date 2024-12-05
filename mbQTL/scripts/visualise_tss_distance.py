@@ -13,7 +13,8 @@ parser.add_argument("--data", required=True, type=str, help="")
 parser.add_argument("--nbins", required=False, type=int, default=5, help="")
 parser.add_argument("--signif_col", required=False, type=str, default=None, help="")
 parser.add_argument("--alpha", required=False, type=float, default=0.05, help="")
-parser.add_argument("--out", required=True, type=str, help="The output file where results will be saved.")
+parser.add_argument("--extensions", nargs="+", type=str, choices=["png", "pdf", "eps"], default=["png"], help="")
+parser.add_argument("--out", required=True, type=str, help="")
 args = parser.parse_args()
 
 print("Options in effect:")
@@ -23,6 +24,8 @@ print("")
 
 os.makedirs(os.path.dirname(args.out), exist_ok=True)
 
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 
 def plot(data, x="x", hue=None, hline=None, vline=None, palette=None, title="", xlabel="", filename="plot"):
     plt.rcParams["figure.figsize"] = (12, 9)
@@ -101,7 +104,8 @@ def plot(data, x="x", hue=None, hline=None, vline=None, palette=None, title="", 
                   weight='bold')
 
     fig.tight_layout()
-    plt.savefig(args.out + filename + '.png', bbox_inches="tight")
+    for extension in args.extensions:
+        plt.savefig(args.out + filename + '.' + extension, bbox_inches="tight")
 
 
 ######################################################
@@ -115,8 +119,9 @@ if args.signif_col is not None and args.signif_col in df.columns:
     print("\tFiltering on {}<{} leaves {:,} effects".format(args.signif_col, args.alpha, df.shape[0]))
 
 if df.shape[0] == 0:
-    plt.savefig(args.out + '-TSSDistance-VariantType.png')
-    plt.savefig(args.out + '-TSSDistance-PValBins.png')
+    for extension in args.extensions:
+        plt.savefig(args.out + '-TSSDistance-VariantType.' + extension)
+        plt.savefig(args.out + '-TSSDistance-PValBins.' + extension)
     exit()
 
 # Adding variant type column.
