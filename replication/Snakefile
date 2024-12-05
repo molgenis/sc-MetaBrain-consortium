@@ -82,6 +82,7 @@ def build_paths(ref_path, inputs=None):
 def get_plot_replication_stats_input(wildcards):
     logger.debug("get_plot_replication_stats_input(wildcards:{})".format(print_dict(wildcards)))
     input_files = []
+    input_figures = []
     for disc_settings, disc_fpath in DISC_FPATHS.items():
         for disc_ct in config["settings"]["disc_cell_types"]:
             disc_standard_ct = disc_ct
@@ -103,17 +104,20 @@ def get_plot_replication_stats_input(wildcards):
 
                     logger.debug("\trequesting '{}'.".format(combination_str))
                     input_files.append(config["outputs"]["output_dir"] + "replication_data/{disc_name}{disc_settings}discovery_{repl_name}{repl_settings}replication/{disc_name}{disc_settings}_{disc_ct}_Disc_{repl_name}{repl_settings}_{repl_ct}_Repl_ReplicationStats.txt.gz".format(disc_name=config["inputs"]["discovery_name"], disc_settings=disc_settings, disc_ct=disc_ct, repl_name=config["inputs"]["replication_name"], repl_settings=repl_settings, repl_ct=repl_ct))
-    return input_files
+                    for extension in config["settings"]["extensions"]:
+                        input_figures.append(config["outputs"]["output_dir"] + "replication_plot/{disc_name}{disc_settings}discovery_{repl_name}{repl_settings}replication/{disc_name}{disc_settings}_{disc_ct}_Disc_{repl_name}{repl_settings}_{repl_ct}_Repl.{extension}".format(disc_name=config["inputs"]["discovery_name"], disc_settings=disc_settings, disc_ct=disc_ct, repl_name=config["inputs"]["replication_name"], repl_settings=repl_settings, repl_ct=repl_ct, extension=extension))
+    return input_files, input_figures
 
 DISC_FPATHS = build_paths(ref_path=config["inputs"]["discovery_path"], inputs=config["settings"]["disc_inputs"])
 REPL_FPATHS = build_paths(ref_path=config["inputs"]["replication_path"], inputs=config["settings"]["repl_inputs"])
-plot_replication_stats_input = get_plot_replication_stats_input(wildcards={})
-input_files = []
-if len(plot_replication_stats_input) == 1:
-    input_files = plot_replication_stats_input
+PLOT_REPLICATION_STATS_INPUT, plot_replication_stats_figures = get_plot_replication_stats_input(wildcards={})
+input_files = plot_replication_stats_figures
+if len(PLOT_REPLICATION_STATS_INPUT) == 1:
+    input_files.extend(PLOT_REPLICATION_STATS_INPUT)
 else:
-    input_files.append(config["outputs"]["output_dir"] + "replication_data/{disc_name}discovery_{repl_name}replication/{disc_name}_Disc_{repl_name}_Repl_ReplicationStats.txt.gz".format(disc_name=config["inputs"]["discovery_name"],repl_name=config["inputs"]["replication_name"]))
-    input_files.append(config["outputs"]["output_dir"] + "replication_plot/{disc_name}discovery_{repl_name}replication/{disc_name}_Disc_{repl_name}_Repl_ReplicationStats.png".format(disc_name=config["inputs"]["discovery_name"],repl_name=config["inputs"]["replication_name"]))
+    input_files.append(config["outputs"]["output_dir"] + "replication_data/{disc_name}discovery_{repl_name}replication/{disc_name}_Disc_{repl_name}_Repl_ReplicationStats.txt.gz".format(disc_name=config["inputs"]["discovery_name"], repl_name=config["inputs"]["replication_name"]))
+    for extension in config["settings"]["extensions"]:
+        input_files.append(config["outputs"]["output_dir"] + "replication_plot/{disc_name}discovery_{repl_name}replication/{disc_name}_Disc_{repl_name}_Repl_ReplicationStats.{extension}".format(disc_name=config["inputs"]["discovery_name"], repl_name=config["inputs"]["replication_name"], extension=extension))
 
 
 wildcard_constraints:
@@ -127,7 +131,7 @@ rule all:
 
 rule plot_replication_stats:
     input:
-        replication_stats = get_plot_replication_stats_input
+        replication_stats = PLOT_REPLICATION_STATS_INPUT
     output:
         replication_stats = config["outputs"]["output_dir"] + "replication_data/{disc_name}discovery_{repl_name}replication/{disc_name}_Disc_{repl_name}_Repl_ReplicationStats.txt.gz",
         replication_figures = expand(config["outputs"]["output_dir"] + "replication_plot/{disc_name}discovery_{repl_name}replication/{disc_name}_Disc_{repl_name}_Repl_ReplicationStats.{extension}", extension=config["settings"]["extensions"], allow_missing=True)
