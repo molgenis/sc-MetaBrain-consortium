@@ -1737,7 +1737,7 @@ rule visualise:
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/visualise.py",
+        script = config["inputs"]["repo_dir"] + "scripts/visualise_tss_distance.py",
         out = config["outputs"]["output_dir"] + "figures/{cov}/{output_prefix}-TopEffects-{signif_filter}significant"
     log: config["outputs"]["output_dir"] + "log/visualise.{cov}.{output_prefix}.{signif_filter}.log"
     shell:
