@@ -60,6 +60,7 @@ class main():
         self.entities = getattr(arguments, 'entities')
         self.folders = getattr(arguments, 'folders')
         self.out_dir = getattr(arguments, 'outdir')
+        self.download_file = getattr(arguments, 'download_file')
 
         if len(self.entities) != len(self.folders):
             print("Error, -input and --folders must have equal lengths.")
@@ -96,6 +97,7 @@ class main():
                             type=str,
                             required=True,
                             help="The path to the output directory.")
+        parser.add_argument("--dryrun", dest="download_file", action='store_false', help="")
 
         return parser.parse_args()
 
@@ -117,18 +119,19 @@ class main():
                         if os.path.exists(folder + "/" + entity_file):
                             print("Skipping '{}' - '{}'".format(entity_code, entity_file))
                             continue
-                        self.download_file(syn=syn, entity=entity_code, path=folder + "/")
+                        self.download(syn=syn, entity=entity_code, path=folder + "/", downloadfile=self.download_file())
                 f.close()
             else:
-                self.download_file(syn=syn, entity=entity, path=folder + "/")
+                self.download(syn=syn, entity=entity, path=folder + "/", downloadfile=self.download_file)
 
     @staticmethod
-    def download_file(syn, entity, path):
+    def download(syn, entity, path, downloadfile):
         try:
             _ = synapseutils.syncFromSynapse(syn,
                                              entity=entity,
                                              ifcollision="keep.local",
-                                             path=path)
+                                             path=path,
+                                             downloadFile=downloadfile)
         except synapseclient.core.exceptions.SynapseUnmetAccessRestrictions as e:
             print(e)
         except synapseclient.core.exceptions.SynapseMd5MismatchError as e:
@@ -139,6 +142,7 @@ class main():
         for entity, folder in zip(self.entities, self.folders):
             print("  > entity: {}\tpath: {}/".format(entity, folder))
         print("  > Output directory: {}".format(self.out_dir))
+        print("  > Download file: {}".format(self.download_file))
         print("")
 
 

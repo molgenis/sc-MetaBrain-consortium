@@ -195,10 +195,10 @@ for job_id, failed_job in failed_jobs.items():
         rule_stats[failed_job["rule"]]["Other"] += 1
         other_jobs.append(failed_job)
 
-        print(job_id)
-        for key, value in failed_job.items():
-            print("\t{} = {}".format(key, value))
-        print("")
+    print(job_id)
+    for key, value in failed_job.items():
+        print("\t{} = {}".format(key, value))
+    print("")
 
 for key, value in rule_stats.items():
     values = []
