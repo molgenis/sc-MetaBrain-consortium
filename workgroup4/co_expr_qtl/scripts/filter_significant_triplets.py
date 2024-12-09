@@ -3,9 +3,10 @@
 
 import glob
 import argparse
+import gzip
 
 parser = argparse.ArgumentParser(description="")
-parser.add_argument("--significant_egenes", required=True, nargs="*", type=str,  help="")
+parser.add_argument("--significant_egenes", required=True, type=str,  help="")
 parser.add_argument("--egene_column", required=True, type=str,  help="")
 parser.add_argument("--signif_column", required=True, type=str,  help="")
 parser.add_argument("--indir", required=True, type=str,  help="")
@@ -18,52 +19,72 @@ for arg in vars(args):
     print("  --{} {}".format(arg, getattr(args, arg)))
 print("")
 
+def gzopen(file, mode="r"):
+    if file.endswith(".gz"):
+        if mode == "w":
+            return gzip.open(file, mode + 't', 4)
+        else:
+            return gzip.open(file, mode + 't')
+    else:
+        return open(file, mode)
+
 print(f"Extracting significance using {args.signif_column}")
-fin = open(args.significant_egenes,"rt")
+fin = gzopen(args.significant_egenes,"rt")
 header = fin.readline().strip().split("\t")
-fin.readline()
 egene_pval = {}
 for line in fin:
-	egene = line.strip().split("\t")[header.index(args.egene_col)]
-	pval = line.strip().split("\t")[header.index(args.signif_column)]
-	egene_pval[egene] = pval
-fin.close()
+	values = line.strip().split("\t")
+	egene = values[header.index(args.egene_column)]
+	pval = values[header.index(args.signif_column)]
+	egene_pval[egene] = float(pval)
+
+print(f"{len(egene_pval)} significant top effects found")
 
 print(f"Looking for files in: {args.indir}")
-pattern = f"{args.indir}*-dump-TopEffects.txt"
+pattern = f"{args.indir}*-dump-AllEffects.txt.gz"
 files = glob.glob(pattern)
-print(f"{len(files)} files detected")
+print(f"{len(files)} file(s) detected")
+print(files)
 
-fho = open(args.out,'w')
-print("open outputfile")
+fout = gzopen(args.output,'w')
 ctr = 0
-wctr = 0
 for file in files:
-	fh = open(file,'r')
+	fin = gzopen(file,'r')
+	all_lines = 0
 	lctr = 0
 	if ctr == 0:
-		fho.write(fh.readline())
-		for line in fh:
-			egene = line.strip().split("\t")[0]
-			pval = float(line.strip().split("\t")[13])
+		line = fin.readline()
+		fout.write(line)
+		header = line.strip().split("\t")
+		all_lines += 1
+		for line in fin:
+			all_lines += 1
+			values = line.strip().split("\t")
+			egene = values[header.index("Group")]
+			pval = float(values[header.index("MetaP")])
+			# pval = float(line.strip().split("\t")[13])
 			threshold = float(egene_pval[egene])
 			if pval < threshold:
-				fho.write(fh.readline())
+				print(f"{egene}: {pval} < {threshold}")
+				fout.write(line)
 				lctr += 1
 	else:
-		fh.readline()
-		for line in fh:
-			egene = line.strip().split("\t")[0]
-			pval = float(line.strip().split("\t")[13])
+		fin.readline()
+		all_lines += 1
+		for line in fin:
+			values = line.strip().split("\t")
+			all_lines += 1
+			egene = values[header.index("Group")]
+			pval = float(values[header.index("MetaP")])
 			threshold = float(egene_pval[egene])
 			if pval < threshold:
-				fho.write(fh.readline())
+				fout.write(line)
 				lctr += 1
 
-	print(f"{file}, {lctr} lines")
-	fh.close()
+	print(f"Found {lctr}/{all_lines} significant effects for {file}")
+	fin.close()
 	ctr += 1
 
-fho.flush()
-fho.close()
+fout.flush()
+fout.close()
 print("Done.")
