@@ -10,7 +10,7 @@ parser.add_argument("--input", required=True, type=str,  help="")
 parser.add_argument("--out", required=True, type=str,  help="")
 parser.add_argument("--batches", required=True, type=str,  help="")
 parser.add_argument("--signif_column", default = "qval", type=str,  help="")
-parser.add_argument("--alpha", default = "qval", type=str,  help="")
+parser.add_argument("--alpha", default = 0.05, type=float,  help="")
 parser.add_argument("--snp_genepair_triplets", required=True, nargs="*", type=str,  help="")
 
 args = parser.parse_args()
@@ -31,10 +31,10 @@ print(f"Filtering significant effects using a threshold of {args.signif_column} 
 df = pd.read_csv(args.input,sep="\t")
 df = df[df[args.signif_column] < args.alpha]
 df = df.sort_values(by = args.signif_column, ascending=True)
-df.to_csv(f"{args.out}EX-TopEffects-significant.txt",index=False,sep="\t")
+df.to_csv(f"{args.out}-TopEffects-significant.txt",index=False,sep="\t")
 
 print("Getting significant groups")
-fin = gzopen(f"{args.out}EX-TopEffects-significant.txt",'r')
+fin = gzopen(f"{args.out}-TopEffects-significant.txt",'r')
 fin.readline()
 significant = set()
 for line in fin:
@@ -48,7 +48,7 @@ print("\nExtracting gene pairs from previously created batches")
 batches = glob.glob(f"{args.batches}chr*/batches/*.txt")
 print(f"{len(batches)} batches found")
 
-fout = gzopen(f"{args.out}genepairs_to_dump.txt",'w')
+fout = gzopen(f"{args.out}-genepairs_to_dump.txt",'w')
 counter = 0
 pairs = set()
 for batch in batches:
@@ -69,7 +69,7 @@ print(f"{counter}/{len(batches)} files processed - "+batch, end='\n')
 print("\nWriting gene pair SNP triplets")
 snp_genepair = args.snp_genepair_triplets
 print(f"{len(snp_genepair)} files found")
-fout = gzopen(f"{args.out}snp_genepairs_to_dump.txt",'w')
+fout = gzopen(f"{args.out}-snp_genepairs_to_dump.txt",'w')
 for file in snp_genepair:
 	fin = gzopen(file,'r')
 	for line in fin:

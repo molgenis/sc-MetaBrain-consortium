@@ -8,11 +8,14 @@ import gzip
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--chr", required=True, type=str,  help="")
-parser.add_argument("--top_effects", required=True, type=str,  help="")
 parser.add_argument("--corr", required=True, type=str,  help="")
-parser.add_argument("--signif_column", type=str, default="qval", help="")
-parser.add_argument("--alpha", type=float, default=0.05,  help="False discovery column to use to filter significant eqtls. Default is 'qval")
-parser.add_argument("--out", required=True, type=str,  help="Threshold value for filtering significant eqtls. Default is 0.05")
+parser.add_argument("--top_effects", required=True, type=str,  help="")
+parser.add_argument("--chr_col", type=str, default="GeneChr", help="")
+parser.add_argument("--significance_col", type=str, default="qval", help="")
+parser.add_argument("--gene_col", type=str, default="Gene", help="")
+parser.add_argument("--snp_col", type=str, default="SNP", help="")
+parser.add_argument("--alpha", type=float, default=0.05,  help="")
+parser.add_argument("--out", required=True, type=str,  help="")
 
 args = parser.parse_args()
 
@@ -41,7 +44,7 @@ counter = 0
 fin.readline()
 for line in fin:
     counter += 1
-    gp = line.strip().split("\t")[0]
+    gp = line.strip().split("\t")[0] 
     if "_" not in gp:
         print(f"Error, invalid delimiter found in gene pair '{gp}', gene pair delimeter should be '_'")
         exit()
@@ -55,18 +58,18 @@ fin.close()
 
 sys.stdout.flush()
 
-print(f"\nGetting significant top eQTL - SNP combinations using a threshold of: {args.signif_column} < {args.alpha}")
+print(f"\nGetting significant top eQTL - SNP combinations using a threshold of: {args.significance_col} < {args.alpha}")
 gene_snp_map = {}
 fin = gzopen(args.top_effects,"r")
 header = fin.readline().strip().split("\t")
 for line in fin:
     values = line.strip().split("\t")
-    chr = values[header.index("GeneChr")]
+    chr = values[header.index(args.chr_col)]
     if chr == args.chr:    
-        qval = float(values[header.index(args.signif_column)])
+        qval = float(values[header.index(args.significance_col)])
         if qval < args.alpha:
-            gene = values[header.index("Gene")]
-            snp = values[header.index("SNP")]
+            gene = values[header.index(args.gene_col)]
+            snp = values[header.index(args.snp_col)]
             gene_snp_map[gene] = snp
 fin.close()
 print(f"{len(gene_snp_map)} significant eQTL - SNP combinations found")
