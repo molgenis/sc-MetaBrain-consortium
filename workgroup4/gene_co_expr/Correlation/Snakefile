@@ -37,17 +37,25 @@ if config["inputs"]["rb_genes"] is None or not os.path.exists(config["inputs"]["
 if config["inputs"]["mt_genes"] is None or not os.path.exists(config["inputs"]["mt_genes"]):
     logger.error("Critical, MT genes file does not exist.\n\nExiting.")
     exit("MissingMTGenes")
-if config["inputs"]["gtf"] is None or not os.path.exists(config["inputs"]["gtf"]):
-    logger.error("Critical, GTF genes file does not exist.\n\nExiting.")
-    exit("MissingGTF")
 if config["outputs"]["output_dir"] is None:
     logger.error("Critical, the output_dir cannot be empty.\n\nExiting.")
     exit("MissingOutputDir")
 
 # Add trailing /.
-
 if not config["outputs"]["output_dir"].endswith("/"):
     config["outputs"]["output_dir"] += "/"
+
+# Checking settings with options to be valid.
+if config["settings"]["weight"] not in ["sumcounts", "nonzero"]:
+    logger.error("Critical, weight must be 'sumcounts' or 'nonzero'.\n\nExiting.")
+    exit("InvalidWeight")
+if config["settings_extra"]["feature_name"] not in ["HGNC", "ENSG", "HGNC_ENSG"]:
+    logger.error("Critical, feature_name must be 'HGNC', 'ENSG', or 'HGNC_ENSG'.\n\nExiting.")
+    exit("InvalidFeatureName")
+
+# Define the chromosomes.
+if config["settings"]["chromosomes"] is None:
+  config["settings"]["chromosomes"] = [str(i) for i in range(1, 23)]
 
 # Create the output directory.
 os.makedirs(config["outputs"]["output_dir"], exist_ok=True)
@@ -101,10 +109,12 @@ def get_pool_samples(wildcards):
     logger.debug("\tfound '{:,}' samples".format(n_samples))
     return pool_samples
 
+
 rule all:
     input:
         corr = expand(config["outputs"]["output_dir"] + "correlations/log/{cell_type}/{cell_type}.chr.{chr}.corr.done",cell_type=config["settings"]["cell_type"],chr=config["settings"]["chromosomes"])
         # aggregated_corr = expand(config["outputs"]["combined_result_dir"] + "correlations/data/{cell_type}/chr{chr}/{cell_type}.chr.{chr}.corr.transpose.stripped.txt.gz",cell_type=config["settings"]["cell_type"],chr=config["settings"]["chromosomes"])
+
 
 checkpoint filter_split_counts:
     input:
@@ -117,7 +127,8 @@ checkpoint filter_split_counts:
         mt_genes = config["inputs"]["mt_genes"]
     output:
         full_metadata = config["outputs"]["output_dir"] + "expression/{pool}/{pool}.full.metadata.tsv.gz",
-        # weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.sumcounts.weights.txt.gz",
+        # sumcounts_weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.sumcounts.weights.txt.gz",
+        # nonzero_weights = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.nonzero.weights.txt.gz",
         # counts = config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.raw.counts.h5",
         data_dir = directory(config["outputs"]["output_dir"] + "expression/{pool}/data/"),
         stats = config["outputs"]["output_dir"] + "expression/{pool}/{pool}.pseudobulk.stats.tsv.gz",
@@ -145,8 +156,7 @@ checkpoint filter_split_counts:
         cr_barcodes = lambda wildcards: "--cr_barcodes" if config["barcode_qc_settings"]["cellranger_barcodes"] else "",
         min_cells = config["barcode_qc_settings"]["min_cells"],
         feature_name = config["settings_extra"]["feature_name"],
-        out = config["outputs"]["output_dir"] + "expression/{pool}/",
-        nonzero_counts = lambda wildcards: "--nonzero_weights" if config["settings"]["weight"] == "nonzero" else ""
+        out = config["outputs"]["output_dir"] + "expression/{pool}/"
     log: config["outputs"]["output_dir"] + "log/filter_split_counts.{pool}.log"
     shell:
         """
@@ -173,16 +183,15 @@ checkpoint filter_split_counts:
             {params.cap_barcodes} \
             {params.cr_barcodes} \
             --min_cells {params.min_cells} \
-            {params.nonzero_counts} \
             --out {params.out} > {log} 2>&1 
         singularity exec --bind {params.bind} {params.sif} touch {output.stats} {output.done}
         """
 
 
-# Important to check if merge_sample_counts is done to prevent snakemake errors.
+# Important to check if filter_split_counts is done to prevent snakemake errors.
 rule average_read_counts:
     input:
-        fsc_done = expand(config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done",pool=POOLS,allow_missing=True),
+        fsc_done = expand(config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done", pool=POOLS, allow_missing=True),
         weights = lambda wildcards: expand(config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.sumcounts.weights.txt.gz", zip, **get_pool_samples(wildcards), allow_missing=True)
     output:
         avg_read_depth = config["outputs"]["output_dir"] + "expression/data/{cell_type}/sumcounts.avg_read_depth.json"
@@ -235,10 +244,11 @@ rule proportional_fit_and_log:
             --out {output.out} > {log} 2>&1
         """
 
-# Important to check if merge_sample_counts is done to prevent snakemake errors.
+
+# Important to check if filter_split_counts is done to prevent snakemake errors.
 rule average_read_counts_pflogpf:
     input:
-        fsc_done = expand(config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done",pool=POOLS,allow_missing=True),
+        fsc_done = expand(config["outputs"]["output_dir"] + "expression/{pool}/{pool}.done", pool=POOLS, allow_missing=True),
         weights = lambda wildcards: expand(config["outputs"]["output_dir"] + "expression/{pool}/data/{pool}.{sample}.{cell_type}.pflog1.weights.txt.gz", zip, **get_pool_samples(wildcards), allow_missing=True)
     output:
         avg_read_depth = config["outputs"]["output_dir"] + "expression/data/{cell_type}/pflog1.avg_read_depth.json"
@@ -261,6 +271,7 @@ rule average_read_counts_pflogpf:
             --read_counts {input.weights} \
             --outfile {output.avg_read_depth} > {log} 2>&1
         """
+
 
 rule proportional_fit:
     input:
@@ -307,9 +318,8 @@ rule correlate_genes:
         min_obs_per_gene = config["correlate_settings"]["min_obs_per_gene"],
         chunk_size = config["correlate_settings"]["chunk_size"],
         out = config["outputs"]["output_dir"] + "correlations/data/{cell_type}/chr{chr}/{pool}.{sample}",
-        egene_list = lambda wildcards: config["inputs"]["e_gene_list"][wildcards.cell_type],
-        coegene_list = lambda wildcards: config["inputs"]["co_egene_list"][wildcards.cell_type]
-
+        egene_list = lambda wildcards: "--egenelist " + config["inputs"]["e_gene_list"][wildcards.cell_type] if wildcards.cell_type in config["inputs"]["e_gene_list"] else "",
+        coegene_list = lambda wildcards: "--coegenelist " + config["inputs"]["co_egene_list"][wildcards.cell_type] if wildcards.cell_type in config["inputs"]["co_egene_list"] else "",
     log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/{pool}.{sample}.chr.{chr}.log"
     shell:
         """
@@ -320,11 +330,12 @@ rule correlate_genes:
             --chr {wildcards.chr} \
             --min_obs {params.min_obs_per_gene} \
             --chunk_size {params.chunk_size} \
-            --egenelist {params.egene_list} \
-            --coegenelist {params.coegene_list} \
+            {params.egene_list} \
+            {params.coegene_list} \
             --binary \
             --out {params.out} > {log} 2>&1
         """
+
 
 rule correlation_check:
     input: 

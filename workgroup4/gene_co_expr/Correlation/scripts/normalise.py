@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Author: M. Vochteloo
+# Author: M. Vochteloo and A. Kooijmans
 
 import argparse
 import gzip
@@ -8,8 +8,6 @@ import numpy as np
 import scipy as sp
 import os
 import scanpy
-from scipy.io import mmwrite
-from scipy.io import mmread
 import h5py
 
 parser = argparse.ArgumentParser(description="")
@@ -77,7 +75,7 @@ barcodes = adata.obs_names
 print(f"Original matrix shape: {mtx.shape}")
 
 print("Loading average read count ...")
-fh = open(args.avg_rd)
+fh = open(args.avg_rd, 'r')
 sf = json.load(fh)["avg_read_count"]
 fh.close()
 print("\taverage read count: {:.4f}".format(sf))
@@ -89,12 +87,15 @@ if args.log1p:
     print("log1p transform ...")
     mtx = np.log1p(mtx)
 
+if args.weights_out is not None:
     print("Calculating read counts ...")
     pf = mtx.A.sum(axis=1).ravel().astype(int)
     print(f"Matrix shape after log {mtx.shape}")
-    with gzip.open(args.weights_out, "wt") as fh:
-        for idx in range(0,len(barcodes)):
+
+    with gzopen(args.weights_out, "w") as fh:
+        for idx in range(0, len(barcodes)):
             fh.write(f"{barcodes[idx]}\t{pf[idx]}\n")
+    fh.close()
 
 print("Saving count ...")
 adata.X = mtx

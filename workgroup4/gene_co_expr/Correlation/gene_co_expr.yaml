@@ -2,100 +2,93 @@
 ##### The following arguments need to be changed by the user to indicating file locations on your system #####
 ##############################################################################################################
 inputs:
-  bind_path: 
-  singularity_image: 
-  repo_dir: 
-  gene_annotation:
-  rb_genes:
-  mt_genes:
-  gtf:
-  cell_type_pairing:  # optional
+  bind_path: /path/to/bind/to/mount ### List of paths to bind to Singularity. You can specify multiple directories by adding a "," between them. Eg. ${DIRECTORY1},${DIRECTORY2}
+  singularity_image: /path/to/singularity/image.sif ### The complete path to the singularity image that has all the pipeline softwares
+  repo_dir: /path/to/repo/dir/ ### Path to the github repository directory
+  gene_annotation: /path/to/gene/annotation.txt ### Path to gene annotation file, used to select genes on a chromosome.
+  rb_genes: /path/to/ribosomal/genes.txt ### File containing ribosomal genes.
+  mt_genes: /path/to/mitochondrial/genes.txt ### File containing mitochondrial genes.
+  cell_type_pairing: /path/to/celltype/pairing.txt ### File with an optional cell annotation mapping file
 
   # Dataset specific inputs
-  poolsheet:
-  psam:
-  cell_annotation:
-  droplet_type_annotation:
-  cell_type_annotation:
+  poolsheet: /path/to/sample/metadata/file.tsv ### tab separated file that has a header. Each line has a pool name used for the scRNA-seq directories and the number of individuals in each pool
+  psam: /path/to/genotype.psam ### Plink genotype PSAM file from WG1.
+  cell_annotation: /path/to/cell_annotation.tsv ### The cell annotation file
+  droplet_type_annotation: /path/to/droplet_type_annotation.tsv ### The droplet annotation file from WG1.
+  cell_type_annotation: /path/to/cell_type_annotation.tsv ### The cell type annotation file from WG2.
 
-  # Cell specific input
-
-  e_gene_list: # optional
-    EX:
-    MIC:
-    OLI:
-
-  co_egene_list: # optional
-    EX:
-    MIC:
-    OLI:
+  # Cell specific input. Optional.
+  e_gene_list:
+    EX: /path/to/celltype/egene/file.tsv ### list of genes to correlate as eGenes.
+  co_egene_list:
+    EX: /path/to/celltype/co_egene/file.tsv ### list of genes to correlate as co_eGenes.
 
 outputs:
-  output_dir:
+  output_dir: /path/to/parent/out/dir ### The path to the parent dir where you would like all outputs/results saved. This path must exist before running
 
 settings:
-  ancestry: "EUR"
-  cell_level: "L1"
-  cell_type: ["EX","MIC","OLI"]
-  chromosomes: ["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22"]
-  weight: "sumcounts" # alternitvely use "nonzero" 
+  ancestry: "EUR" ### Which ancestry to use. Default: 'EUR'.
+  cell_level: "L1" ### The cell annotation on which to aggregate. Default: 'L1'.
+  cell_type: ["AST", "END", "EX", "IN", "MIC", "OLI", "OPC", "PER"] ### The cell types to process.
+  chromosomes: null ### The chromosomes to process. Default: null (= chromosome 1 to 22).
+  weight: "sumcounts" # The weights to use for the gene correlation. Options are: "sumcounts" and "nonzero". Default: 'sumcounts'.
 
 cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
 
 ##############################################################################################################
 ##### The following arguments are common parameters that may need to be changed depending on the dataset #####
 ##############################################################################################################
-filter_split_counts_memory: 4
-filter_split_counts_threads: 1
-filter_split_counts_time: 0
+filter_split_counts_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+filter_split_counts_threads: 1 ### Number of threads to use
+filter_split_counts_time: 0 ### The time setting to use
 
-split_chromosome_memory: 4
-split_chromosome_threads: 1
-split_chromosome_time: 0
+split_chromosome_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+split_chromosome_threads: 1 ### Number of threads to use
+split_chromosome_time: 0 ### The time setting to use
 
-average_read_counts_memory: 4
-average_read_counts_threads: 1
-average_read_counts_time: 0
+average_read_counts_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+average_read_counts_threads: 1 ### Number of threads to use
+average_read_counts_time: 0 ### The time setting to use
 
-proportional_fit_and_log_memory: 4
-proportional_fit_and_log_threads: 1
-proportional_fit_and_log_time: 0
+proportional_fit_and_log_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+proportional_fit_and_log_threads: 1 ### Number of threads to use
+proportional_fit_and_log_time: 0 ### The time setting to use
 
-proportional_fit_memory: 4
-proportional_fit_threads: 1
-proportional_fit_time: 0
+proportional_fit_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+proportional_fit_threads: 1 ### Number of threads to use
+proportional_fit_time: 0 ### The time setting to use
 
-correlate_genes_memory: 4
-correlate_genes_threads: 1
-correlate_genes_time: 0
+correlate_genes_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+correlate_genes_threads: 1 ### Number of threads to use
+correlate_genes_time: 0 ### The time setting to use
 
-ç_memory: 4
-correlation_check_threads: 1
-correlation_check_time: 0
+correlation_check_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+correlation_check_threads: 1 ### Number of threads to use
+correlation_check_time: 0 ### The time setting to use
 
 ############################################################################################################################################
 ##### The following arguments in this section should not need to be changed/edited unless the default options do not work your dataset #####
 ############################################################################################################################################
 barcode_qc_settings:
-  ncount_rna: 500 # min value
-  nfeature_rna: 0 # min value
-  complexity: 100 # max value
-  percent_rb: 100 # max value
-  percent_mt: 5 # max value
-  malat1: 0 # min value
-  cellranger_barcodes: False
-  min_cells: 5
-  cap_barcodes: 
+  ncount_rna: 500 # Only include cells with more than X UMIs. Default: 500.
+  nfeature_rna: 0 # Only include cells with more than X unique features (i.e. genes). Default: 0.
+  complexity: 100 ### Only include cells with fewer than X% complexity (nFeature_RNA / nCount_RNA). Default: 100.
+  percent_rb: 100 ### Only include cells with fewer than X% reads mapping to RB genes. Default: 100.
+  percent_mt: 5 ### Only include cells with fewer than X% reads mapping to MT genes. Default: 5.
+  malat1: 0 ### Only include cells with at least X MALAT1 reads. Default: 0.
+  cellranger_barcodes: False ### Only include cells annotated as CellRanger = True. Default: False.
+  min_cells: 10 ### The minimum number of cells a sample requires to be considered for further analyses. Default: 10.
+  cap_barcodes: null ### The maximum number of cells to include per pool. The first N cells are kept based on max UMi count. Default: null.
 
 create_annotation_settings:
   feature_name: "gene_name" ### the info column that in your gtf that describes the names of the genes in your expression matrix. Default `gene_name`.
   autosomes_only: True ### whether or not to only include autosomal chromosomes. Default 'True'.
 
 correlate_settings:
-  min_obs_per_gene: 10
-  chunk_size: 10000
+  min_obs_per_gene: 10 ### The minimum number of non-zero observations for a gene to be included in the correlation analysis. Default: 10.
+  chunk_size: 10000 ### The number of genes to correlate at the same time. Increasing this number increases memory usage but could be faster. Default: 10000.
 
 settings_extra:
-  feature_name: "HGNC"
-  sample_aggregate: "Assignment"
-  debug: False
+  feature_name: "HGNC" ### The label to use for genes. Options are: "HGNC", "ENSG", or "HGNC_ENSG". Default: 'HGNC'.
+  sample_aggregate: "Assignment" ### The column on which to aggregate individuals. Default: 'Assignment'.
+  debug: False ### set logger to level DEBUG printing additional information. Default: False.
