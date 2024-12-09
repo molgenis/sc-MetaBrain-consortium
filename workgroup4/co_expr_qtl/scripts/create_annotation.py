@@ -30,16 +30,24 @@ def gzopen(file, mode="r"):
     
 print("Reading gene annotation file")
 fin = gzopen(args.gene_annotation,"r")
-header = fin.readline().lower().strip().split("\t")
+header = fin.readline().strip().split("\t")
+expected_header = ["Gene","GeneSymbol","Chr","ChrStart","ChrEnd","Strand"]
+
+if header != expected_header:
+    print(f"Error: Header does not match the expected format.\n"
+          f"Found: {header}\n"
+          f"Expected: {expected_header}")
+    exit()
+
 annotation = {}
 counter = 0
 for line in fin:
     values = line.strip().split("\t")
-    gene = values[header.index("genesymbol")]
-    chr = values[header.index("chr")]
-    start = values[header.index("chrstart")]
-    stop = values[header.index("chrend")]
-    strand = values[header.index("strand")]
+    gene = values[header.index("GeneSymbol")]
+    chr = values[header.index("Chr")]
+    start = values[header.index("ChrStart")]
+    stop = values[header.index("ChrEnd")]
+    strand = values[header.index("Strand")]
     annotation[gene] = [chr,start,stop,strand]
 fin.close()
 print(f"{len(annotation.keys())} genes loaded")
