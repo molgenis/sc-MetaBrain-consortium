@@ -24,7 +24,7 @@ def gzopen(file, mode="r"):
     else:
         return open(file, mode)
     
-files = args.input.sort()
+files = sorted(args.input)
 print(f"Merging {len(files)} files")
 
 fout = gzopen(args.output,'w')
@@ -32,24 +32,23 @@ header = None
 all_lines = 0
 for file in files:
     fin = gzopen(file,'r')
-    line = 0
+    counter = 0
     if header == None:
         print("Writing header")
         header = fin.readline()
         fout.write(header)
-        line += 1
+        counter += 1
     else:
         # Skip header
         fin.readline()
-        line += 1
+        counter += 1
     for line in fin:
         fout.write(line)
-        line += 1
+        counter += 1
         all_lines += 1
     fin.close()
-    print(f"{line} lines written for {file}", end = "\r")
+    print(f"{counter} lines written for {file}", end = "\r")
+fout.close()
 
-fin.flush()
-fin.close()
 print(f"\n{all_lines} lines written")
 print("\nDone.\n")

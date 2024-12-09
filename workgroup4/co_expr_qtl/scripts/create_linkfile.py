@@ -34,7 +34,7 @@ fin.close()
 
 print(f"{len(samples)} sample IDs found")
 
-print("\nLinking sample IDs to dataset use WG0 poolsheet")
+print("\nLinking sample IDs to dataset using the WG0 poolsheet")
 df = pd.read_csv(args.wg0,sep="\t")
 pool_dataset = df.groupby('Pool')['Dataset'].apply(list).to_dict()
 print(f"{len(pool_dataset)} pool-dataset links found")
