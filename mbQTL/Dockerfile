@@ -23,9 +23,6 @@ MAINTAINER Martijn Vochteloo <m.vochteloo@umcg.nl>
 
 ################## INSTALLATION ######################
 
-ADD . /tmp/repo
-WORKDIR /tmp/repo
-
 ENV PATH=/opt:/usr/games:/opt/conda/envs/py311/bin:/opt/conda/bin:$PATH
 ENV SHELL=/bin/bash
 ENV LC_ALL=C
@@ -108,7 +105,12 @@ RUN eval "$(command conda 'shell.bash' 'hook' 2> /dev/null)" \
     #
     && /opt/conda/envs/py311/bin/pip install scipy==1.10.1 \
     # patsy-0.5.6
-    && /opt/conda/envs/py311/bin/pip install statsmodels==0.14.2
+    && /opt/conda/envs/py311/bin/pip install statsmodels==0.14.2 \
+    # PySocks-1.7.1 beautifulsoup4-4.12.3 certifi-2024.8.30
+    # charset-normalizer-3.4.0 filelock-3.16.1 gdown-4.6.0
+    # idna-3.10 requests-2.32.3 soupsieve-2.6 tqdm-4.67.1
+    # urllib3-2.2.3
+    && /opt/conda/envs/py311/bin/pip install gdown==4.6.0
 
 RUN conda clean -y --all
 
@@ -226,6 +228,12 @@ RUN cd /opt \
       && make \
       && make install \
     && rm -rf /opt/htslib-1.18/test
+
+RUN cd /opt \
+    && gdown 1rPm-n8Zteq5v0t__OjZdi_YjdO5Mwl81 \
+    && mkdir Genotype-IO-1.0.6-SNAPSHOT \
+    && mv Genotype-IO-1.0.6-SNAPSHOT-jar-with-dependencies.jar Genotype-IO-1.0.6-SNAPSHOT/GenotypeIO.jar \
+    && chmod 777 Genotype-IO-1.0.6-SNAPSHOT/GenotypeIO.jar
 
 ####################################
 ################ CLEAN #############
