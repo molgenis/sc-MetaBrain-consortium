@@ -32,7 +32,11 @@ general_settings:
   include_modes: null ### which modes to run (options: `all`, `default`, `cov`, `covXPcs`, `XPcs`).
   force_mega: null ### force the covariate correction and / or eQTL mapping to be done over all samples at once (options: 'all', 'cov', 'qtl').
   n_pcs: null ### how many PCs should be removed from the expression matrix (e.g. `[0, 5, 10]`).
-  filter_vcf: False ### whether or not the input VCF should be filtered on variants / samples of interest before running QTL analysis.
+  filter_vcf: True ### whether or not the input VCF should be filtered on variants / samples of interest before running QTL analysis.
+  filter_vcf_maf: null ### filter the input VCF on MAF. Default `qtl_settings: maf`.
+  filter_vcf_cr: null ### filter the input VCF on call rate. Default `qtl_settings: cr`.
+  filter_vcf_hwep: null ### filter the input VCF on hardy-Weinberg p-value threshold. Default `qtl_settings: hwep`.
+  filter_vcf_r2: 0.6 ### filter the input VCF on MACH R2 >=X. Default `0.6`.
   n_genes: 100 ### how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk. Default `100`.
   use_snpannotation: False ### whether or not the `snpannotation` option should be used. Default `False`.
   alpha: 0.05 ### QTL significance threshold. Default '0.05'.
@@ -94,6 +98,10 @@ split_snpgenelimit_time: 0 ### The time setting to use
 index_vcf_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 index_vcf_threads: 1 ### Number of threads to use
 index_vcf_time: 0 ### The time setting to use
+
+genotype_io_memory: 8 ### Amount of gigs that will be used for memory and disk space per thread
+genotype_io_threads: 4 ### Number of threads to use
+genotype_io_time: 0 ### The time setting to use
 
 filter_vcf_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
 filter_vcf_threads: 1 ### Number of threads to use

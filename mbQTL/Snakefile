@@ -141,9 +141,9 @@ else:
     if (config["inputs"]["snpgenelimit"] != "" or config["inputs"]["snplimit"] != "") and config["general_settings"]["use_snpannotation"]:
         logger.warning("\tWarning, setting use_snpannotation to False since snpgenelimit / snplimit is used.")
         config["general_settings"]["use_snpannotation"] = False
-    if config["inputs"]["snpgenelimit"] == "" and config["inputs"]["snplimit"] == "" and config["general_settings"]["filter_vcf"]:
-        logger.warning("\tWarning, setting filter_vcf to False since snpgenelimit / snplimit is not used.")
-        config["general_settings"]["filter_vcf"] = False
+    if not config["general_settings"]["filter_vcf"] and config["general_settings"]["filter_vcf_r2"] is not None:
+        logger.warning("\tWarning, setting filter_vcf to True since filter_vcf_r2 is not used (this cannot be filtered on in mbQTL on the fly).")
+        config["general_settings"]["filter_vcf"] = True
     if config["inputs"]["snpgenelimit"] != "" and not config["qtl_settings"]["outputall"]:
         logger.warning("\tWarning, setting outputall to True since snpgenelimit is used.")
         config["qtl_settings"]["outputall"] = True
@@ -160,6 +160,14 @@ else:
         logger.warning("\tWarning, setting cov to 'null' since the input gte endswith '.smf' and therefore does not "
                        "contain dataset information to include as covariates.")
         config["inputs"]["cov"] = ""
+
+# Set the default value for the variant filter.
+if config["general_settings"]["filter_vcf_maf"] is None:
+    config["general_settings"]["filter_vcf_maf"] = config["qtl_settings"]["maf"]
+if config["general_settings"]["filter_vcf_cr"] is None:
+    config["general_settings"]["filter_vcf_cr"] = config["qtl_settings"]["cr"]
+if config["general_settings"]["filter_vcf_hwep"] is None:
+    config["general_settings"]["filter_vcf_hwep"] = config["qtl_settings"]["hwep"]
 
 # Check setting combinations that are not allowed.
 if config["qtl_settings"]["nrdatasets"] > 1 and config["inputs"]["gte"].endswith(".smf"):
@@ -192,6 +200,9 @@ else:
 if config["inputs"]["cov"] == config["inputs"]["gte"]:
     logger.warning("\tWarning, your input cov is equal to your input gte. A covariate will be "
                    "added based on the dataset column of your gte file.")
+if not config["general_settings"]["filter_vcf"]:
+    logger.warning("\tWarning, your input VCF will not be prefiltered. All variants, other than "
+                   "those that are skipped by mbQTL based on MAF en CR, will be tested.")
 if config["inputs"]["snpgenelimit"] != "" and config["run_qtl_time"] != 0:
     logger.warning("\tWarning, you are only testing a select number of effects but the runtime for each "
                    "job is max {}. If you tink this is too long you should decrease "
@@ -436,6 +447,8 @@ def get_variants(wildcards):
         fpath = config["inputs"]["snplimit"]
         logger.debug("\treturn input 'snplimit': " + fpath)
         return fpath
+    elif wildcards.limit_file == "OnlyQCFilter":
+        return []
     else:
         logger.error("Critical, Unexpected value for limit_file in get_variants: {}\n\nExiting.".format(wildcards.limit_file))
         exit()
@@ -643,6 +656,10 @@ def get_vcf(wildcards):
     elif config["general_settings"]["filter_vcf"] and config["inputs"]["snplimit"] != "":
         fpath = "genotype/{vcf_basename}_{snp_basename}.vcf.bgz".format(**wildcards, vcf_basename=BASENAMES["vcf"], snp_basename=BASENAMES["snplimit"])
         logger.debug("\treturning output of rule 'filter_vcf' with snplimit: " + fpath)
+        return config["outputs"]["output_dir"] + fpath
+    elif config["general_settings"]["filter_vcf"]:
+        fpath = "genotype/{vcf_basename}_OnlyQCFilter.vcf.bgz".format(**wildcards, vcf_basename=BASENAMES["vcf"])
+        logger.debug("\treturning output of rule 'filter_vcf': " + fpath)
         return config["outputs"]["output_dir"] + fpath
 
     fpath = config["inputs"]["vcf"]
@@ -1121,11 +1138,46 @@ rule index_vcf:
         """
 
 
+rule genotype_io:
+    input:
+        vcf = config["inputs"]["vcf"],
+        index = config["inputs"]["vcf"] + ".tbi"
+    output:
+        vars = temp(config["outputs"]["output_dir"] + "genotype/{vcf_basename}_stats.vars.gz"),
+        samples = temp(config["outputs"]["output_dir"] + "genotype/{vcf_basename}_stats.samples.gz")
+    resources:
+        java_mem_gb = lambda wildcards, attempt: attempt * config["genotype_io_memory"] * config["genotype_io_threads"] - config["settings_extra"]["java_memory_buffer"],
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["genotype_io_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["genotype_io_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["genotype_io_time"]]
+    threads: config["genotype_io_threads"]
+    params:
+        bind = config["inputs"]["bind_path"],
+        sif = config["inputs"]["singularity_image"],
+        java_threads = config["genotype_io_threads"] * 2,
+        jar = "/opt/Genotype-IO-1.0.6-SNAPSHOT/GenotypeIO.jar",
+        out = config["outputs"]["output_dir"] + "genotype/{vcf_basename}_stats"
+    log: config["outputs"]["output_dir"] + "log/genotype_io.{vcf_basename}.log"
+    shell:
+        """
+         singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.java_mem_gb}g -Xms{resources.java_mem_gb}g \
+            -Djava.util.concurrent.ForkJoinPool.common.parallelism={params.java_threads} \
+            -Dmaximum.threads={params.java_threads} -Dthread.pool.size={params.java_threads} \
+            -jar {params.jar} \
+            --inputType VCF \
+            --input {input.vcf} \
+            --output {params.out} > {log} 2>&1
+         singularity exec --bind {params.bind} {params.sif} gzip {params.out}.vars
+         singularity exec --bind {params.bind} {params.sif} gzip {params.out}.samples
+        """
+
+
 rule filter_vcf:
     input:
         vcf = config["inputs"]["vcf"],
         gte = get_gte,
-        vars = get_variants
+        vars = get_variants,
+        var_stats = config["outputs"]["output_dir"] + "genotype/{vcf_basename}_stats.vars.gz"
     output:
         samples = temp(config["outputs"]["output_dir"] + "genotype/{vcf_basename}_{limit_file}_samples.txt"),
         vcf_gz = temp(config["outputs"]["output_dir"] + "genotype/{vcf_basename}_{limit_file}.vcf.gz"),
@@ -1139,13 +1191,22 @@ rule filter_vcf:
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
-        script = config["inputs"]["repo_dir"] + "scripts/filter_vcf.py"
+        script = config["inputs"]["repo_dir"] + "scripts/filter_vcf.py",
+        maf = "--maf " + str(config["general_settings"]["filter_vcf_maf"]) if config["general_settings"]["filter_vcf_maf"] is not None else "",
+        cr = "--cr " + str(config["general_settings"]["filter_vcf_cr"]) if config["general_settings"]["filter_vcf_cr"] is not None else "",
+        hwep = "--hwep " + str(config["general_settings"]["filter_vcf_hwep"]) if config["general_settings"]["filter_vcf_hwep"] is not None else "",
+        r2 = "--r2 " + str(config["general_settings"]["filter_vcf_r2"]) if config["general_settings"]["filter_vcf_r2"] is not None else "",
     log: config["outputs"]["output_dir"] + "log/filter_vcf.{vcf_basename}.{limit_file}.log"
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} awk 'BEGIN{{ FS = OFS = "\\t" }} {{ print $1 }}' {input.gte} > {output.samples}
         singularity exec --bind {params.bind} {params.sif} python {params.script} \
             --vcf {input.vcf} \
+            --variant_stats {input.var_stats} \
+            {params.maf} \
+            {params.cr} \
+            {params.hwep} \
+            {params.r2} \
             --variants {input.vars} \
             --samples {output.samples} \
             --outfile {output.vcf_gz} > {log} 2>&1

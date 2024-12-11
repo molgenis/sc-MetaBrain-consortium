@@ -52,6 +52,10 @@ See the README of [mbQTL](https://github.com/molgenis/systemsgenetics/tree/maste
  * `force_mega`: force the covariate correction and / or eQTL mapping to be done over all samples at once (options: `all`, `cov`, `qtl`, `none`). Default: `null`.
  * `n_pcs`: how many PCs should be removed from the expression matrix (e.g. `[0, 5, 10]`). If `cov` is also used these PCs are added to those covariates. Default `null`.
  * `filter_vcf`: whether or not the input VCF should be filtered on variants / samples of interest before running QTL analysis. This adds some pre-processing time but can add substantial speed improvements in the QTL analysis. Only available if `snplimit` or `snpgenelimit` is used. Note that it also filters on the samples in the `gte` file. Default `False`.
+ * `filter_vcf_maf`: filter the input VCF on MAF. Default `qtl_settings: maf`.
+ * `filter_vcf_cr`: filter the input VCF on call rate. Default `qtl_settings: cr`.
+ * `filter_vcf_hwep`: filter the input VCF on hardy-Weinberg p-value threshold. Default `qtl_settings: hwep`.
+ * `filter_vcf_r2`: filter the input VCF on MACH R2 >=X. Default `0.6`.
  * `n_genes`: how many genes should be tested per chunk. If empty, all genes are tested in 1 chunk. Default `100`.
  * `use_snpannotation`: whether or not the `snpannotation` option should be used. Automatically set to `False` if `snplimit` or `snpgenelimit` is used since it is faster without `snpannotation` then. Default `False`.
  * `alpha`: QTL significance threshold. Default `0.05`.
@@ -187,12 +191,13 @@ Please keep in mind that:
  * Non-autosomal chromosomes are currently not supported.
  * Expression PCs calculation is per dataset over the samples that overlap between the expression identifiers in `gte` and the columns in `exp`. 
  * Expression PCs are calculated without first removing covariates in `cov`.
+ * Variant QC metrics are calculated over the complete input VCF, e.g. not just over the samples in your GTE file.
  * Genes are grouped into eQTL chunks (if `n_genes` >0) by genetic position: genes that are close together are put in the same chunk. If `expgroups` is used then groups are always put in the same chunk and groups are sorted based on the first gene on that group. Note that chromosomes are sorted with numerical chromosomes first and then alphanumeric. 
  * Snakemake checks if the output files exist but not with what settings they were generated. Therefore, if you wish to rerun the eQTL mapping with different settings while keeping the old files it is recommended to change the complete `output_dir` rather than just changing the`output_prefix` since wrongly pre-processed input files might be used otherwise.
 
 ## Output
 
-Each eQTL run is outputted in a seperate folder: e.g. no covariate or PCs (`default`), cov (`cov`), 5 Pcs (`5Pcs`), or cov + 5 Pcs (`cov5Pcs`) all get their own folder in `output` containing the default mbQTL output files. In addition, the following extra files are created:
+Each eQTL run is outputted in a separate folder: e.g. no covariate or PCs (`default`), cov (`cov`), 5 Pcs (`5Pcs`), or cov + 5 Pcs (`cov5Pcs`) all get their own folder in `output` containing the default mbQTL output files. In addition, the following extra files are created:
  * if `plot_pca` is True, a `*.Pcs.png` and `*.Scree.png` figure containing visualisations of the expression matrix PCA is created. If covariates are corrected a plot after correction is created as well.
  * a `-TopEffectsWithMultTest.txt` file with a couple of columns added:
    * `BonfAdjustedMetaP`: nominal p-value (`MetaP`) multiplied by the number of tests performed for that gene (`NrTestedSNPs`).
