@@ -49,12 +49,16 @@ for key, outfile in [("WG1-ImputedVCF", config["outputs"]["output_dir"] + "Combi
                      ("CellAnnotation", config["outputs"]["output_dir"] + "CombineFiles/cell_annotation.tsv.gz"),
                      ("PoolSheet", config["outputs"]["output_dir"] + "CombineFiles/wg0_file_directories.tsv")]:
     for file in set(dataset_info[key]):
+        if file is None:
+            continue
         if not os.path.exists(file):
             logger.warning("\tCritical, '{}' does not exist.\n\nExiting.".format(file))
             exit("InvalidDataSheetFile")
 
     if key in ["WG1-ImputedVCF", "WG1-HetVCF"]:
         for file in dataset_info[key]:
+            if file is None:
+                continue
             md5_hash_value = md5_hash(file)
             if md5_hash_value in VCF_INPUT_FILES:
                 logger.info("\tSkipping duplicated input VCF file '{}'".format(os.path.basename(file)))
@@ -72,7 +76,7 @@ for key, outfile in [("WG1-ImputedVCF", config["outputs"]["output_dir"] + "Combi
     else:
         logger.info("\tKey '{}' has {:,} values.".format(key,n_files))
 
-    FILES[key] = dict(zip(dataset_info["Dataset"],dataset_info[key]))
+    FILES[key] = {k: v for k, v in dict(zip(dataset_info["Dataset"], dataset_info[key])).items() if v is not None}
     logger.debug("\trequesting output: " + outfile)
     input_files.append(outfile)
 
@@ -109,28 +113,32 @@ def get_samples(wildcards):
 
 def get_combine_vcf_input(wildcards):
     logger.debug("rule combine_vcf - get_combine_vcf_input({})".format(print_wildcards(wildcards)))
-    if config["inputs"]["variants_path"] is None and not config["settings"]["filter_samples"]:
-        if wildcards.vcf == "imputed_hg38":
-            fpaths = FILES["WG1-ImputedVCF"].values()
-            logger.debug("\treturn WG1-ImputedVCF input files: " + ", ".join(fpaths))
+    if wildcards.vcf == "het_filtered":
+        if config["settings"]["filter_samples"]:
+            fpaths = [config["outputs"]["output_dir"] + "FilterVCF/{md5_hash}.vcf.bgz".format(md5_hash=md5_hash(vcf)) for _, vcf in FILES["WG1-HetVCF"].items()]
+            logger.debug("\treturn filtered WG1-HetVCF input files: " + ", ".join(fpaths))
             return fpaths
-        elif wildcards.vcf == "het_filtered":
+        else:
             fpaths = FILES["WG1-HetVCF"].values()
             logger.debug("\treturn WG1-HetVCF input files: " + ", ".join(fpaths))
             return fpaths
-    else:
-        if wildcards.vcf == "imputed_hg38":
+    elif wildcards.vcf == "imputed_hg38":
+        if config["settings"]["qc_variants"]:
+            fpaths = [config["outputs"]["output_dir"] + "QualityControlVCF/{md5_hash}_qc_filtered.vcf.gz".format(md5_hash=md5_hash(vcf)) for _, vcf in FILES["WG1-ImputedVCF"].items()]
+            logger.debug("\treturn QC'd WG1-ImputedVCF input files: " + ", ".join(fpaths))
+            return fpaths
+        elif config["inputs"]["variants_path"] is not None or config["settings"]["filter_samples"]:
             fpaths = [config["outputs"]["output_dir"] + "FilterVCF/{md5_hash}.vcf.bgz".format(md5_hash=md5_hash(vcf)) for _, vcf in FILES["WG1-ImputedVCF"].items()]
             logger.debug("\treturn filtered WG1-ImputedVCF input files: " + ", ".join(fpaths))
             return fpaths
-        elif wildcards.vcf == "het_filtered":
-            fpaths = [config["outputs"]["output_dir"] + "FilterVCF/{md5_hash}.vcf.bgz".format(md5_hash=md5_hash(vcf)) for _, vcf in FILES["WG1-HetVCF"].items()]
-            logger.debug("\treturn filtered WG1-HetVCF input files: " + ", ".join(fpaths))
+        else:
+            fpaths = FILES["WG1-ImputedVCF"].values()
+            logger.debug("\treturn WG1-ImputedVCF input files: " + ", ".join(fpaths))
             return fpaths
 
     logger.error("Critical, Unexpected value for vcf in get_combine_vcf_input: {}\n\nExiting.".format(wildcards.vcf))
     exit()
-    return None
+    return []
 
 
 def get_files(wildcards):
@@ -242,9 +250,34 @@ rule filter_vcf:
         """
 
 
+rule qc_vcf:
+    input:
+        vcf = lambda wildcards: config["outputs"]["output_dir"] + "FilterVCF/{md5_hash}.vcf.bgz" if (config["inputs"]["variants_path"] is not None or config["settings"]["filter_samples"]) else VCF_INPUT_FILES[wildcards.md5_hash]
+    output:
+        qc_filtered = config["outputs"]["output_dir"] + "QualityControlVCF/{md5_hash}_qc_filtered.vcf.gz",
+        index = config["outputs"]["output_dir"] + "QualityControlVCF/{md5_hash}_qc_filtered.vcf.gz.csi",
+    resources:
+        mem_per_thread_gb = lambda wildcards, attempt: attempt * config["qc_vcf_memory"],
+        disk_per_thread_gb = lambda wildcards, attempt: attempt * config["qc_vcf_memory"],
+        time = lambda wildcards, attempt: config["cluster_time"][(attempt - 1) + config["qc_vcf_time"]]
+    threads: config["qc_vcf_threads"]
+    params:
+        sif = config["inputs"]["singularity_image"],
+        bind = config["inputs"]["bind_path"],
+        maf = config["settings"]["maf"],
+        r2 = config["settings"]["r2"]
+    log: config["outputs"]["output_dir"] + "log/qc_vcf.{md5_hash}.log"
+    shell:
+        """
+        singularity exec --bind {params.bind} {params.sif} bcftools +fill-tags {input.vcf} -Ou -- --tags MAF | \
+            singularity exec --bind {params.bind} {params.sif} bcftools filter --include 'MAF>={params.maf} & R2>={params.r2}' --write-index -Oz --output {output.qc_filtered} > {log} 2>&1
+        """
+
+
 rule combine_vcf:
     input:
-        vcf = get_combine_vcf_input
+        vcf = get_combine_vcf_input,
+        indices = lambda wildcards: [fpath + ".csi" for fpath in get_combine_vcf_input(wildcards)]
     output:
         vcf = config["outputs"]["output_dir"] + "CombineVCF/{vcf}.vcf.gz",
         index1 = config["outputs"]["output_dir"] + "CombineVCF/{vcf}.vcf.gz.csi",

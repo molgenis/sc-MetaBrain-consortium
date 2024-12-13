@@ -15,6 +15,9 @@ outputs:
 
 settings:
   filter_samples: True
+  qc_variants: True
+  maf: 0.01
+  r2: 0.3
 
 cluster_time: {0: "00:59:00", 1: "05:59:00",  2: "23:59:00", 3: "6-23:59:00"} ### Options for dynamic time usage for cluster submissions of jobs
 
@@ -30,11 +33,15 @@ filter_vcf_memory: 2 ### Amount of gigs that will be used for memory and disk sp
 filter_vcf_threads: 1 ### Number of threads to use
 filter_vcf_time: 0 ### The time setting to use
 
+qc_vcf_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+qc_vcf_threads: 2 ### Number of threads to use
+qc_vcf_time: 0 ### The time setting to use
+
 combine_vcf_memory: 8 ### Amount of gigs that will be used for memory and disk space per thread
 combine_vcf_threads: 4 ### Number of threads to use
 combine_vcf_time: 1 ### The time setting to use
 
-combine_files_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
+combine_files_memory: 8 ### Amount of gigs that will be used for memory and disk space per thread
 combine_files_threads: 1 ### Number of threads to use
 combine_files_time: 0 ### The time setting to use
 
