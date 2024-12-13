@@ -367,7 +367,8 @@ def pseudobulk_per_ct(adata, metadata):
                 exit()
 
             # Save as h5.
-            save_filtered_counts_h5(fpath=os.path.join(args.out, f"{args.pool}.{sample}.{cell_type}.counts.h5"), adata=adata[mask, :])
+            if args.save_filtered_h5:
+                save_filtered_counts_h5(fpath=os.path.join(args.out, f"{args.pool}.{sample}.{cell_type}.counts.h5"), adata=adata[mask, :])
 
             # Add the column.
             expr_columns.append(sample + "_" + cell_type)

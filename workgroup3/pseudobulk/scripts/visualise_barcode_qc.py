@@ -368,18 +368,18 @@ print(barcode_qc)
 
 print("\nSaving file")
 barcode_qc.to_csv(os.path.join(args.data_out, "qc_metrics.tsv.gz"), sep="\t", header=True, index=False, compression="gzip")
-# barcode_qc = pd.read_csv("/groups/umcg-biogen/tmp02/output/2022-09-01-scMetaBrainConsortium/2024-08-22-Pseudobulk/2024-09-02-pseudobulk-BryoisEtAl/expression/500nCountRNA_0nFeatureRNA_100Complex_100PcntRB_5PcntMT_0MALAT1_NoneCapBarcodes_FalseCRBarcodes/qc_metrics.tsv.gz", sep="\t", header=0, index_col=None, nrows=None)
+# barcode_qc = pd.read_csv(os.path.join(args.data_out, "qc_metrics.tsv.gz"), sep="\t", header=0, index_col=None, nrows=None)
 # barcode_qc[args.cell_level] = barcode_qc[args.cell_level].fillna("NA")
-#
-# n_barcodes_per_pool = barcode_qc[["pool", "Dataset", "nCount_RNAIndex"]].groupby("pool").max().rename(columns={"nCount_RNAIndex": "MaxIndices"}).reset_index(drop=False)
+
+n_barcodes_per_pool = barcode_qc[["pool", "Dataset", "nCount_RNAIndex"]].groupby("pool").max().rename(columns={"nCount_RNAIndex": "MaxIndices"}).reset_index(drop=False)
 # n_barcodes_per_pool.sort_values(by="MaxIndices", ascending=False, inplace=True)
 # # print(n_barcodes_per_pool)
 # # n_barcodes_per_pool.groupby("Dataset").mean("MaxIndices")
 # # exit()
-# barcode_qc = barcode_qc.merge(n_barcodes_per_pool, on="pool", how="left")
-# barcode_qc["nCount_RNAIndexPcnt"] = barcode_qc["nCount_RNAIndex"] / barcode_qc["MaxIndices"]
-# args.barcode_qc_columns = args.barcode_qc_columns + ["nCount_RNAIndexPcnt"]
-#
+barcode_qc = barcode_qc.merge(n_barcodes_per_pool, on="pool", how="left")
+barcode_qc["nCount_RNAIndexPcnt"] = barcode_qc["nCount_RNAIndex"] / barcode_qc["MaxIndices"]
+args.barcode_qc_columns = args.barcode_qc_columns + ["nCount_RNAIndexPcnt"]
+
 # # barcode_qc[args.tag] = "NotOutlier"
 # barcode_qc[args.tag] = "Outlier"
 # # barcode_qc.loc[barcode_qc["nCount_RNA"] >= 500, args.tag] = "NotOutlier"
