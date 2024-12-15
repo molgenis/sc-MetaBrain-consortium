@@ -114,7 +114,7 @@ PLOT_REPLICATION_STATS_INPUT, plot_replication_stats_figures = get_plot_replicat
 input_files = plot_replication_stats_figures
 if len(PLOT_REPLICATION_STATS_INPUT) == 1:
     input_files.extend(PLOT_REPLICATION_STATS_INPUT)
-else:
+elif len(PLOT_REPLICATION_STATS_INPUT) > 1:
     input_files.append(config["outputs"]["output_dir"] + "replication_data/{disc_name}discovery_{repl_name}replication/{disc_name}_Disc_{repl_name}_Repl_ReplicationStats.txt.gz".format(disc_name=config["inputs"]["discovery_name"], repl_name=config["inputs"]["replication_name"]))
     for extension in config["settings"]["extensions"]:
         input_files.append(config["outputs"]["output_dir"] + "replication_plot/{disc_name}discovery_{repl_name}replication/{disc_name}_Disc_{repl_name}_Repl_ReplicationStats.{extension}".format(disc_name=config["inputs"]["discovery_name"], repl_name=config["inputs"]["replication_name"], extension=extension))
