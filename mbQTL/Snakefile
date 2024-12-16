@@ -629,16 +629,9 @@ def get_annotation(wildcards):
     :return: return the gene annotation file. If the input is a gtf we need to convert this first using
     create_gene_annotation, else we return the input annotation file.
     """
-    logger.debug("rule run_qtl, create_batches - get_annotation({})".format(print_wildcards(wildcards)))
-    if config["inputs"]["annotation"].endswith(".gtf"):
-        # not using wildcards since some rules have annot_basename and some do not.
-        fpath = "create_annotation/{annot_basename}.txt.gz".format(annot_basename=BASENAMES["annotation"])
-        logger.debug("\treturning output of rule 'create_gene_annotation': " + fpath)
-        return config["outputs"]["output_dir"] + fpath
-
-    fpath = config["inputs"]["annotation"]
-    logger.debug("\treturning input 'annotation': " + fpath)
-    return fpath
+    fpath = "create_annotation/{annot_basename}.txt.gz".format(annot_basename=BASENAMES["annotation"])
+    logger.debug("\treturning output of rule 'create_gene_annotation': " + fpath)
+    return config["outputs"]["output_dir"] + fpath
 
 
 def get_vcf(wildcards):
@@ -1003,7 +996,7 @@ rule preflight_checks:
 
 rule create_gene_annotation:
     input:
-        gtf = config["inputs"]["annotation"]
+        data = config["inputs"]["annotation"]
     output:
         dupl_annotation = temp(config["outputs"]["output_dir"] + "create_annotation/{annot_basename}.WithDuplicates.txt.gz"),
         annotation = config["outputs"]["output_dir"] + "create_annotation/{annot_basename}.txt.gz"
@@ -1023,7 +1016,7 @@ rule create_gene_annotation:
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} python {params.script} \
-            --in_gtf {input.gtf} \
+            --data {input.data} \
             --feature_name {params.feature_name} \
             {params.autosomes_only} \
             --out {params.out} > {log} 2>&1

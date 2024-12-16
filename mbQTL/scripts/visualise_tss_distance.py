@@ -10,6 +10,7 @@ import os
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--data", required=True, type=str, help="")
+parser.add_argument("--annotation", required=False, type=str, default=None, help="")
 parser.add_argument("--nbins", required=False, type=int, default=5, help="")
 parser.add_argument("--signif_col", required=False, type=str, default=None, help="")
 parser.add_argument("--alpha", required=False, type=float, default=0.05, help="")
@@ -124,6 +125,31 @@ if df.shape[0] == 0:
         plt.savefig(args.out + '-TSSDistance-PValBins.' + extension)
     exit()
 
+# Updating gene pos info.
+if args.annotation is not None:
+    print("Loading annotation data ...")
+    annot_df = pd.read_csv(args.annotation, sep="\t", header=0, index_col=None)
+    if annot_df["Gene"].nunique() != annot_df.shape[0]:
+        print("Error, not all gene IDs are unique.")
+        exit()
+    if (annot_df["ChrStart"] == annot_df["ChrEnd"]).sum() > 0:
+        print("Error, column 'ChrStart' and 'ChrEnd' are identical for some rows.")
+        exit()
+
+    # Make sure the positions are sorted.
+    annot_df["ChrLow"] = annot_df[["ChrStart", "ChrEnd"]].min(axis=1)
+    annot_df["ChrHigh"] = annot_df[["ChrStart", "ChrEnd"]].max(axis=1)
+
+    # Determine the TSS.
+    annot_df["TSS"] = annot_df["ChrLow"]
+    mask = reverse_strand = annot_df["Strand"] == "-"
+    annot_df.loc[mask, "TSS"] = annot_df.loc[mask, "ChrEnd"]
+    gene_to_tss = dict(zip(annot_df["Gene"], annot_df["TSS"]))
+    df["TSSPos"] = df["Gene"].map(gene_to_tss)
+else:
+    print("Warning, assuming 'Genepos' is the TSS position. This is determined by the --annotation file you give to mbQTL.")
+    df["TSSPos"] = df["GenePos"]
+
 # Adding variant type column.
 df["VariantType"] = df["SNPAlleles"].str.len().map({0: "NA", 1: "NA", 2: "NA", 3: "SNP"}, na_action=None)
 df["VariantType"] = df["VariantType"].fillna("INDEL")
@@ -140,14 +166,17 @@ elif "MetaP-Random" in df.columns:
     p_value_col = "MetaP-Random"
 else:
     print("Error, could not identify p-value column.")
-df["Pbin"] = pd.qcut(df[p_value_col], q=args.nbins)
+df["Pbin"] = [f"{interval.left:.2e} - {interval.right:.2e}" for interval in pd.qcut(df[p_value_col], q=args.nbins)]
 
 print("Plotting the distance to the TSS ...")
 # only works for cis-eQTLs
 cis_mask = (df["QTLType"] == "CIS") & (df["GeneChr"] == df["SNPChr"])
 print("\t{:,} / {:,} [{:.2f}%] cis-eQTL effects".format(cis_mask.sum(), df.shape[0], (100 / df.shape[0]) * cis_mask.sum()))
-tss_df = df.loc[cis_mask, ["VariantType", "Pbin", "GenePos", "SNPPos"]].copy()
-tss_df["distance"] = tss_df["GenePos"] - tss_df["SNPPos"]
+tss_df = df.loc[cis_mask, ["Gene", "VariantType", "Pbin", "TSSPos", "GeneStrand", "SNPPos"]].copy()
+tss_df["distance"] = tss_df["SNPPos"] - tss_df["TSSPos"]
+tss_df["distance"] = tss_df["distance"] * (tss_df["GeneStrand"] == "+").map({True: 1, False: -1}) # flip the distance if the strand is negative.
+# tss_df.sort_values(by="distance", inplace=True)
+# print(tss_df)
 del df
 
 plot(
