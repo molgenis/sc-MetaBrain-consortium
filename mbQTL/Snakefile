@@ -1582,7 +1582,7 @@ rule export_all_effects:
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
-        java_threads = config["run_qtl_threads"] * 2,
+        java_threads = config["export_all_effects_threads"] * 2,
         jar = "/opt/tools/MbQTL.jar" if config["qtl_settings_extra"]["mbqtl_jar"] is None else config["qtl_settings_extra"]["mbqtl_jar"],
         analysis_type = config["qtl_settings"]["analysis_type"],
         meta_analysis_method = config["qtl_settings"]["meta_analysis_method"],
