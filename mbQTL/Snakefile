@@ -1147,15 +1147,14 @@ rule genotype_io:
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
-        java_threads = config["genotype_io_threads"] * 2,
         jar = "/opt/Genotype-IO-1.0.6-SNAPSHOT/GenotypeIO.jar",
         out = config["outputs"]["output_dir"] + "genotype/{vcf_basename}_stats"
     log: config["outputs"]["output_dir"] + "log/genotype_io.{vcf_basename}.log"
     shell:
         """
          singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.java_mem_gb}g -Xms{resources.java_mem_gb}g \
-            -Djava.util.concurrent.ForkJoinPool.common.parallelism={params.java_threads} \
-            -Dmaximum.threads={params.java_threads} -Dthread.pool.size={params.java_threads} \
+            -Djava.util.concurrent.ForkJoinPool.common.parallelism={threads} \
+            -Dmaximum.threads={threads} -Dthread.pool.size={threads} \
             -jar {params.jar} \
             --inputType VCF \
             --input {input.vcf} \
@@ -1484,7 +1483,6 @@ rule run_qtl:
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
-        java_threads = config["run_qtl_threads"] * 2,
         jar = "/opt/tools/MbQTL.jar" if config["qtl_settings_extra"]["mbqtl_jar"] is None else config["qtl_settings_extra"]["mbqtl_jar"],
         analysis_type = config["qtl_settings"]["analysis_type"],
         meta_analysis_method = config["qtl_settings"]["meta_analysis_method"],
@@ -1516,8 +1514,8 @@ rule run_qtl:
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.java_mem_gb}g -Xms{resources.java_mem_gb}g \
-            -Djava.util.concurrent.ForkJoinPool.common.parallelism={params.java_threads} \
-            -Dmaximum.threads={params.java_threads} -Dthread.pool.size={params.java_threads} \
+            -Djava.util.concurrent.ForkJoinPool.common.parallelism={threads} \
+            -Dmaximum.threads={threads} -Dthread.pool.size={threads} \
             -jar {params.jar} \
             --mode mbqtl \
             --{params.analysis_type} \
@@ -1582,7 +1580,6 @@ rule export_all_effects:
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
-        java_threads = config["export_all_effects_threads"] * 2,
         jar = "/opt/tools/MbQTL.jar" if config["qtl_settings_extra"]["mbqtl_jar"] is None else config["qtl_settings_extra"]["mbqtl_jar"],
         analysis_type = config["qtl_settings"]["analysis_type"],
         meta_analysis_method = config["qtl_settings"]["meta_analysis_method"],
@@ -1611,8 +1608,8 @@ rule export_all_effects:
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.java_mem_gb}g -Xms{resources.java_mem_gb}g \
-            -Djava.util.concurrent.ForkJoinPool.common.parallelism={params.java_threads} \
-            -Dmaximum.threads={params.java_threads} -Dthread.pool.size={params.java_threads} \
+            -Djava.util.concurrent.ForkJoinPool.common.parallelism={threads} \
+            -Dmaximum.threads={threads} -Dthread.pool.size={threads} \
             -jar {params.jar} \
             --mode mbqtl \
             --{params.analysis_type} \
@@ -1645,8 +1642,8 @@ rule export_all_effects:
             --out {params.out} > {log} 2>&1
             
         singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.java_mem_gb}g -Xms{resources.java_mem_gb}g \
-            -Djava.util.concurrent.ForkJoinPool.common.parallelism={params.java_threads} \
-            -Dmaximum.threads={params.java_threads} -Dthread.pool.size={params.java_threads} \
+            -Djava.util.concurrent.ForkJoinPool.common.parallelism={threads} \
+            -Dmaximum.threads={threads} -Dthread.pool.size={threads} \
             -jar {params.jar} \
             --mode sortfile \
             --input {output.all} \
@@ -1823,7 +1820,6 @@ rule plot_eqtl:
     params:
         bind = config["inputs"]["bind_path"],
         sif = config["inputs"]["singularity_image"],
-        java_threads = config["run_qtl_threads"] * 2,
         jar = "/opt/tools/MbQTL.jar" if config["qtl_settings_extra"]["mbqtl_jar"] is None else config["qtl_settings_extra"]["mbqtl_jar"],
         replacemissinggenotypes = "--replacemissinggenotypes" if config["qtl_settings"]["replacemissinggenotypes"] else "",
         usehardgenotypecalls = "--usehardgenotypecalls" if config["qtl_settings"]["usehardgenotypecalls"] else "",
@@ -1833,8 +1829,8 @@ rule plot_eqtl:
     shell:
         """
         singularity exec --bind {params.bind} {params.sif} java -Xmx{resources.java_mem_gb}g -Xms{resources.java_mem_gb}g \
-            -Djava.util.concurrent.ForkJoinPool.common.parallelism={params.java_threads} \
-            -Dmaximum.threads={params.java_threads} -Dthread.pool.size={params.java_threads} \
+            -Djava.util.concurrent.ForkJoinPool.common.parallelism={threads} \
+            -Dmaximum.threads={threads} -Dthread.pool.size={threads} \
             -jar {params.jar} \
             --mode mbqtlplot \
             --vcf {input.vcf} \
