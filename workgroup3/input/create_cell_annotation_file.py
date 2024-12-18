@@ -9,7 +9,6 @@ Syntax:
 
 parser = argparse.ArgumentParser(description="")
 parser.add_argument("--wg0_indir", required=True, type=str, help="")
-parser.add_argument("--wg1_indir", required=True, type=str, help="")
 parser.add_argument("--metadata_indir", required=True, type=str, help="")
 parser.add_argument("--metadata_outdir", required=True, type=str, help="")
 parser.add_argument("--bryois_indir", required=False, type=str, help="")
@@ -130,6 +129,8 @@ def load_cain_metadata():
 def load_fujita_metadata():
     df = load_cain_metadata()
     df["id"] = df["rnaBatch"] + "_" + df["platformLocation"]
+    df = df.loc[~df["id"].isna(), :]
+    df = df.drop(["individualID", "specimenID", "excludeReason", "exclude"], axis=1).drop_duplicates()
     return df
 
 def load_rosmap_metadata():
@@ -139,8 +140,6 @@ def load_rosmap_metadata():
         df = load_zhou_metadata()
     elif args.dataset == "Cain2023":
         df = load_cain_metadata()
-    elif args.dataset == "Fujita2022":
-        df = load_fujita_metadata()
     else:
         print("Error, unepxected --dataset in load_rosmap_metadata()")
         exit()
@@ -258,21 +257,9 @@ def load_barcodes(pool_name="Pool"):
     barcodes_df = cellbender_barcodes_df.merge(cellranger_barcodes_df, how="outer", on=["barcode", pool_name])
     barcodes_df.drop(["method_x", "method_y"], axis=1, inplace=True)
     barcodes_df["CellRanger"] = barcodes_df["CellRanger"].fillna(False)
-    barcodes_df["CellRanger"] = barcodes_df["CellRanger"].fillna(False)
+    barcodes_df["CellBender"] = barcodes_df["CellBender"].fillna(False)
     barcodes_df["Barcode"] = barcodes_df["barcode"].str.split("-", n=1, expand=True)[0] + "_" + barcodes_df[pool_name].astype(str)
     return barcodes_df
-
-def load_demultiplex():
-    dataset = glob.glob(os.path.join(args.wg1_indir, "*" + args.dataset + "*"))
-    if len(dataset) == 1:
-        dataset = dataset[0]
-    else:
-        print("Error in load_demultiplex()")
-        exit()
-
-    df = pd.read_csv(os.path.join(args.wg1_indir, dataset, "CombinedResults", "Final_Assignments_demultiplexing_doublets.tsv.gz"), sep="\t", header=None, index_col=None)
-    print(df)
-    exit()
 
 def load_bryois_barcodes():
     ad_barcodes_df = pd.read_csv(os.path.join(args.bryois_indir, "ad.cell_type.labels.txt.gz"), sep="\t", header=0, index_col=None)
@@ -313,10 +300,13 @@ if args.dataset in ["RocheMS2022", "RocheAD2022", "RocheColumbia2022"]:
     bryois_keys_df = load_bryois_keys()
     bryois_metadata_df = load_bryois_metadata()
     metadata_df = full_link_df.merge(bryois_metadata_df, how='left').merge(bryois_keys_df, how='left')
-elif args.dataset in ["Mathys2019", "Zhou2020", "Cain2023", "Fujita2022"]:
+elif args.dataset in ["Mathys2019", "Zhou2020", "Cain2023"]:
     print("\nLoading ROSMAP metadata")
     rosmap_metadata_df = load_rosmap_metadata()
     metadata_df = full_link_df.merge(rosmap_metadata_df, how='left')
+elif args.dataset in ["Fujita2022"]:
+    print("\nLoading ROSMAP metadata partially")
+    metadata_df = load_fujita_metadata()
 else:
     print("Unexpected --dataset 1")
     exit()
@@ -344,12 +334,8 @@ else:
 print("\nLoading barcodes data")
 barcodes_df = load_barcodes(pool_name=pool_name)
 print(barcodes_df)
-# print(barcodes_df["id"].value_counts())
 # print(barcodes_df["CellRanger"].value_counts())
 # print(barcodes_df["CellBender"].value_counts())
-
-# print("\nLoading demultiplexing output")
-# demultiplex_df = load_demultiplex()
 
 # print("\nLoading Bryois barcodes data")
 # bryois_barcodes_df = load_bryois_barcodes()
@@ -360,6 +346,8 @@ print(barcodes_df)
 # mathys_df = load_mathys_barcodes()
 # mathys_df = mathys_df.rename({"broad.cell.type": "Mathys_ct_label", "Subcluster": "Mathys_ct_subcluster"})
 # print(mathys_df)
+
+#################################################################
 
 print("\nBuilding cell annotation file")
 if args.dataset in ["RocheMS2022", "RocheAD2022", "RocheColumbia2022"]:
@@ -378,14 +366,15 @@ if args.dataset in ["RocheMS2022", "RocheAD2022", "RocheColumbia2022"]:
     df["cell_treatment"] = "UT"
 elif args.dataset in ["Mathys2019", "Zhou2020", "Cain2023", "Fujita2022"]:
     # df = barcodes_df.merge(metadata_df, how="left").merge(mathys_df, how="left")
+    # print(set(barcodes_df.columns).intersection(set(metadata_df.columns)))
     df = barcodes_df.merge(metadata_df, how="left")
     df = df.rename(columns={
         "platform": "sequencing_platform",
         "tissue": "biomaterial",
         "phenotype": "sample_condition"
     })
-    df["sequencing_run"] = df["projid"].astype(str) + "_run" + df["sequencingBatch"].astype(str)
-    df["sequencing_lane"] = df["projid"].astype(str) + "_lane1"
+    df["sequencing_run"] = df[pool_name].astype(str) + "_run" + df["sequencingBatch"].astype(str)
+    df["sequencing_lane"] = df[pool_name].astype(str) + "_lane1"
     df["plate_based"] = "N"
     df["umi_based"] = "Y"
     df["cell_treatment"] = "UT"
@@ -409,21 +398,26 @@ default_columns = [
 order = []
 for default_column, default_value in default_columns:
     order.append(default_column)
-    if default_column not in df.columns:
+    if default_column in df.columns:
+        if default_value is not None:
+            df[default_column] = df[default_column].fillna(default_value)
+    else:
         if default_value is None:
             print("\tError, missing {}".format(default_column))
             exit()
         else:
             print("\tAdding: {} = {}".format(default_column, default_value))
             df[default_column] = default_value
-df = df[order + ["CellBender"]]
+df = df[order + ["CellRanger", "CellBender"]]
 print(df)
 
 print("Saving cell annotation file")
-df.loc[df["CellBender"], :].to_csv(os.path.join(args.metadata_outdir, args.dataset, args.dataset + "_cell_annotations_CellBender.tsv.gz"), sep="\t", index=False, header=True, compression="gzip")
-print("Saved data frame with shape: {}".format(df.shape))
+cellbender_df = df.loc[df["CellBender"], :]
+cellbender_df.to_csv(os.path.join(args.metadata_outdir, args.dataset, args.dataset + "_cell_annotations_CellBender.tsv.gz"), sep="\t", index=False, header=True, compression="gzip")
+print("Saved data frame with shape: {}".format(cellbender_df.shape))
 
-df.loc[df["CellRanger"], :].to_csv(os.path.join(args.metadata_outdir, args.dataset, args.dataset + "_cell_annotations_CellRanger.tsv.gz"), sep="\t", index=False, header=True, compression="gzip")
-print("Saved data frame with shape: {}".format(df.shape))
+cellranger_df = df.loc[df["CellRanger"], :]
+cellranger_df.to_csv(os.path.join(args.metadata_outdir, args.dataset, args.dataset + "_cell_annotations_CellRanger.tsv.gz"), sep="\t", index=False, header=True, compression="gzip")
+print("Saved data frame with shape: {}".format(cellranger_df.shape))
 
 #################################################################

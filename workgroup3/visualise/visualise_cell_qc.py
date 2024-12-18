@@ -11,17 +11,18 @@ Syntax:
 
 parser = argparse.ArgumentParser(
     description="wrapper for DoubletDetection for doublet detection from transcriptomic data.")
-parser.add_argument("--wg3_dir", type=str, required=True, help="")
+parser.add_argument("--wg3_dir", nargs="+", type=str, required=True, help="")
 parser.add_argument("--droplet_type", type=str, required=False, default="singlet", help="")
 parser.add_argument("--cell_level", type=str, required=False, default="L1", help="")
 parser.add_argument("--cell_type", type=str, required=False, default="EX", help="")
 parser.add_argument("--ancestry", type=str, required=False, default="EUR", help="")
+parser.add_argument("--gene_qc", type=str, required=False, default="MALAT1", help="")
+parser.add_argument("--min_gene_qc_count", type=int, required=False, default=0, help="")
 parser.add_argument("--min_umi", type=int, required=False, default=500, help="")
 parser.add_argument("--max_mt", type=int, required=False, default=5, help="")
 parser.add_argument("--wg1_metadata", type=str, required=False, default=None, help="")
 parser.add_argument("--limit_cells", type=str, required=False, default=None, help="")
 parser.add_argument("--wg0_dir", type=str, required=False, help="")
-parser.add_argument("--gene_qc", type=str, required=False, default="MALAT1", help="")
 parser.add_argument("--palette", type=str, required=False, help="")
 parser.add_argument("--outdir", type=str, required=True, help="")
 parser.add_argument("--label", type=str, required=False, help="")
@@ -46,7 +47,7 @@ import seaborn as sns
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
+
 
 if not os.path.exists(args.outdir):
     os.makedirs(args.outdir)
@@ -66,6 +67,7 @@ def load_metadata(in_dir):
     full_in_dir = os.path.join(in_dir, "expression_input", "pools")
     full_meta_fpaths = glob.glob(os.path.join(full_in_dir, "*.full.metadata.tsv.gz"))
     full_meta_pools = [os.path.basename(fpath).replace(".full.metadata.tsv.gz", "") for fpath in full_meta_fpaths]
+    print("\tFound {:,} '*.full.metadata.tsv.gz' pools".format(len(full_meta_pools)))
 
     meta_fpaths = glob.glob(os.path.join(full_in_dir, "*.qc_metrics.tsv.gz"))
     meta_filename = ".qc_metrics.tsv.gz"
@@ -73,9 +75,11 @@ def load_metadata(in_dir):
         meta_fpaths = glob.glob(os.path.join(full_in_dir, "*.metadata.tsv.gz"))
         meta_filename = ".metadata.tsv.gz"
     meta_pools = [os.path.basename(fpath).replace(meta_filename, "") for fpath in meta_fpaths]
+    print("\tFound {:,} '*{}' pools".format(len(full_meta_pools), meta_filename))
 
     filter_stats_fpaths = glob.glob(os.path.join(full_in_dir, "*.filter.stats.tsv"))
     filter_stats_pool = [os.path.basename(fpath).replace(".filter.stats.tsv", "") for fpath in filter_stats_fpaths]
+    print("\tFound {:,} '*.filter.stats.tsv' pools".format(len(filter_stats_pool), meta_filename))
 
     pools = list(set(full_meta_pools).intersection(set(meta_pools)).intersection(set(filter_stats_pool)))
     print("\tFound {:,} pools".format(len(pools)))
@@ -84,8 +88,6 @@ def load_metadata(in_dir):
     filter_stats_data = []
     n_rows = 0
     for pool in pools:
-        # if pool != "EGAN00003566115":
-        #     continue
         full_meta_df = pd.read_csv(os.path.join(full_in_dir, pool + ".full.metadata.tsv.gz"), sep="\t", header=0, index_col=None)
         meta_df = pd.read_csv(os.path.join(full_in_dir, pool + meta_filename), sep="\t", header=0, index_col=None)
         df = full_meta_df[["Pool", "Barcode", "DropletType", "L1", "Provided_Ancestry", "Assignment", "cell_treatment"]].merge(meta_df, how="left")
@@ -164,7 +166,11 @@ def load_cell_qc(in_dir):
     df = pd.read_csv(os.path.join(in_dir, "expression_input", "metadata.tagged.tsv.gz"), sep="\t", header=0, index_col=None)
     return df[["Pool", "Barcode"] + [column for column in df.columns if column.endswith("tag")]]
 
-def filter_cells(df, min_umi=None, max_mt=None, filter_stats_df=None, print_cells=True):
+def filter_cells(df, gene_qc=None, min_gene_qc_count=None, min_umi=None, max_mt=None, filter_stats_df=None, print_cells=True):
+    if gene_qc is None:
+        gene_qc = args.gene_qc
+    if min_gene_qc_count is None:
+        min_gene_qc_count = args.min_gene_qc_count
     if min_umi is None:
         min_umi = args.min_umi
     if max_mt is None:
@@ -175,13 +181,19 @@ def filter_cells(df, min_umi=None, max_mt=None, filter_stats_df=None, print_cell
     if filter_stats_df is not None:
         n_seurat = filter_stats_df["cells >1 - features >1"]
     droplettype_mask = df["DropletType"] == "singlet"
+    gene_qc_mask = np.ones_like(droplettype_mask).astype(bool)
+    if gene_qc is not None:
+        gene_qc_mask = df[gene_qc].astype(float) >= min_gene_qc_count
     ncount_mask = df["nCount_RNA"].astype(float) >= min_umi
     percentmt_mask = df["percent.mt"].astype(float) <= max_mt
     tag_mask = ncount_mask & percentmt_mask
-    celltype_mask = df[str(args.cell_level)] == str(args.cell_type)
+
+    celltype_mask = np.ones_like(droplettype_mask).astype(bool)
+    if args.cell_type != "all":
+        celltype_mask = df[str(args.cell_level)] == str(args.cell_type)
     ancestry_mask = df["Provided_Ancestry"] == str(args.ancestry)
     celltreatment_mask = df["cell_treatment"] == "UT"
-    mask = droplettype_mask & tag_mask & celltype_mask & ancestry_mask & celltreatment_mask
+    mask = droplettype_mask & gene_qc_mask & tag_mask & celltype_mask & ancestry_mask & celltreatment_mask
 
     if print_cells:
         print("Filtering barcodes:")
@@ -192,19 +204,23 @@ def filter_cells(df, min_umi=None, max_mt=None, filter_stats_df=None, print_cell
             print("    DoubletFinder - DropletType - Singlet: N = {:,} [{:.2f}%]".format(sum(doubletfinder_mask), (100 / n_barcodes) * sum(doubletfinder_mask)))
             scdblfinder_mask = df["scDblFinder_DropletType"] == "singlet"
             print("    scDblFinder - DropletType - Singlet: N = {:,} [{:.2f}%]".format(sum(scdblfinder_mask), (100 / n_barcodes) * sum(scdblfinder_mask)))
-            print("    Agreement: N = {:,} [{:.2f}%]".format(sum(droplettype_mask), (100 / n_barcodes) * sum(droplettype_mask)))
+        print("    Agreement: N = {:,} [{:.2f}%]".format(sum(droplettype_mask), (100 / n_barcodes) * sum(droplettype_mask)))
         mask1 = droplettype_mask & celltype_mask
         print("  {} - {}: N = {:,} [{:.2f}%]".format(args.cell_level, args.cell_type, sum(mask1), (100 / n_barcodes) * sum(mask1)))
 
-        mask2a = droplettype_mask & celltype_mask & ncount_mask
-        mask2b = droplettype_mask & celltype_mask & percentmt_mask
+        mask2 = droplettype_mask & celltype_mask & gene_qc_mask
+        if gene_qc is not None:
+            print("  {} >= {}: N = {:,} [{:.2f}%]".format(gene_qc, min_gene_qc_count, sum(mask2), (100 / n_barcodes) * sum(mask2)))
+
+        mask3a = droplettype_mask & celltype_mask & gene_qc_mask & ncount_mask
+        mask3b = droplettype_mask & celltype_mask & gene_qc_mask & percentmt_mask
         print("  Cell QC:")
-        print("    nCount_RNA.tag - NotOutlier: N = {:,} [{:.2f}%]".format(sum(mask2a), (100 / n_barcodes) * sum(mask2a)))
-        print("    percent.mt.tag - NotOutlier: N = {:,} [{:.2f}%]".format(sum(mask2b), (100 / n_barcodes) * sum(mask2b)))
-        mask2 = droplettype_mask & celltype_mask & tag_mask
-        print("    pass: N = {:,} [{:.2f}%]".format(sum(mask2), (100 / n_barcodes) * sum(mask2)))
-        mask3 = droplettype_mask & celltype_mask & tag_mask & ancestry_mask
-        print("  has genotype information: N = {:,} [{:.2f}%]".format(sum(mask3), (100 / n_barcodes) * sum(mask3)))
+        print("    nCount_RNA.tag - NotOutlier: N = {:,} [{:.2f}%]".format(sum(mask3a), (100 / n_barcodes) * sum(mask3a)))
+        print("    percent.mt.tag - NotOutlier: N = {:,} [{:.2f}%]".format(sum(mask3b), (100 / n_barcodes) * sum(mask3b)))
+        mask3 = droplettype_mask & celltype_mask & gene_qc_mask & tag_mask
+        print("    pass: N = {:,} [{:.2f}%]".format(sum(mask3), (100 / n_barcodes) * sum(mask3)))
+        mask4 = droplettype_mask & celltype_mask & gene_qc_mask & tag_mask & ancestry_mask
+        print("  has genotype information: N = {:,} [{:.2f}%]".format(sum(mask4), (100 / n_barcodes) * sum(mask4)))
         print("")
 
         print(df.loc[mask, :])
@@ -466,17 +482,36 @@ def plot_heatmap(df, annot_df, xlabel="", ylabel="", title="", filename="plot"):
 ################################################
 
 print("Loading data")
-metadata_df, filter_stats_df = load_metadata(in_dir=args.wg3_dir)
-print("\tMetadata matrix: {}".format(metadata_df.shape))
-print(metadata_df)
-print("\tFilter stats matrix: {}".format(filter_stats_df.shape))
-print(filter_stats_df)
+metadata_df_list = []
+filter_stats_df_list = []
+for in_dir in args.wg3_dir:
+    metadata_df, filter_stats_df = load_metadata(in_dir=in_dir)
+    print("\tMetadata matrix: {}".format(metadata_df.shape))
+    print(metadata_df)
+    metadata_df_list.append(metadata_df)
 
-metadata_df.to_csv("visualise_cell_qc_metadata.tsv.gz", sep="\t", header=True, index=False, compression="gzip")
-filter_stats_df.to_csv("visualise_cell_qc_filter_stats.tsv.gz", sep="\t", header=True, index=True, compression="gzip")
+    print("\tFilter stats matrix: {}".format(filter_stats_df.shape))
+    print(filter_stats_df)
+    filter_stats_df_list.append(filter_stats_df)
+
+if len(metadata_df_list) == 1:
+    metadata_df = metadata_df_list[0]
+else:
+    metadata_df = pd.concat(metadata_df_list)
+
+if len(filter_stats_df_list) == 1:
+    filter_stats_df = filter_stats_df_list[0]
+else:
+    filter_stats_df = pd.concat(filter_stats_df_list)
+
+# metadata_df.to_csv("visualise_cell_qc_metadata.tsv.gz", sep="\t", header=True, index=False, compression="gzip")
+# filter_stats_df.to_csv("visualise_cell_qc_filter_stats.tsv.gz", sep="\t", header=True, index=True, compression="gzip")
 # exit()
 # metadata_df = pd.read_csv("visualise_cell_qc_metadata.tsv.gz", sep="\t", header=0, index_col=None)
 # filter_stats_df = pd.read_csv("visualise_cell_qc_filter_stats.tsv.gz", sep="\t", header=0, index_col=0)
+print("\tMetadata matrix: {}".format(metadata_df.shape))
+print("\tFilter stats matrix: {}".format(filter_stats_df.shape))
+
 
 if args.limit_cells is not None:
     print("Limiting cells to {}".format(args.limit_cells))
@@ -509,6 +544,55 @@ plot(
     title="",
     filename=args.label + "_ncountrna_vs_percentmt_cell_qc"
 )
+
+# targets = {
+#     "OLI": 294187,
+#     "EX": 242061,
+#     "AST": 89517,
+#     "IN": 66647,
+#     "MIC": 38734,
+#     "OPC": 33538,
+#     "END": 10123,
+#     "PER": 8674,
+# }
+# thresholds = []
+# for ct in targets.keys():
+#     args.cell_type = ct
+#     target = targets[ct]
+#     n_iters = 150
+#     iter = 0
+#     min_umi = args.min_umi
+#     max_mt = args.max_mt
+#     step_size = 100
+#     deltas = {"umi": [], "mt": []}
+#     delta = None
+#     mode = "umi"
+#     while iter < n_iters and delta != 0:
+#         n_cells = filter_cells(df=metadata_df, min_umi=min_umi, max_mt=max_mt, print_cells=False)
+#         delta = target - n_cells
+#         if delta < 0 and mode == "umi":
+#             min_umi += step_size
+#         elif delta > 0 and mode == "umi":
+#             min_umi -= step_size
+#         elif delta < 0 and mode == "mt":
+#             max_mt -= step_size
+#         elif delta > 0 and mode == "mt":
+#             max_mt += step_size
+#         min_umi = max(0, min_umi)
+#         max_mt = max(min(max_mt, 100), 0)
+#         print("ct: {}\tmode: {}\tmin_umi: {:.2f}\tmax_mt: {:.2f}\tdelta: {:.2f}\tstep size: {:.4f}".format(ct, mode, min_umi, max_mt, delta, step_size))
+#
+#         step_size = step_size / 2
+#         deltas[mode].append(delta)
+#         if len(deltas[mode]) > 2 and deltas[mode][-2] == delta:
+#             mode = "mt" if mode == "umi" else "umi"
+#             step_size = 100 if mode == "umi" else 1
+#         iter += 1
+#
+#     print("---")
+#     thresholds.append([ct, min_umi, max_mt, delta])
+# print(pd.DataFrame(thresholds, columns=["Cell Type", "nCount_RNA", "percent.mt", "delta"]))
+# exit()
 
 # umi_thresholds = range(75, 325, 25)
 # mt_thresholds = range(5, 16, 1)

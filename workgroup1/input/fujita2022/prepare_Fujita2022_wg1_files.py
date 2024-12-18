@@ -116,11 +116,12 @@ class main():
         scrnaseq_metadata.columns = ["individualID", "scrnaSeqID"]
         scrnaseq_metadata["PartialscrnaSeqID"] = [scrnaseq_id.split("_")[0] for scrnaseq_id in scrnaseq_metadata["scrnaSeqID"]]
         print(scrnaseq_metadata)
+        print(len(scrnaseq_metadata["individualID"].unique()))
+        print(scrnaseq_metadata.loc[scrnaseq_metadata["individualID"].duplicated(), :])
 
         # WGS metadata.
-        wholegenomeseq_metadata = metadata_df.loc[metadata_df["assay"] == "wholeGenomeSeq", ["individualID", "specimenID"]].copy()
-        wholegenomeseq_metadata.drop_duplicates(inplace=True)
-        wholegenomeseq_metadata.columns = ["individualID", "wholeGenomeSeqID"]
+        wholegenomeseq_metadata = metadata_df.loc[metadata_df["assay"] == "wholeGenomeSeq", ["individualID", "specimenID", "organ", "tissue"]].copy()
+        wholegenomeseq_metadata.columns = ["individualID", "wholeGenomeSeqID", "organ", "tissue"]
         print(wholegenomeseq_metadata)
 
         vcf_samples = None
@@ -128,6 +129,25 @@ class main():
             print("Checking overlap with VCF")
             vcf_samples = self.load_vcf_samples(inpath=self.vcf)
             wholegenomeseq_metadata = wholegenomeseq_metadata.loc[wholegenomeseq_metadata["wholeGenomeSeqID"].isin(vcf_samples), :]
+
+        dups = set(wholegenomeseq_metadata.loc[wholegenomeseq_metadata["individualID"].duplicated(), "individualID"].values)
+        clean_df = wholegenomeseq_metadata.loc[~wholegenomeseq_metadata["individualID"].isin(dups), :].copy()
+        for dup_ind in dups:
+            subset = wholegenomeseq_metadata.loc[wholegenomeseq_metadata["individualID"] == dup_ind, :]
+            if sum(subset["organ"] == "brain") == 1:
+                clean_df = pd.concat([clean_df, subset.loc[subset["organ"] == "brain", :]])
+            elif sum(subset["tissue"] == "dorsolateral prefrontal cortex") == 1:
+                clean_df = pd.concat([clean_df, subset.loc[subset["tissue"] == "dorsolateral prefrontal cortex", :]])
+            else:
+                print("Warning, could not resolve duplicates:")
+                print(subset)
+                clean_df = pd.concat([clean_df, subset])
+        wholegenomeseq_metadata = clean_df
+        del clean_df
+
+        print(wholegenomeseq_metadata)
+        # print(len(wholegenomeseq_metadata["individualID"].unique()))
+        print(wholegenomeseq_metadata.loc[wholegenomeseq_metadata["individualID"].duplicated(), :])
 
         metadata = scrnaseq_metadata.merge(wholegenomeseq_metadata, how="left")
         print(metadata)
@@ -230,6 +250,8 @@ class main():
     @staticmethod
     def load_fastq_files(inpath):
         fpaths = glob.glob(inpath + "*.fastq.gz")
+        if len(fpaths) == 0 and os.path.exists(inpath + "SYNAPSE_METADATA_MANIFEST.tsv"):
+            fpaths = pd.read_csv(inpath + "SYNAPSE_METADATA_MANIFEST.tsv", sep="\t", header=0, index_col=None)["name"].values
 
         samples = []
         for fpath in fpaths:

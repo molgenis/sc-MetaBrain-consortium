@@ -27,6 +27,7 @@ import argparse
 import glob
 import json
 import os
+import re
 
 # Third party imports.
 import numpy as np
@@ -35,6 +36,9 @@ import seaborn as sns
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
+import warnings
+warnings.filterwarnings("ignore")
 
 # Local application imports.
 
@@ -54,7 +58,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 """
 Syntax: 
-./plot_metadata_overview.py -H
+./plot_metadata_overview.py -h
 """
 
 
@@ -65,6 +69,7 @@ class main():
         self.workdir = getattr(arguments, 'workdir')
         self.mapping = getattr(arguments, 'mapping')
         self.mapping_key = getattr(arguments, 'key')
+        self.ct_columns = getattr(arguments, 'columns')
         self.palette = getattr(arguments, 'palette')
         self.extensions = getattr(arguments, 'extension')
 
@@ -103,6 +108,12 @@ class main():
                             required=False,
                             default=None,
                             help="A cell mapping key.")
+        parser.add_argument("--columns",
+                            nargs="*",
+                            type=str,
+                            required=False,
+                            default=None,
+                            help="")
         parser.add_argument("--palette",
                             type=str,
                             required=False,
@@ -130,6 +141,12 @@ class main():
             if not os.path.exists(metadata_path1) and not os.path.exists(metadata_path2):
                 continue
 
+            dataset_label = re.match("[0-9]{4}-[0-9]{2}-[0-9]{2}-(.+)", dataset).group(1)
+            if "-sequencing-round-1" in dataset_label:
+                dataset_label = dataset_label.replace("-sequencing-round-1", "-SR1")
+            if "-sequencing-round-2" in dataset_label:
+                dataset_label = dataset_label.replace("-sequencing-round-2", "-SR2")
+
             metadata_path = None
             if os.path.exists(metadata_path1):
                 metadata_path = metadata_path1
@@ -138,7 +155,7 @@ class main():
 
             print("  loading '{}' results".format(dataset))
             meta_data_df = self.load_file(metadata_path)
-            meta_data_df["dataset"] = dataset
+            meta_data_df["dataset"] = dataset_label
             meta_data_list.append(meta_data_df)
 
         meta_data_df = pd.concat(meta_data_list, axis=0)
@@ -159,8 +176,10 @@ class main():
                 palette = json.load(f)
             f.close()
 
+        if self.ct_columns is not None:
+            ct_columns = set(ct_columns).intersection(set(self.ct_columns))
+
         print("Plotting.")
-        # ct_columns = ["L1"]
         for ct_col in ct_columns:
             print("\t" + ct_col)
             counts = meta_data_df[["Barcode", ct_col]].groupby(ct_col).count()
@@ -196,7 +215,6 @@ class main():
 
             counts = meta_data_df[["Barcode", ct_col, "dataset", "Pool"]].groupby([ct_col, "dataset", "Pool"]).count()
             counts.reset_index(inplace=True, drop=False)
-            counts["dataset"] = [dataset.split("-")[-1] for dataset in counts["dataset"]]
             print(counts)
 
             self.plot_violinplot_per_group(
@@ -214,7 +232,6 @@ class main():
             total_counts = meta_data_df[["Barcode", "dataset", "Pool"]].groupby(["dataset", "Pool"]).count()
             total_counts.columns = ["Total"]
             total_counts.reset_index(inplace=True, drop=False)
-            total_counts["dataset"] = [dataset.split("-")[-1] for dataset in total_counts["dataset"]]
             fraction_counts = counts.merge(total_counts, on=["dataset", "Pool"], how="left")
             fraction_counts["fraction"] = (fraction_counts["Barcode"] / fraction_counts["Total"]) * 100
             print(fraction_counts)
@@ -258,7 +275,7 @@ class main():
                     palette = None
                     break
 
-        df.sort_values(by=y, inplace=True)
+        df.sort_values(by=y, inplace=True, ascending=False)
 
         g = sns.barplot(x=x,
                         y=y,
@@ -295,7 +312,8 @@ class main():
                       fontweight='bold')
 
         plt.tight_layout()
-        fig.savefig(os.path.join(self.outdir, "{}.png".format(filename)))
+        for extension in self.extensions:
+            fig.savefig(os.path.join(self.outdir, "{}.{}".format(filename, extension)))
         plt.close()
 
     def plot_violinplot(self, df, x="x", y="y", hue=None, xlabel="",
@@ -317,7 +335,8 @@ class main():
             palette=palette)
 
         plt.tight_layout()
-        fig.savefig(os.path.join(self.outdir, "{}.png".format(filename)))
+        for extension in self.extensions:
+            fig.savefig(os.path.join(self.outdir, "{}.{}".format(filename, extension)))
         plt.close()
 
     def plot_violinplot_per_group(self, df, group, x="x", y="y", hue=None, xlabel="",
@@ -383,7 +402,8 @@ class main():
                      fontweight='bold')
 
         plt.tight_layout()
-        fig.savefig(os.path.join(self.outdir, "{}.png".format(filename)))
+        for extension in self.extensions:
+            fig.savefig(os.path.join(self.outdir, "{}.{}".format(filename, extension)))
         plt.close()
 
     @staticmethod
