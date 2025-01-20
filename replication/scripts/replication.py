@@ -1596,6 +1596,10 @@ class Dataset:
             data.append(values)
         fhin.close()
 
+        if colnames is None and len(data) == 0:
+            print("Error, empty file.")
+            exit()
+
         return colnames, data
 
     def get_file_header(self, inpath, header=0, sep="\t"):
@@ -2246,7 +2250,7 @@ class Dataset:
                 if i == 0:
                     columns.append(self.name + " " + argument)
             df_info.append(row_info)
-        standard_df = pd.DataFrame(df_info, columns=columns).replace("NA", np.nan).replace("-", np.nan).dropna(axis=1, how='all').dropna(axis=0, how='any')
+        standard_df = pd.DataFrame(df_info, columns=columns).replace("NA", np.nan).replace("-", np.nan).dropna(axis=1, how='all').dropna(subset=[self.name + " " + gene, self.name + " " + snp])
 
         dtypes = {
             self.name + " gene_hgnc": str,
