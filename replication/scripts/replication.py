@@ -1273,7 +1273,8 @@ class Dataset:
         # line of a given file.
         example_file = self.get_example_file()
         if example_file is None:
-            return
+            print("Error, could not find an example data file.")
+            exit()
         self.effects_header, self.effects_line = self.get_file_header_and_first_line(example_file)
 
     def get_cell_type(self):
@@ -2485,7 +2486,7 @@ class LIMIX(Dataset):
 
     def get_top_effects(self, gene=None, snp=None):
         df = super(LIMIX, self).get_top_effects(gene=gene, snp=snp)
-        if df is None:
+        if df is not None:
             return df
 
         print("Selecting all effects from 'qtl chunks' instead.")
