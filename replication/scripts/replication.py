@@ -2288,7 +2288,7 @@ class Dataset:
                 if i == 0:
                     columns.append(self.name + " " + argument)
             df_info.append(row_info)
-        standard_df = pd.DataFrame(df_info, columns=columns).replace("NA", np.nan).replace("-", np.nan).dropna(axis=1, how='all').dropna(subset=[self.name + " " + gene, self.name + " " + snp])
+        standard_df = pd.DataFrame(df_info, columns=columns).replace("NA", np.nan).replace("nan", np.nan).replace("-", np.nan).dropna(axis=1, how='all').dropna(subset=[self.name + " " + gene, self.name + " " + snp])
 
         dtypes = {
             self.name + " gene_hgnc": str,
@@ -2317,7 +2317,11 @@ class Dataset:
                 continue
             # this needs to be done in two steps to deal with things like '180.0'.
             if dtype == int:
-                standard_df[column] = standard_df[column].astype(float).astype(int)
+                standard_df[column] = standard_df[column].astype(float)
+
+                # This only works if there are no NaN values.
+                if standard_df[column].isna().sum() == 0:
+                    standard_df[column] = standard_df[column].astype(int)
             else:
                 standard_df[column] = standard_df[column].astype(dtype)
 
