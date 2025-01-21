@@ -92,6 +92,7 @@ class main():
         self.discovery_name = getattr(arguments, 'discovery_name')
         self.discovery_cell_type = getattr(arguments, 'discovery_cell_type')
         self.discovery_class_settings = getattr(arguments, 'discovery_class_settings')
+        self.discovery_rm_dupl = getattr(arguments, 'discovery_rm_dupl')
 
         self.replication_method = getattr(arguments, 'replication_method')
         self.replication_path = getattr(arguments, 'replication_path')
@@ -100,13 +101,13 @@ class main():
         self.replication_name = getattr(arguments, 'replication_name')
         self.replication_cell_type = getattr(arguments, 'replication_cell_type')
         self.replication_class_settings = getattr(arguments, 'replication_class_settings')
+        self.replication_rm_dupl = getattr(arguments, 'replication_rm_dupl')
 
         self.gene = "gene_" + getattr(arguments, 'gene')
         self.snp = "SNP_" + getattr(arguments, 'snp')
         self.pvalue = getattr(arguments, 'pvalue') + "_pvalue"
         self.effect = getattr(arguments, 'effect')
         self.allow_infer = getattr(arguments, 'allow_infer')
-        self.rm_dupl = getattr(arguments, 'rm_dupl')
         self.alpha = getattr(arguments, 'alpha')
         self.fdr_calc_method = getattr(arguments, 'fdr_calc_method')
         self.log_modulus = getattr(arguments, 'log_modulus')
@@ -214,6 +215,11 @@ class main():
                             required=False,
                             default=None,
                             help="JSON file containing custom discovery class settings.")
+        parser.add_argument("--discovery_rm_dupl",
+                            type=str,
+                            choices=["none", "all", "allbutfirst"],
+                            default="none",
+                            help="How to deal with duplicates in the discovery summary statistics. Options: none) throw error and exit, all) remove all duplicates, allbutfirst) removed all except the first effect. Default: 'none'.")
         parser.add_argument("--replication_method",
                             type=str,
                             required=True,
@@ -247,6 +253,11 @@ class main():
                             required=False,
                             default=None,
                             help="JSON file containing custom discovery class settings.")
+        parser.add_argument("--replication_rm_dupl",
+                            type=str,
+                            choices=["none", "all", "mismatched"],
+                            default="none",
+                            help="How to deal with duplicates in the replication summary statistics. Options: none) throw error and exit, all) remove all duplicates, mismatches) removed duplicates for which the effect allele does not match. Default: 'none'.")
         parser.add_argument("--gene",
                             type=str,
                             choices=["ensembl", "hgnc"],
@@ -270,11 +281,6 @@ class main():
         parser.add_argument("--allow_infer",
                             action='store_true',
                             help="Allow for inferring summary stats information. Note that inferred info are approximations and not exact. Default: False.")
-        parser.add_argument("--rm_dupl",
-                            type=str,
-                            choices=["none", "all", "mismatched"],
-                            default="none",
-                            help="How to deal with duplicates in the replication summary statistics. Options: none) throw error and exit, all) remove all duplicates, mismatches) removed duplicates for which the effect allele does not match. Default: 'none'.")
         parser.add_argument("--alpha",
                             type=float,
                             required=False,
@@ -394,7 +400,8 @@ class main():
             exit()
 
         # Create a dict of top effects with keys being gene names and values being SNPs.
-        discovery_eqtls = disc.get_eqtl_effects(df=discovery_top_df, gene=self.gene, snp=self.snp)
+        discovery_eqtls, n_disc_effects, n_disc_duplicated = disc.get_eqtl_effects(df=discovery_top_df, gene=self.gene, snp=self.snp)
+        print("\tDiscovery has {:,} effects, {:,} were excluded due to duplication\n".format(n_disc_effects, n_disc_duplicated))
 
         # Select the specific top effects from the discovery datasets in the replication dataset.
         print("### Loading replication data... ###")
@@ -481,6 +488,7 @@ class main():
         print("  > Discovery name: {}".format(self.discovery_name))
         print("  > Discovery cell type: {}".format(self.discovery_cell_type))
         print("  > Discovery class settings: {}".format(self.discovery_class_settings))
+        print("  > Discovery remove duplicates: {}".format(self.discovery_rm_dupl))
         print("  > Replication method: {}".format(self.replication_method))
         print("  > Replication path: {}".format(self.replication_path))
         print("  > Replication all filename: {}".format(self.replication_all_filename))
@@ -488,6 +496,7 @@ class main():
         print("  > Replication name: {}".format(self.replication_name))
         print("  > Replication cell type: {}".format(self.replication_cell_type))
         print("  > Replication class settings: {}".format(self.replication_class_settings))
+        print("  > Replication remove duplicates: {}".format(self.replication_rm_dupl))
         print("  > Cell type names path: {}".format(self.cell_type_names_path))
         print("  > Palette path: {}".format(self.palette_path))
         print("  > Gene: {}".format(self.gene))
@@ -495,7 +504,6 @@ class main():
         print("  > P-value: {}".format(self.pvalue))
         print("  > Effect: {}".format(self.effect))
         print("  > Allow infer: {}".format(self.allow_infer))
-        print("  > Remove duplicates: {}".format(self.rm_dupl))
         print("  > Alpha: {}".format(self.alpha))
         print("  > FDR calc. method: {}".format(self.fdr_calc_method))
         print("  > Log modulus transform: {}".format(self.log_modulus))
@@ -608,28 +616,45 @@ class main():
         else:
             print("Warning, could not verify that the alleles match. Assuming it is fine; use with caution!")
 
-        # Duplicates in the discovery should never happen so stop if they exist.
+        # Resolve duplicates in discovery data.
         if len(set(disc_df.index)) != disc_df.shape[0]:
-            print("Error, discovery contains duplicate indices")
-            self.print_duplicate_indices(df=disc_df)
-            exit()
+            if self.discovery_rm_dupl == "none":
+                print("Error, discovery contains duplicate indices")
+                self.print_duplicate_indices(df=disc_df)
+                exit()
+            elif self.discovery_rm_dupl == "all":
+                print("Warning, discovery contains duplicate indices. Resolving this by removing"
+                      " all duplicates.")
+                disc_df = self.remove_duplicates(df=disc_df)
+            elif self.discovery_rm_dupl == "allbutfirst":
+                print("Warning, discovery contains duplicate indices. Attempting to resolve duplicates"
+                      " by removing all effects except the first.")
+                disc_df = self.remove_allbutfirst_duplicates(df=disc_df)
+            else:
+                print("Error, unexpected argument for --discovery_rm_dupl.")
+                exit()
 
-        # Duplicates in the replication data might be possible to resolve.
+            if len(set(disc_df.index)) != disc_df.shape[0]:
+                print("Error, discovery still contains duplicate indices.")
+                self.print_duplicate_indices(df=disc_df)
+                exit()
+
+        # Resolve duplicates in replication data.
         if len(set(repl_df.index)) != repl_df.shape[0]:
-            if self.rm_dupl == "none":
+            if self.replication_rm_dupl == "none":
                 print("Error, replication contains duplicate indices")
                 self.print_duplicate_indices(df=repl_df)
                 exit()
-            elif self.rm_dupl == "all":
+            elif self.replication_rm_dupl == "all":
                 print("Warning, replication contains duplicate indices. Resolving this by removing"
-                      " all duplicates. ")
-                repl_df = self.remove_duplicates(repl_df=repl_df)
-            elif self.rm_dupl == "mismatched":
+                      " all duplicates.")
+                repl_df = self.remove_duplicates(df=repl_df)
+            elif self.replication_rm_dupl == "mismatched":
                 print("Warning, replication contains duplicate indices. Attempting to resolve duplicates"
                       " by removing effects that require flipping.")
                 repl_df = self.remove_mismatched_duplicates(disc_df=disc_df, disc_name=disc_name, repl_df=repl_df, repl_name=repl_name)
             else:
-                print("Error, unexpected argument for --rm_dupl.")
+                print("Error, unexpected argument for --replication_rm_dupl.")
                 exit()
 
             if len(set(repl_df.index)) != repl_df.shape[0]:
@@ -715,8 +740,12 @@ class main():
         return df[column].apply(lambda value: "/".join(sorted(value.split("/"))))
 
     @staticmethod
-    def remove_duplicates(repl_df):
-        return repl_df.loc[~repl_df.index.duplicated(keep=False), :]
+    def remove_duplicates(df):
+        return df.loc[~df.index.duplicated(keep=False), :]
+
+    @staticmethod
+    def remove_allbutfirst_duplicates(df):
+        return df.groupby(df.index).first()
 
     @staticmethod
     def remove_mismatched_duplicates(disc_df, disc_name, repl_df, repl_name):
@@ -1273,7 +1302,7 @@ class Dataset:
         # line of a given file.
         example_file = self.get_example_file()
         if example_file is None:
-            print("Error, could not find an example data file.")
+            print("Error, could not find any data file(s).")
             exit()
         self.effects_header, self.effects_line = self.get_file_header_and_first_line(example_file)
 
@@ -1482,6 +1511,8 @@ class Dataset:
 
         # Save this as {gene: {snp1, snp2}} to allow for multiple snps per gene to be extracted.
         effects = {}
+        n_effects = 0
+        n_duplicates = 0
         for gene, snp in zip(genes, snps):
             if gene is None or snp is None:
                 continue
@@ -1491,10 +1522,13 @@ class Dataset:
 
             if snp in effects[gene]:
                 print("Warning, {} - {} is duplicated.".format(gene, snp))
-    
-            effects[gene].add(snp)
+                n_duplicates += 1
+                continue
 
-        return effects
+            effects[gene].add(snp)
+            n_effects += 1
+
+        return effects, n_effects, n_duplicates
 
     @staticmethod
     def get_effect_snps(effects):
@@ -2132,8 +2166,11 @@ class Dataset:
 
     def extract_other_allele(self, row, alleles_column, effect_allele_column):
         alleles = self.extract_info(data=row, query=alleles_column)
-        effect_allele = self.extract_info(data=row, query=effect_allele_column)
+        if alleles is None:
+            return np.nan
         allele1, allele2 = alleles.split("/")
+
+        effect_allele = self.extract_info(data=row, query=effect_allele_column)
         if effect_allele is None or (effect_allele != allele1 and effect_allele != allele2):
             return np.nan
         elif effect_allele == allele1:

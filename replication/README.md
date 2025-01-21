@@ -181,9 +181,12 @@ Note that a [Dockerfile](Dockerfile) is available will all required software.
  * **--discovery_name**: Name of the discovery summary statistics.
  * **--discovery_cell_type**: Cell type of the discovery summary statistics. Default: None.
  * **--discovery_class_settings**: JSON file containing custom discovery class settings.
+ * **--discovery_rm_dupl**: How to deal with duplicates in the discovery summary statistics. Options: none) throw error and exit, all) remove all duplicates, allbutfirst) removed all except the first effect. Default: 'none'.
+
 
 ### Replication arguments:
  * **--replication_[method/path/all_filename/top_filename/name/cell_type/class_settings]**: same as discovery but then for the replication summary statistics
+ * **--replication_rm_dupl**: How to deal with duplicates in the replication summary statistics. Options: **none**) throw error and exit, **all**) remove all duplicates, **mismatches**) removed duplicates for which the effect allele does not match. Default: 'none'.
 
 ### Data extraction arguments:
  * **--gene**: Which gene format to select on. Options: hgnc, ensembl. Default: 'ensembl'.
@@ -193,7 +196,6 @@ Note that a [Dockerfile](Dockerfile) is available will all required software.
  * **--allow_infer**: Allow for inferring summary stats information. Note that inferred info are approximations and not exact. Default: False.
 
 ### Overlap arguments:
- * **--rm_dupl**: How to deal with duplicates in the replication summary statistics. Options: **none**) throw error and exit, **all**) remove all duplicates, **mismatches**) removed duplicates for which the effect allele does not match. Default: 'none'.
  * **--alpha**: The significance threshold to use. Default: 0.05.
  * **--fdr_calc_method**: The multiple testing correction method to use. Default: 'qvalues'.
 
