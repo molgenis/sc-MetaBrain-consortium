@@ -2325,6 +2325,15 @@ class Dataset:
             else:
                 standard_df[column] = standard_df[column].astype(dtype)
 
+        # Check for p-values out of range.
+        for pval_column in ["nominal_pvalue", "permuted_pvalue", "bonferroni_pvalue"]:
+            if self.name + " " + pval_column not in standard_df.columns:
+                continue
+            invalid_pval_range_mask = (standard_df[self.name + " " + pval_column] < 0) | (standard_df[self.name + " " + pval_column] > 1)
+            if invalid_pval_range_mask.sum() > 0:
+                standard_df = standard_df.loc[~invalid_pval_range_mask, :]
+                print(f"Warning: {invalid_pval_range_mask.sum():,} rows were removed since the value in column {pval_column} is outside of a normal p-value range.")
+
         # Remove FDR if we do not want it (in the case of replication).
         if self.name + " FDR" in standard_df and not include_fdr:
             standard_df.drop([self.name + " FDR"], axis=1, inplace=True)
