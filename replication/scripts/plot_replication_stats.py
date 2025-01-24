@@ -56,16 +56,12 @@ def plot(df, title="", filename="heatmap"):
     sns.set_style("ticks")
     if ncolumn_cells > 1 and nrow_cells > 1:
         sns.set(rc={'figure.figsize': (ncols * ncolumn_cells, nrows * nrow_cells)})
-        fig, axes = plt.subplots(nrows=nrows,
-                                 ncols=ncols,
-                                 sharex='none',
-                                 sharey='none')
     else:
-        sns.set(rc={'figure.figsize': (ncols * 6, nrows * max(nrow_cells, ncolumn_cells))})
-        fig, axes = plt.subplots(nrows=nrows,
-                                 ncols=ncols,
-                                 sharex='none',
-                                 sharey='row')
+        sns.set(rc={'figure.figsize': (ncols * 6, 6)})
+    fig, axes = plt.subplots(nrows=nrows,
+                             ncols=ncols,
+                             sharex='none',
+                             sharey='none')
 
     for col_index, (metric, vmin, center, vmax) in enumerate([("AC", -100, 0, 100),
                                                               ("Coef", -1, 0, 1),
@@ -110,36 +106,27 @@ def plot(df, title="", filename="heatmap"):
                 coi.append(metric + "SE")
 
             plot_df = df.loc[df["Disc significant"] & ~df["Repl significant"], coi].copy()
-            if not metric + "SE" in plot_df.columns:
-                if metric == "Coef":
-                    plot_df[metric + "SE"] = 1.0 / np.sqrt(plot_df["N"] - 3)
-                else:
-                    plot_df[metric + "SE"] = 0
-            plot_df.columns = ["discovery", "replication", "n", metric, "se"]
-            plot_df["lower"] = plot_df[metric] - (1.96 * plot_df["se"])
-            plot_df["upper"] = plot_df[metric] + (1.96 * plot_df["se"])
+            plot_df.sort_values(by=metric, inplace=True, ascending=False)
+            plot_df["discovery_id"] = [x.replace("Main_", "") for x in plot_df["discovery_id"]]
+            plot_df["replication_id"] = [x.replace("Main_", "") for x in plot_df["replication_id"]]
 
             if ncolumn_cells > 1 and nrow_cells == 1:
-                label = "discovery"
-                hue = "replication"
-                xlabel = args.repl_name + " discovery"
-                ylabel = "discovery"
+                label = "discovery_id"
+                subtitle = plot_df["replication_id"].values[0]
             else:
-                label = "replication"
-                hue = "discovery"
-                xlabel = args.disc_name + " discovery"
-                ylabel = "replication"
+                label = "replication_id"
+                subtitle = plot_df["discovery_id"].values[0]
 
-            plot_df["label"] = plot_df[label] + " [n=" + plot_df["n"].astype(str) + "]"
-
-            plot_stripplot(
+            plot_scatterplot(
                 ax=axes[col_index],
                 df=plot_df,
-                label="label",
-                value=metric,
-                hue=hue,
-                xlabel=metric,
-                ylabel=ylabel if col_index == 0 else ""
+                x="N",
+                y=metric,
+                hue=None,
+                label=label,
+                xlabel="N effects",
+                ylabel=metric,
+                title=subtitle
             )
 
     fig.suptitle(title,
@@ -196,36 +183,30 @@ def plot_heatmap(ax, df, annot_df, vmin=None, vmax=None, center=None, xlabel="",
     ax.set_title(title, fontsize=12)
 
 
-def plot_stripplot(ax, df, label="x", value="y", hue="y", xlabel="", ylabel="", title=""):
-    dfm = df.melt(id_vars=[label, hue], value_vars=["lower", "upper"])
-    sns.pointplot(x="value",
-                  y=label,
-                  data=dfm,
-                  hue=hue,
-                  color="#000000",
-                  join=False,
-                  ax=ax)
+def plot_scatterplot(ax, df, x="x", y="y", hue=None, label=None, label_top=3, label_bottom=3, xlabel="", ylabel="", title=""):
+    sns.scatterplot(x=x,
+                    y=y,
+                    hue=hue,
+                    color="#000000" if hue is None else None,
+                    data=df,
+                    linewidth=0,
+                    legend=False,
+                    ax=ax)
 
-    sns.stripplot(x=value,
-                  y=label,
-                  data=df,
-                  hue=hue,
-                  size=12,
-                  dodge=False,
-                  orient="h",
-                  palette='dark:#000000',
-                  linewidth=1,
-                  edgecolor="w",
-                  jitter=0,
-                  legend=False,
-                  ax=ax)
+    if label is not None:
+        nrows = df.shape[0]
+        for i, (index, point) in enumerate(df.iterrows()):
+            if label_top <= i < nrows - label_bottom:
+                continue
 
-    # ax.tick_params(axis='x', labelsize=10)
-    # ax.tick_params(axis='y', labelsize=10)
-    ax.get_legend().remove()
-
-    ax.xaxis.grid(False)
-    ax.yaxis.grid(True)
+            ax.annotate(
+                str(point[label]),
+                xy=(point[x], point[y]),
+                color="#b22222",
+                fontsize=8,
+                ha='center',
+                va='bottom',
+                fontweight='bold')
 
     ax.set_title(title,
                  fontsize=14,
