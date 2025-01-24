@@ -77,7 +77,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 CHROMOSOMES = [str(chromosome) for chromosome in range(1, 23)] + ["X", "Y", "MT"]
 BATCHES = [str(batch) for batch in range(0, 100000)]
-METHODS = ["CUSTOM", "LIMIX", "mbQTL", "eQTLMappingPipeline", "eQTLgenPhase2", "Bryois", "Bryois_REDUCED", "Fujita", "DeconQTL", "PICALO"]
+METHODS = ["CUSTOM", "LIMIX", "mbQTL", "eQTLMappingPipeline", "eQTLgenPhase2", "Bryois", "Bryois_REDUCED", "Fujita", "DeconQTL", "PICALO", "GTEx"]
 EFFECTS = ["zscore", "beta"]
 
 
@@ -111,6 +111,7 @@ class main():
         self.alpha = getattr(arguments, 'alpha')
         self.fdr_calc_method = getattr(arguments, 'fdr_calc_method')
         self.log_modulus = getattr(arguments, 'log_modulus')
+        self.gene_translate_path = getattr(arguments, 'gene_translate')
         self.cell_type_names_path = getattr(arguments, 'cell_type_names')
         self.palette_path = getattr(arguments, 'palette')
         self.extensions = getattr(arguments, 'extensions')
@@ -294,6 +295,11 @@ class main():
         parser.add_argument("--log_modulus",
                             action='store_true',
                             help="Transfer the effect column into log space while maintaining effect direction. Default: False.")
+        parser.add_argument("--gene_translate",
+                            type=str,
+                            required=False,
+                            default=None,
+                            help="A tab seperated file containing ensembl - HGNC gene mappings. Default: None.")
         parser.add_argument("--cell_type_names",
                             type=str,
                             required=False,
@@ -354,6 +360,7 @@ class main():
             path=self.discovery_path,
             all_filename=self.discovery_all_filename,
             top_filename=self.discovery_top_filename,
+            gene_translate_path=self.gene_translate_path,
             cell_type=self.discovery_cell_type,
             class_settings=self.discovery_class_settings,
             allow_infer=self.allow_infer,
@@ -367,6 +374,7 @@ class main():
             path=self.replication_path,
             all_filename=self.replication_all_filename,
             top_filename=self.replication_top_filename,
+            gene_translate_path=self.gene_translate_path,
             cell_type=self.replication_cell_type,
             class_settings=self.replication_class_settings,
             allow_infer=self.allow_infer,
@@ -402,6 +410,9 @@ class main():
         # Create a dict of top effects with keys being gene names and values being SNPs.
         discovery_eqtls, n_disc_effects, n_disc_duplicated = disc.get_eqtl_effects(df=discovery_top_df, gene=self.gene, snp=self.snp)
         print("\tDiscovery has {:,} effects, {:,} were excluded due to duplication\n".format(n_disc_effects, n_disc_duplicated))
+        if n_disc_effects == 0:
+            print("Error, no effects in discovery dataframe to query.")
+            exit()
 
         # Select the specific top effects from the discovery datasets in the replication dataset.
         print("### Loading replication data... ###")
@@ -540,6 +551,8 @@ class main():
             return DeconQTL
         elif method == "PICALO":
             return PICALO
+        elif method == "GTEx":
+            return GTEx
         else:
             print("Error, unexpected method '{}'".format(method))
             exit()
@@ -1168,7 +1181,7 @@ class main():
 
 
 class Dataset:
-    def __init__(self, type, name, path, all_filename, top_filename, cell_type, class_settings, allow_infer, verbose):
+    def __init__(self, type, name, path, all_filename, top_filename, gene_translate_path, cell_type, class_settings, allow_infer, verbose):
         self.class_name = None
         self.type = type
         self.name = name
@@ -1176,6 +1189,7 @@ class Dataset:
         self.all_filename = all_filename
         self.top_filename = top_filename
         self.cell_type = cell_type
+        self.gene_translate_path = gene_translate_path if (gene_translate_path is not None and os.path.exists(gene_translate_path)) else None
         self.class_settings = class_settings
         self.allow_infer = allow_infer
         self.verbose = verbose
@@ -1187,6 +1201,10 @@ class Dataset:
         # Default effects info.
         self.effects_header = None
         self.effects_line = None
+
+        # Gene translate dicts.
+        self.ensembl_to_hgnc = None
+        self.hgnc_to_ensembl = None
 
         # Default sample size, assume equal for all effects.
         self.n = None
@@ -1222,6 +1240,7 @@ class Dataset:
             "FDR": self.na,
             "N": self.na,
             "AF": self.na,
+            "MAN": self.na,
             "MAF": self.na
         }
 
@@ -1309,6 +1328,38 @@ class Dataset:
     def get_cell_type(self):
         return self.cell_type
 
+    def load_gene_translate_dicts(self):
+        if not os.path.exists(self.gene_translate_path):
+            print("Error, gene translate file does not exist.")
+            return
+
+        df = pd.read_csv(self.gene_translate_path, sep="\t", header=None, index_col=None)
+        if df.iloc[:, 0].nunique() != df.shape[0]:
+            print("Error, ensembl IDs should be unique.")
+            exit()
+        self.ensembl_to_hgnc = dict(zip(df.iloc[:, 0], df.iloc[:, 1]))
+
+        if df.iloc[:, 1].nunique() != df.shape[0]:
+            mask = df.iloc[:, 1].duplicated()
+            print("Warning, gene translate had {} duplicate HGNC symbols. Removing all duplicates.".format(mask.sum()))
+            df = df.loc[~mask, :]
+
+        self.hgnc_to_ensembl = dict(zip(df.iloc[:, 1], df.iloc[:, 0]))
+
+        del df
+
+    def get_ensembl_to_hgnc(self):
+        if self.ensembl_to_hgnc is None:
+            self.load_gene_translate_dicts()
+
+        return self.ensembl_to_hgnc
+
+    def get_hgnc_to_ensembl(self):
+        if self.hgnc_to_ensembl is None:
+            self.load_gene_translate_dicts()
+
+        return self.hgnc_to_ensembl
+
     def get_id(self):
         if self.cell_type is None or self.cell_type == "":
             return self.get_name()
@@ -1325,6 +1376,22 @@ class Dataset:
 
     def get_na(self):
         return self.na
+
+    def select_columns(self):
+        # TODO: would be good to build this logic in for the get_top_effects and get_all_effects functions as well
+        if self.type == "discovery":
+            return self.get_discovery_columns()
+        elif self.type == "replication":
+            return self.get_replication_columns()
+        else:
+            print("Error, unexpected type '{}' in {}".format(self.type, self.name))
+            exit()
+
+    def get_discovery_columns(self):
+        return self.columns
+
+    def get_replication_columns(self):
+        return self.columns
 
     def get_columns(self):
         return self.columns
@@ -1360,6 +1427,11 @@ class Dataset:
         if self.has_column(label):
             return True
 
+        if label == "gene_ensembl" and self.contains_data("gene_hgnc") and self.gene_translate_path is not None:
+            return True
+        if label == "gene_hgnc" and self.contains_data("gene_ensembl") and self.gene_translate_path is not None:
+            return True
+
         # In some cases the data might not have a certain column but it can be deduced from other columns.
         if label == "OA" and self.contains_data("alleles") and self.contains_data("EA"):
             return True
@@ -1376,7 +1448,7 @@ class Dataset:
                     return False
                 return True
 
-        if label == "N" and self.n is not None:
+        if label == "N" and (self.n is not None or (self.contains_data("MAN") and self.contains_data("MAF"))):
             return True
 
         if label == "MAF" and self.contains_data("AF"):
@@ -2109,6 +2181,16 @@ class Dataset:
             return df
         print("Adding missing info to '{}':".format(self.class_name))
 
+        # Fill in missing gene info.
+        if not self.has_column("gene_ensembl") and self.contains_data("gene_hgnc") and self.gene_translate_path is not None:
+            print("\tAdding ensembl column")
+            df["gene_ensembl"] = self.translate_column(df=df, key_column=self.get_column("gene_hgnc"), translate_dict=self.get_hgnc_to_ensembl())
+            self.columns["gene_ensembl"] = [("gene_ensembl", None, None)]
+        if not self.has_column("gene_hgnc") and self.contains_data("gene_ensembl") and self.gene_translate_path is not None:
+            print("\tAdding HGNC column")
+            df["gene_hgnc"] = self.translate_column(df=df, key_column=self.get_column("gene_ensembl"), translate_dict=self.get_ensembl_to_hgnc())
+            self.columns["gene_hgnc"] = [("gene_hgnc", None, None)]
+
         # Fill in the other allele.
         if not self.has_column("OA") and self.contains_data("OA"):
             print("\tAdding OA column")
@@ -2123,8 +2205,12 @@ class Dataset:
 
         # Fill in N.
         if not self.has_column("N") and self.contains_data("N"):
-            print("\tAdding N column")
-            df["N"] = self.n
+            if self.n is not None:
+                print("\tAdding N column")
+                df["N"] = self.n
+            else:
+                print("\tAdding N column")
+                df["N"] = self.calc_n_from_man(df=df, man_column=self.get_column("MAN"), maf_column=self.get_column("MAF"))
             self.columns["N"] = [("N", None, None)]
 
         # Fill in the MAF.
@@ -2161,6 +2247,16 @@ class Dataset:
         print("")
         return df
 
+    def translate_column(self, df, key_column, translate_dict):
+        return df.apply(lambda row: self.translate_value(row=row, key_column=key_column, translate_dict=translate_dict), axis=1)
+
+    def translate_value(self, row, key_column, translate_dict):
+        value = self.extract_info(data=row, query=key_column)
+        if value is None or value not in translate_dict:
+            return np.nan
+
+        return translate_dict[value]
+
     def impute_other_allele(self, df, alleles_column, effect_allele):
         return df.apply(lambda row: self.extract_other_allele(row=row, alleles_column=alleles_column, effect_allele_column=effect_allele), axis=1)
 
@@ -2189,6 +2285,21 @@ class Dataset:
             return np.nan
 
         return min(nominal_pvalue * ntests, 1)
+
+    def calc_n_from_man(self, df, man_column, maf_column):
+        return df.apply(lambda row: self.man_to_n(row=row, man_column=man_column, maf_column=maf_column), axis=1)
+
+
+    def man_to_n(self, row, man_column, maf_column):
+        try:
+            man = int(self.extract_info(data=row, query=man_column))
+            maf = float(self.extract_info(data=row, query=maf_column))
+        except ValueError:
+            return np.nan
+
+        n = int(man / maf)
+
+        return n
 
     def calc_zscore_from_pvalue(self, df, beta_column, pvalue_column):
         return df.apply(lambda row: self.beta_pvalue_to_zscore(row=row, beta_column=beta_column, pvalue_column=pvalue_column), axis=1)
@@ -2308,6 +2419,7 @@ class Dataset:
             self.name + " FDR": float,
             self.name + " N": int,
             self.name + " AF": float,
+            self.name + " MAN": int,
             self.name + " MAF": float
         }
 
@@ -2492,6 +2604,7 @@ class LIMIX(Dataset):
             "FDR": [("global_pvalue", None, None)],
             "N": [("n_samples", None, None)],
             # "AF": [(None, None, None)],
+            # "MAN": [(None", None, None)],
             "MAF": [("maf", None, None)]
         })
 
@@ -2794,6 +2907,7 @@ class mbQTL(Dataset):
             "FDR": self.get_fdr_column(),
             "N": [("MetaPN", None, None)],
             "AF": [("SNPEffectAlleleFreq", None, None)],
+            # "MAN": [(None", None, None)],
             # "MAF": [(None, None, None)]
         })
 
@@ -2892,7 +3006,8 @@ class eQTLMappingPipeline(Dataset):
             "zscore": [("Zscore", None, None)],
             # "FDR": [("FDR", None, None)], # TODO: not sure what kind of FDR this is
             # "N": [("NrSamples", None, None)],
-            # "AF": [(None, None, None)]
+            # "AF": [(None, None, None)],
+            # "MAN": [(None", None, None)],
             # "MAF": [(None, None, None)],
         })
 
@@ -2961,6 +3076,7 @@ class eQTLgenPhase2(Dataset):
             # "FDR": [(None, None, None)],
             "N": [("sample_size", None, None)],
             "AF": [("allele_eff_freq", None, None)],
+            # "MAN": [(None", None, None)],
             # "MAF": [(None, None, None)]
         })
 
@@ -3023,6 +3139,7 @@ class Bryois(Dataset):
             "FDR": [("adj_p", None, None)],
             # "N": [(None, None, None)],
             # "AF": [(None, None, None)],
+            # "MAN": [(None", None, None)],
             "MAF": [("MAF", None, None)]
         })
 
@@ -3153,6 +3270,7 @@ class Bryois_REDUCED(Dataset):
             # "FDR": [(None, None, None)],
             # "N": [(None, None, None)],
             # "AF": [(None, None, None)],
+            # "MAN": [(None", None, None)],
             # "MAF": [(None, None, None)],
         })
 
@@ -3200,6 +3318,7 @@ class Fujita(Dataset):
             # "FDR": [(None, None, None)],
             # "N": [(None, None, None)],
             "AF": [("ALT_AF", None, None)],
+            # "MAN": [(None", None, None)],
             # "MAF": [(None, None, None)]
         })
 
@@ -3248,6 +3367,7 @@ class DeconQTL(Dataset):
             # "FDR": [(None, None, None)],
             # "N": [("N", None, None)],
             # "AF": [(None, None, None)],
+            # "MAN": [(None", None, None)],
             # "MAF": [(None, None, None)],
         })
 
@@ -3338,6 +3458,7 @@ class PICALO(Dataset):
             "FDR": [("FDR", None, None)],
             "N": [("N", None, None)],
             # "AF": [(None, None, None)],
+            # "MAN": [(None", None, None)],
             "MAF": [("MAF", None, None)]
         })
 
@@ -3369,6 +3490,71 @@ class PICALO(Dataset):
         df.drop(["SNP"], axis=1, inplace=True)
         return info_df.merge(df, left_index=True, right_index=True, how="right")
 
+
+##############################################################################################################
+
+
+class GTEx(Dataset):
+    def __init__(self, *args, **kwargs):
+        super(GTEx, self).__init__(*args, **kwargs)
+        self.class_name = "GTEx"
+
+        # Update filenames.
+        self.update_all_filename(filename="<CT>.v8.signif_variant_gene_pairs.txt.gz")
+        self.update_top_filename(filename="<CT>.v8.egenes.txt.gz")
+
+        # Set file paths.
+        self.set_all_effects_path()
+        self.set_top_effects_path()
+
+        # Columns that are in the original file.
+        self.columns.update(self.select_columns())
+
+    def get_discovery_columns(self):
+        return {
+            "gene_hgnc": [("gene_name", None, None)],
+            "gene_ensembl": [("gene_id", "(ENSG[0-9]+).[0-9]+", None)],
+            "SNP_rsid": [("rs_id_dbSNP151_GRCh38p7", None, None)],
+            "SNP_chr:pos": [("chr", "chr([0-9]{1,2}|X|Y|MT)", ":"), ("variant_pos", None, None)],
+            "alleles": [("ref", None, "/"), ("alt", None, "")],
+            "EA": [("variant_id", "chr(?:[0-9]{1,2}|X|Y|MT)_[0-9]+_[A-Z]_([A-Z]+)_b38", None)],
+            # "OA": [(None, None, None)],
+            "beta": [("slope", None, None)],
+            "beta_se": [("slope_se", None, None)],
+            # "n_tests": [(None, None, None)],
+            "nominal_pvalue": [("pval_nominal", None, None)],
+            "permuted_pvalue": [("pval_perm", None, None)],
+            # "bonferroni_pvalue": [(None, None, None)],
+            # "zscore": [(None, None, None)],
+            "FDR": [("qval", None, None)],
+            # "N": [(None, None, None)],
+            # "AF": [(None, None, None)],
+            "MAN": [("minor_allele_samples", None, None)],
+            "MAF": [("maf", None, None)]
+        }
+
+    def get_replication_columns(self):
+        return {
+            # "gene_hgnc": [(None, None, None)],
+            "gene_ensembl": [("gene_id", "(ENSG[0-9]+).[0-9]+", None)],
+            # "SNP_rsid": [(None, None, None)],
+            "SNP_chr:pos": [("variant_id", "chr([0-9]{1,2}|X|Y|MT)_[0-9]+_[A-Z]_[A-Z]+_b38", ":"), ("variant_id", "chr(?:[0-9]{1,2}|X|Y|MT)_([0-9]+)_[A-Z]_[A-Z]+_b38", None)],
+            "alleles": [("variant_id", "chr(?:[0-9]{1,2}|X|Y|MT)_[0-9]+_([A-Z])_[A-Z]+_b38", "/"), ("variant_id", "chr(?:[0-9]{1,2}|X|Y|MT)_[0-9]+_[A-Z]_([A-Z]+)_b38", "")],
+            "EA": [("variant_id", "chr(?:[0-9]{1,2}|X|Y|MT)_[0-9]+_[A-Z]_([A-Z]+)_b38", None)],
+            # "OA": [(None, None, None)],
+            "beta": [("slope", None, None)],
+            "beta_se": [("slope_se", None, None)],
+            # "n_tests": [(None, None, None)],
+            "nominal_pvalue": [("pval_nominal", None, None)],
+            # "permuted_pvalue": [(None, None, None)],
+            # "bonferroni_pvalue": [(None, None, None)],
+            # "zscore": [(None, None, None)],
+            # "FDR": [(None, None, None)],
+            # "N": [(None, None, None)],
+            # "AF": [(None, None, None)],
+            "MAN": [("ma_samples", None, None)],
+            "MAF": [("maf", None, None)]
+        }
 
 ##############################################################################################################
 

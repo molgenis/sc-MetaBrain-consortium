@@ -100,6 +100,7 @@ class METHOD(Dataset):
             "FDR": [(None, None, None)], # the global FDR of the eQTL effect
             "N": [(None, None, None)], # the number of samples
             "AF": [(None, None, None)], # the allele frequency
+            "MAN": [(None, None, None)], # number of samples carrying the minor allele
             "MAF": [(None, None, None)] # the minor allele frequency
         })
 ```
@@ -196,6 +197,7 @@ Note that a [Dockerfile](Dockerfile) is available will all required software.
  * **--allow_infer**: Allow for inferring summary stats information. Note that inferred info are approximations and not exact. Default: False.
 
 ### Overlap arguments:
+ * **--gene_translate**: A tab seperated file containing ensembl - HGNC gene mappings. Default: None.
  * **--alpha**: The significance threshold to use. Default: 0.05.
  * **--fdr_calc_method**: The multiple testing correction method to use. Default: 'qvalues'.
 
