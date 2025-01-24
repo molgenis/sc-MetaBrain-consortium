@@ -1427,9 +1427,16 @@ class Dataset:
         if self.has_column(label):
             return True
 
+        # We should only translate the discovery gene names to prevent issues later on.
         if label == "gene_ensembl" and self.contains_data("gene_hgnc") and self.gene_translate_path is not None:
+            if self.type == "replication":
+                print("Warning, translating HGNC to Ensembl gene names is not possible on the fly for the replication dataset, please use 'hgnc' for --gene.")
+                return False
             return True
         if label == "gene_hgnc" and self.contains_data("gene_ensembl") and self.gene_translate_path is not None:
+            if self.type == "replication":
+                print("Warning, translating Ensembl to HGNC gene names is not possible on the fly for the replication dataset, please use 'ensembl' for --gene.")
+                return False
             return True
 
         # In some cases the data might not have a certain column but it can be deduced from other columns.

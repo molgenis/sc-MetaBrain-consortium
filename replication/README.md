@@ -190,7 +190,7 @@ Note that a [Dockerfile](Dockerfile) is available will all required software.
  * **--replication_rm_dupl**: How to deal with duplicates in the replication summary statistics. Options: **none**) throw error and exit, **all**) remove all duplicates, **mismatches**) removed duplicates for which the effect allele does not match. Default: 'none'.
 
 ### Data extraction arguments:
- * **--gene**: Which gene format to select on. Options: hgnc, ensembl. Default: 'ensembl'.
+ * **--gene**: Which gene format to select on. Options: hgnc, ensembl. Default: 'ensembl'. If the discovery and replication have conflicting gene IDs, use the replication format for '--gene' and provide a '--gene_translate' file.
  * **--snp**: Which variant format to select on. Options: chr:pos, rsid. Default: 'chr:pos'.
  * **--pvalue**: Which pvalue to use. Options: permuted, bonferroni, nominal. Default: 'permuted'.
  * **--effect**: What to consider as the effect column. Options: beta, zscore. Default: 'zscore'.
