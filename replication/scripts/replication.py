@@ -77,7 +77,7 @@ __description__ = "{} is a program developed and maintained by {}. " \
 
 CHROMOSOMES = [str(chromosome) for chromosome in range(1, 23)] + ["X", "Y", "MT"]
 BATCHES = [str(batch) for batch in range(0, 100000)]
-METHODS = ["CUSTOM", "LIMIX", "mbQTL", "eQTLMappingPipeline", "eQTLgenPhase2", "Bryois", "Bryois_REDUCED", "Fujita", "DeconQTL", "PICALO", "GTEx"]
+METHODS = ["CUSTOM", "LIMIX", "mbQTL", "eQTLMappingPipeline", "eQTLgenPhase2", "Bryois", "Bryois_REDUCED", "Fujita", "DeconQTL", "PICALO", "GTEx", "GTEx_REDUCED"]
 EFFECTS = ["zscore", "beta"]
 
 
@@ -553,6 +553,8 @@ class main():
             return PICALO
         elif method == "GTEx":
             return GTEx
+        elif method == "GTEx_REDUCED":
+            return GTEx_REDUCED
         else:
             print("Error, unexpected method '{}'".format(method))
             exit()
@@ -653,6 +655,7 @@ class main():
                 exit()
 
         # Resolve duplicates in replication data.
+        repl_df = repl_df.drop_duplicates()
         if len(set(repl_df.index)) != repl_df.shape[0]:
             if self.replication_rm_dupl == "none":
                 print("Error, replication contains duplicate indices")
@@ -3565,6 +3568,43 @@ class GTEx(Dataset):
 
 ##############################################################################################################
 
+class GTEx_REDUCED(Dataset):
+    def __init__(self, *args, **kwargs):
+        super(GTEx_REDUCED, self).__init__(*args, **kwargs)
+        self.class_name = "GTEx_REDUCED"
+
+        # Update filenames.
+        self.update_all_filename(filename="<CT>.txt.gz")
+        # self.update_top_filename(filename=None)
+
+        # Set file paths.
+        self.set_all_effects_path()
+        self.set_top_effects_path()
+
+        # Columns that are in the original file.
+        self.columns.update({
+            # "gene_hgnc": [(None, None, None)],
+            "gene_ensembl": [("ENSG", None, None)],
+            "SNP_chr:pos": [("GTExSNPId", "chr([0-9]{1,2}|X|Y|MT)_[0-9]+_[A-Z]_[A-Z]+_b38", ":"), ("GTExSNPId", "chr(?:[0-9]{1,2}|X|Y|MT)_([0-9]+)_[A-Z]_[A-Z]+_b38", None)],
+            "alleles": [("GTExSNPId", "chr(?:[0-9]{1,2}|X|Y|MT)_[0-9]+_([A-Z])_[A-Z]+_b38", "/"), ("GTExSNPId", "chr(?:[0-9]{1,2}|X|Y|MT)_[0-9]+_[A-Z]_([A-Z]+)_b38", "")],
+            "EA": [("GTExSNPId", "chr(?:[0-9]{1,2}|X|Y|MT)_[0-9]+_[A-Z]_([A-Z]+)_b38", None)],
+            # "OA": [(None, None, None)],
+            "beta": [("GTEx_slope", None, None)],
+            "beta_se": [("GTEx_slope_se", None, None)],
+            # "n_tests": [(None, None, None)],
+            "nominal_pvalue": [("GTEx_pval_nominal", None, None)],
+            # "permuted_pvalue": [(None, None, None)],
+            # "bonferroni_pvalue": [(None, None, None)],
+            # "zscore": [(None, None, None)],
+            # "FDR": [(None, None, None)],
+            # "N": [(None, None, None)],
+            # "AF": [(None, None, None)],
+            "MAC": [("GTEx_ma_count", None, None)],
+            "MAF": [("GTExMAF", None, None)]
+        })
+
+
+##############################################################################################################
 
 
 if __name__ == '__main__':
