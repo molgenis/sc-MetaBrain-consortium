@@ -2307,6 +2307,9 @@ class Dataset:
         except ValueError:
             return np.nan
 
+        if maf == 0.:
+            return np.nan
+
         n = int(mac / maf / 2)
 
         return n
@@ -2409,7 +2412,7 @@ class Dataset:
                 if i == 0:
                     columns.append(self.name + " " + argument)
             df_info.append(row_info)
-        standard_df = pd.DataFrame(df_info, columns=columns).replace("NA", np.nan).replace("nan", np.nan).replace("-", np.nan).dropna(axis=1, how='all').dropna(subset=[self.name + " " + gene, self.name + " " + snp])
+        standard_df = pd.DataFrame(df_info, columns=columns).dropna(subset=[self.name + " " + gene, self.name + " " + snp])
 
         dtypes = {
             self.name + " gene_hgnc": str,
@@ -2437,15 +2440,9 @@ class Dataset:
         for column, dtype in dtypes.items():
             if column not in standard_df.columns:
                 continue
-            # this needs to be done in two steps to deal with things like '180.0'.
-            if dtype == int:
-                standard_df[column] = standard_df[column].astype(float)
 
-                # This only works if there are no NaN values.
-                if standard_df[column].isna().sum() == 0:
-                    standard_df[column] = standard_df[column].astype(int)
-            else:
-                standard_df[column] = standard_df[column].astype(dtype)
+            standard_df[column] = standard_df[column].apply(lambda value: self.cast_variable(value=value, dtype=dtype))
+        standard_df = standard_df.dropna(axis=1, how='all')
 
         # Check for p-values out of range.
         for pval_column in ["nominal_pvalue", "permuted_pvalue", "bonferroni_pvalue"]:
@@ -2462,6 +2459,21 @@ class Dataset:
 
         standard_df.index = standard_df[self.name + " " + gene] + "_" + standard_df[self.name + " " + snp]
         return standard_df
+
+    @staticmethod
+    def cast_variable(value, dtype):
+        try:
+            if dtype == int:
+                # this needs to be done in two steps to deal with things like '180.0'.
+                casted_value = int(float(value))
+            else:
+                casted_value = dtype(value)
+        except ValueError:
+            return np.nan
+        except TypeError:
+            return np.nan
+
+        return casted_value
 
     def __str__(self):
         return "{} dataset:\n  class_name = {}\n  name = {}\n  path = {}\n  " \
