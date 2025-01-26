@@ -2304,7 +2304,7 @@ class Dataset:
         except ValueError:
             return np.nan
 
-        n = int(man / maf)
+        n = int(man / maf / 2)
 
         return n
 
