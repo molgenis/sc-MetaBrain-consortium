@@ -1240,7 +1240,7 @@ class Dataset:
             "FDR": self.na,
             "N": self.na,
             "AF": self.na,
-            "MAN": self.na,
+            "MAC": self.na,
             "MAF": self.na
         }
 
@@ -1455,7 +1455,7 @@ class Dataset:
                     return False
                 return True
 
-        if label == "N" and (self.n is not None or (self.contains_data("MAN") and self.contains_data("MAF"))):
+        if label == "N" and (self.n is not None or (self.contains_data("MAC") and self.contains_data("MAF"))):
             return True
 
         if label == "MAF" and self.contains_data("AF"):
@@ -2217,7 +2217,7 @@ class Dataset:
                 df["N"] = self.n
             else:
                 print("\tAdding N column")
-                df["N"] = self.calc_n_from_man(df=df, man_column=self.get_column("MAN"), maf_column=self.get_column("MAF"))
+                df["N"] = self.calc_n_from_mac(df=df, mac_column=self.get_column("MAC"), maf_column=self.get_column("MAF"))
             self.columns["N"] = [("N", None, None)]
 
         # Fill in the MAF.
@@ -2293,18 +2293,18 @@ class Dataset:
 
         return min(nominal_pvalue * ntests, 1)
 
-    def calc_n_from_man(self, df, man_column, maf_column):
-        return df.apply(lambda row: self.man_to_n(row=row, man_column=man_column, maf_column=maf_column), axis=1)
+    def calc_n_from_mac(self, df, mac_column, maf_column):
+        return df.apply(lambda row: self.mac_to_n(row=row, mac_column=mac_column, maf_column=maf_column), axis=1)
 
 
-    def man_to_n(self, row, man_column, maf_column):
+    def mac_to_n(self, row, mac_column, maf_column):
         try:
-            man = int(self.extract_info(data=row, query=man_column))
+            mac = int(self.extract_info(data=row, query=mac_column))
             maf = float(self.extract_info(data=row, query=maf_column))
         except ValueError:
             return np.nan
 
-        n = int(man / maf / 2)
+        n = int(mac / maf / 2)
 
         return n
 
@@ -2426,7 +2426,7 @@ class Dataset:
             self.name + " FDR": float,
             self.name + " N": int,
             self.name + " AF": float,
-            self.name + " MAN": int,
+            self.name + " MAC": int,
             self.name + " MAF": float
         }
 
@@ -2611,7 +2611,7 @@ class LIMIX(Dataset):
             "FDR": [("global_pvalue", None, None)],
             "N": [("n_samples", None, None)],
             # "AF": [(None, None, None)],
-            # "MAN": [(None", None, None)],
+            # "MAC": [(None", None, None)],
             "MAF": [("maf", None, None)]
         })
 
@@ -2914,7 +2914,7 @@ class mbQTL(Dataset):
             "FDR": self.get_fdr_column(),
             "N": [("MetaPN", None, None)],
             "AF": [("SNPEffectAlleleFreq", None, None)],
-            # "MAN": [(None", None, None)],
+            # "MAC": [(None", None, None)],
             # "MAF": [(None, None, None)]
         })
 
@@ -3014,7 +3014,7 @@ class eQTLMappingPipeline(Dataset):
             # "FDR": [("FDR", None, None)], # TODO: not sure what kind of FDR this is
             # "N": [("NrSamples", None, None)],
             # "AF": [(None, None, None)],
-            # "MAN": [(None", None, None)],
+            # "MAC": [(None", None, None)],
             # "MAF": [(None, None, None)],
         })
 
@@ -3083,7 +3083,7 @@ class eQTLgenPhase2(Dataset):
             # "FDR": [(None, None, None)],
             "N": [("sample_size", None, None)],
             "AF": [("allele_eff_freq", None, None)],
-            # "MAN": [(None", None, None)],
+            # "MAC": [(None", None, None)],
             # "MAF": [(None, None, None)]
         })
 
@@ -3146,7 +3146,7 @@ class Bryois(Dataset):
             "FDR": [("adj_p", None, None)],
             # "N": [(None, None, None)],
             # "AF": [(None, None, None)],
-            # "MAN": [(None", None, None)],
+            # "MAC": [(None", None, None)],
             "MAF": [("MAF", None, None)]
         })
 
@@ -3277,7 +3277,7 @@ class Bryois_REDUCED(Dataset):
             # "FDR": [(None, None, None)],
             # "N": [(None, None, None)],
             # "AF": [(None, None, None)],
-            # "MAN": [(None", None, None)],
+            # "MAC": [(None", None, None)],
             # "MAF": [(None, None, None)],
         })
 
@@ -3325,7 +3325,7 @@ class Fujita(Dataset):
             # "FDR": [(None, None, None)],
             # "N": [(None, None, None)],
             "AF": [("ALT_AF", None, None)],
-            # "MAN": [(None", None, None)],
+            # "MAC": [(None", None, None)],
             # "MAF": [(None, None, None)]
         })
 
@@ -3374,7 +3374,7 @@ class DeconQTL(Dataset):
             # "FDR": [(None, None, None)],
             # "N": [("N", None, None)],
             # "AF": [(None, None, None)],
-            # "MAN": [(None", None, None)],
+            # "MAC": [(None", None, None)],
             # "MAF": [(None, None, None)],
         })
 
@@ -3465,7 +3465,7 @@ class PICALO(Dataset):
             "FDR": [("FDR", None, None)],
             "N": [("N", None, None)],
             # "AF": [(None, None, None)],
-            # "MAN": [(None", None, None)],
+            # "MAC": [(None", None, None)],
             "MAF": [("MAF", None, None)]
         })
 
@@ -3536,7 +3536,7 @@ class GTEx(Dataset):
             "FDR": [("qval", None, None)],
             # "N": [(None, None, None)],
             # "AF": [(None, None, None)],
-            "MAN": [("minor_allele_samples", None, None)],
+            "MAC": [("minor_allele_count", None, None)],
             "MAF": [("maf", None, None)]
         }
 
@@ -3559,7 +3559,7 @@ class GTEx(Dataset):
             # "FDR": [(None, None, None)],
             # "N": [(None, None, None)],
             # "AF": [(None, None, None)],
-            "MAN": [("ma_samples", None, None)],
+            "MAC": [("minor_allele_count", None, None)],
             "MAF": [("maf", None, None)]
         }
 

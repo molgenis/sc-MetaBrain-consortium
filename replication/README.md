@@ -100,7 +100,7 @@ class METHOD(Dataset):
             "FDR": [(None, None, None)], # the global FDR of the eQTL effect
             "N": [(None, None, None)], # the number of samples
             "AF": [(None, None, None)], # the allele frequency
-            "MAN": [(None, None, None)], # number of samples carrying the minor allele
+            "MAC": [(None, None, None)], # number of samples carrying the minor allele
             "MAF": [(None, None, None)] # the minor allele frequency
         })
 ```
