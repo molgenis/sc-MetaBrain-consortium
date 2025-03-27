@@ -31,7 +31,7 @@ settings:
   snp_column: "SNP" ### The column containing the SNP in the top_effects file 
   chr_column: "GeneChr" ### The column containing the chromosome number in the top_effects file
   signif_column: "qval" ### The column used to filter significant effects (options: `MetaP`, `BetaAdjustedMetaP`, `BonfAdjustedMetaP`, `BonfBHAdjustedMetaP`, `bh_fdr`, `qval`). Default `qval`.
-  force_mega: True
+  force_mega: True ### Force the qtl analysis to be done over all samples at once
 
 mbqtl_settings:
   meta_analysis_method: "fisherzmeta" ### which variants to test per gene (options: 'empzmeta', 'fisherzmeta', 'fisherzmetarandom'). Default 'empzmeta'.
