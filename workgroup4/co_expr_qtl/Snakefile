@@ -243,6 +243,7 @@ rule run_co_eqtl:
     java_threads = config["run_co_eqtl_threads"],
     jar = config["inputs"]["mbqtl_jar"],
     permutations = config["mbqtl_settings"]["perm"],
+    permutationstrategy = config["mbqtl_settings"]["permutationstrategy"],
     maf = config["mbqtl_settings"]["maf"],
     cr = config["mbqtl_settings"]["cr"],
     hwep = config["mbqtl_settings"]["hwep"],
@@ -263,6 +264,7 @@ rule run_co_eqtl:
       --vcf {input.filtered_genotype} \
       --chr {wildcards.chr} \
       --perm {params.permutations} \
+      --permutationstrategy {params.permutationstrategy} \
       --maf {params.maf} \
       --cr {params.cr} \
       --hwep {params.hwep} \
