@@ -4,18 +4,18 @@
 inputs:
   bind_path: ### directories that the singularity should have access to (comma seperated).
   singularity_image: ### path to the singularity image containing the required software.
-  mbqtl_singularity_image:
-  mbqtl_jar:
+  mbqtl_singularity_image: ### path to singularity image containing required software for mbQTL
+  mbqtl_jar: ### path to mbqtl jar
   repo_dir: ### path to the base directory where the scripts are stored (i.e. parent of `scripts`).
 
-  gene_annotation:
+  gene_annotation: ### gene annotation file path
   genotype: ### bgzipped genotype VCF file.
-  co_expr_dir:
-  wg0_file_directories:
+  co_expr_dir: ### path containing co-expression input
+  wg0_file_directories: ### wg0 file directories path
 
   # cell_type dependent
   top_effects:
-    EX:
+    EX: # Top effects used to select eGenes and SNPs to include
     MIC:
     OLI:
 
@@ -69,7 +69,7 @@ create_batches_threads: 1 ### Number of threads to use
 create_batches_time: 0 ### The time setting to use
 
 run_co_eqtl_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
-run_co_eqtl_threads: 2 ### Number of threads to use
+run_co_eqtl_threads: 4 ### Number of threads to use
 run_co_eqtl_time: 1 ### The time setting to use
 
 merge_batches_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread
@@ -89,7 +89,7 @@ get_significant_effects_threads: 1 ### Number of threads to use
 get_significant_effects_time: 0 ### The time setting to use
 
 run_coeqtl_dump_memory: 4 ### Amount of gigs that will be used for memory and disk space per thread
-run_coeqtl_dump_threads: 2 ### Number of threads to use
+run_coeqtl_dump_threads: 4 ### Number of threads to use
 run_coeqtl_dump_time: 0 ### The time setting to use
 
 merge_all_triplets_memory: 2 ### Amount of gigs that will be used for memory and disk space per thread

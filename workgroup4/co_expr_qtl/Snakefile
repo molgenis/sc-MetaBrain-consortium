@@ -240,7 +240,7 @@ rule run_co_eqtl:
   params:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
-    java_threads = config["run_co_eqtl_threads"] * 2,
+    java_threads = config["run_co_eqtl_threads"],
     jar = config["inputs"]["mbqtl_jar"],
     permutations = config["mbqtl_settings"]["perm"],
     maf = config["mbqtl_settings"]["maf"],
@@ -416,7 +416,7 @@ rule run_coeqtl_dump:
   params:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
-    java_threads = config["run_coeqtl_dump_threads"] * 2,
+    java_threads = config["run_coeqtl_dump_threads"],
     jar = config["inputs"]["mbqtl_jar"],
     permutations = 0,
     maf = config["mbqtl_settings"]["maf"],
