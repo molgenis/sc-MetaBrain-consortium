@@ -81,13 +81,15 @@ rule create_linkfile:
   params:
     bind = config["inputs"]["bind_path"],
     sif = config["inputs"]["singularity_image"],
-    script = config["inputs"]["repo_dir"] + "scripts/create_linkfile.py",
+    force_mega = "--force_mega" if config["settings"]["force_mega"] else ""
+    script = config["inputs"]["repo_dir"] + "scripts/create_linkfile.py"
   log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/create_linkefile.{cell_type}.log"
   shell:
     """
     singularity exec --bind {params.bind} {params.sif} python {params.script} \
       --corr {input.corr} \
       --wg0 {input.wg0} \
+      {params.force_mega} \
       --output {output.linkfile} > {log} 2>&1
     """
 
@@ -249,6 +251,7 @@ rule run_co_eqtl:
     hwep = config["mbqtl_settings"]["hwep"],
     minobservations = config["mbqtl_settings"]["minobservations"],
     mingenotypecount = config["mbqtl_settings"]["mingenotypecount"],
+    meta_analysis = "--" + config["mbqtl_settings"]["meta_analysis_method"] if not config["mbqtl_settings"]["force_mega"] else "",
     correlationweight = "--correlationweights " + config["mbqtl_settings"]["correlationweights"] if config["mbqtl_settings"].get("correlationweights") else "",
     out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/output/chr{chr}-batch-{n_batch}"
   log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/run_co_eqtl.{cell_type}.chr.{chr}.batch.{n_batch}.log"
@@ -274,7 +277,7 @@ rule run_co_eqtl:
       --out {params.out} \
       --expgroups {input.triplet_group} \
       --mingenotypecount {params.mingenotypecount} \
-      --fisherzmeta \
+      {params.meta_analysis} \
       {params.correlationweight} \
       --snpgenelimit {input.triplet} > {log} 2>&1
     """

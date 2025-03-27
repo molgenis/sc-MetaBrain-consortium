@@ -9,6 +9,7 @@ parser = argparse.ArgumentParser(description="")
 parser.add_argument("--corr", required=True, type=str,  help="")
 parser.add_argument("--wg0", required=True, type=str,  help="")
 parser.add_argument("--output", required=True, type=str,  help="")
+parser.add_argument("--force_mega",action="store_true", default=False, help="")
 
 args = parser.parse_args()
 
@@ -47,7 +48,10 @@ for sample in samples:
     pool,id = sample.split(".")
     if id not in seen:
         seen.add(id)
-        dataset = pool_dataset[pool][0]
+        if args.force_mega:
+            dataset = "Mega-analysis"
+        else:
+            dataset = pool_dataset[pool][0]
         fho.write(id+"\t"+sample+"\t"+dataset+"\n")
         wctr += 1
 fho.close()
