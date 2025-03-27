@@ -33,6 +33,7 @@ settings:
   signif_column: "qval" ### The column used to filter significant effects (options: `MetaP`, `BetaAdjustedMetaP`, `BonfAdjustedMetaP`, `BonfBHAdjustedMetaP`, `bh_fdr`, `qval`). Default `qval`.
 
 mbqtl_settings:
+  correlationweight: ### path to correlation weights.txt[.gz] with sample ids in the first column followed by sample weights. For unweighted use None
   alpha: 0.05 # Co-eQT significance threshold
   perm: 10 ### number of permutations. Default: '1000'.
   permutationstrategy: semirandom ### permutation strategy

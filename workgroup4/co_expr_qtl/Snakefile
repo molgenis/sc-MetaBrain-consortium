@@ -249,6 +249,7 @@ rule run_co_eqtl:
     hwep = config["mbqtl_settings"]["hwep"],
     minobservations = config["mbqtl_settings"]["minobservations"],
     mingenotypecount = config["mbqtl_settings"]["mingenotypecount"],
+    correlationweight = "--correlationweights " + config["mbqtl_settings"]["correlationweights"] if config["mbqtl_settings"].get("correlationweights") else "",
     out = config["outputs"]["output_dir"] + "coeQTL/output/{cell_type}/chr{chr}/output/chr{chr}-batch-{n_batch}"
   log: config["outputs"]["output_dir"] + "log/{cell_type}/chr{chr}/run_co_eqtl.{cell_type}.chr.{chr}.batch.{n_batch}.log"
   shell:
@@ -274,6 +275,7 @@ rule run_co_eqtl:
       --expgroups {input.triplet_group} \
       --mingenotypecount {params.mingenotypecount} \
       --fisherzmeta \
+      {params.correlationweight} \
       --snpgenelimit {input.triplet} > {log} 2>&1
     """
 
